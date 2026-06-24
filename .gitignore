@@ -1,0 +1,27 @@
+# OS junk
+.DS_Store
+Thumbs.db
+*~
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Node (none committed, but guard against local experimentation)
+node_modules/
+npm-debug.log*
+yarn-error.log
+*.log
+
+# Secrets / credentials — never commit
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+
+# Runtime artifacts produced when test-running the skills in this repo
+.clide/
+.remix-sources/
+/clide.json
