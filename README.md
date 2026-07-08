@@ -1,6 +1,6 @@
 # 8x Skills
 
-Portable agent skills for **publishing** and **remixing** games on
+Portable agent skills for **building**, **publishing**, and **remixing** games on
 [Paean Apps Square](https://clide.app) (`*.clide.app` / `8x.gg`) — usable outside Zero CLI,
 from **Claude Code** and **Codex** (or any agent that can read a `SKILL.md` and run a Node script).
 
@@ -8,29 +8,33 @@ from **Claude Code** and **Codex** (or any agent that can read a `SKILL.md` and 
 |-------|--------------|
 | **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Claude Code or Codex projects. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
+| **paean-sdk** | Add Paean platform capabilities — cross-device **cloud save** and a **shared global leaderboard** — to a static app/game via the Paean Web SDK. Ships a verified, framework-agnostic integration module + a mock host bridge for offline testing. Handles the cross-host edge cases (per-scope grants, return-shape differences, late bridge injection, offline queue) and degrades cleanly to `localStorage` in a plain browser. |
 | **paean-publish** | Publish a static frontend (top-level `index.html`) to a Paean workspace, deploy it to a `*.clide.app` URL, and list it in Paean Apps Square. Picks a meaningful title, ensures `.clideignore` / `clide.json` / `LICENSE` are complete, scans for secrets, and forwards remix lineage. |
 | **paean-remix** | Download the source of one or more published games by hash and scaffold a new game that remixes them, recording a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so upstream creators can be credited. |
 
-Both ship as self-contained Node scripts — no npm install, no external dependencies beyond
-the Node runtime and a system `zip`/`unzip`.
+The publish/remix skills ship as self-contained Node scripts — no npm install, no external
+dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-sdk** skill ships
+browser reference files (no server, no build) you copy into your app.
 
 ```
 8x-skills/
 ├── claude-code/
 │   ├── paean-skills-update/ SKILL.md
 │   ├── paean-zero-setup/ SKILL.md
+│   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
 │   ├── paean-publish/   SKILL.md + scripts/publish.mjs
 │   └── paean-remix/     SKILL.md + scripts/remix.mjs
 └── codex/
     ├── paean-skills-update/ SKILL.md
     ├── paean-zero-setup/ SKILL.md
+    ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
     ├── paean-publish/   SKILL.md + scripts/publish.mjs
     └── paean-remix/     SKILL.md + scripts/remix.mjs
 ```
 
-The Claude Code and Codex variants run the **same** scripts; only the `SKILL.md` packaging
-differs (Claude Code uses YAML frontmatter for auto-loading; Codex references the file
-explicitly).
+The Claude Code and Codex variants ship the **same** scripts and reference files; only the
+`SKILL.md` packaging differs (Claude Code uses YAML frontmatter for auto-loading; Codex
+references the file explicitly).
 
 ## Requirements
 
