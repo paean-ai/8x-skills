@@ -1,3 +1,8 @@
+---
+name: paean-publish
+description: Publish a static frontend (a game or site with a top-level index.html) to Paean Apps Square and a *.clide.app URL using a Paean JWT. Use when the user asks to publish, deploy, ship, or list a static app/game to Paean Apps Square / clide.app (e.g. "publish this game", "deploy to clide.app", "发布到应用广场").
+---
+
 # Paean Publish (Codex)
 
 Publish the current project's static frontend (a game or site with a top-level `index.html`)

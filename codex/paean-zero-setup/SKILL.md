@@ -1,3 +1,8 @@
+---
+name: paean-zero-setup
+description: Install Zero CLI and help the user sign in to Paean so Paean publish/remix skills can read credentials. Use when Zero is missing, Paean credentials are missing, login is needed, or the user asks how to set up Zero / Paean auth / ~/.zero credentials for clide.app publishing.
+---
+
 # Paean Zero Setup (Codex)
 
 Install Zero CLI and authenticate the local machine with Paean so the Paean publish/remix
