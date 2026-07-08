@@ -1,3 +1,8 @@
+---
+name: paean-remix
+description: Remix one or more published Paean Apps Square games into a brand-new game. Downloads each source game's project files by hash and scaffolds a new project with a multi-parent remix graph. Use when the user asks to remix, fork, combine, or mash up published clide.app / Paean Apps Square games (e.g. "remix hash1 hash2", "用 hash1 的玩法 + hash2 的美术做个新游戏").
+---
+
 # Paean Remix (Codex)
 
 Download the source of one or more published `*.clide.app` games (by hash) and use them as the

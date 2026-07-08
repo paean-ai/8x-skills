@@ -1,3 +1,8 @@
+---
+name: paean-skills-update
+description: Update the local 8x-skills repository and reinstall Paean skills for Claude Code or Codex. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean-publish / paean-remix / paean-zero-setup skill changes.
+---
+
 # Paean Skills Update (Codex)
 
 Update the local `8x-skills` checkout and refresh Paean skill instructions. Use this when the
