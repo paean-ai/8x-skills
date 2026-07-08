@@ -15,13 +15,16 @@ This skill bundles a self-contained Node script — `scripts/remix.mjs`. It need
 
 Same as the publish skill: a Paean JWT from `PAEAN_AUTH_TOKEN`, or
 `~/.paean/credentials.json` / `~/.zero/credentials.json` as `{"token":"<jwt>"}`. Set it via
-the environment — never paste it into chat.
+the environment, or use the **paean-zero-setup** skill to install Zero and run `zero login`.
+Never paste tokens into chat.
 
 ## Source references
 
-Each source is a published Square app reference. Accepted forms: a bare hashKey,
-`hash.8x.gg`, `hash.clide.app`, `https://hash.clide.app/`, `https://8x.gg/hash`, or
-`hash=role` to tag the aspect you want from it (e.g. `h1=gameplay h2=art h3=theme`).
+Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare
+hashKey, `https://8x.gg/<hashKey>`, or `hashKey=role` to tag the aspect you want from it
+(e.g. `h1=gameplay h2=art h3=theme`). A `*.clide.app` play URL contains the deployed site
+handle, not necessarily the Square `hashKey`; if the user gives only a play URL, ask for the
+Square hashKey from the publish result or Square app detail before running the script.
 
 ## Run
 
@@ -53,12 +56,17 @@ want the new project created.
    compose a genuinely new game at the target directory's top level, honoring the aspect the
    user assigned to each source (the classic recipe is "h1 gameplay + h2 art/visual style +
    h3 theme/subject"). Do NOT ship the upstream sources verbatim — synthesize a new
-   `index.html` (and assets) that combines the chosen aspects. Keep `.remix-sources/` for
-   reference only; it is not published.
+   `index.html` (and assets) that combines the chosen aspects. Keep the remix standalone:
+   no runtime imports from `.remix-sources/`, parent folders, or remote assets unless their
+   license explicitly allows it and attribution is recorded. Keep `.remix-sources/` for
+   reference only; it is not published. Include top-level `favicon.svg` and `banner.jpg`;
+   `banner.jpg` should be exactly 800x400.
 
 5. **Finalize `clide.json`.** Set a fitting `title`, `summary`, `category`, and `tags` for the
    new game, and set each `remix.parents[].role` to the aspect actually borrowed. Adjust
-   `weight` if the user wants an uneven upstream split.
+   `weight` if the user wants an uneven upstream split. If the remix keeps a parent gameplay
+   loop, save keys, storage namespaces, and visible title/identity must be changed so it does
+   not collide with or impersonate the parent.
 
 6. **Publish** with the **paean-publish** skill from the target directory. It reads
    `clide.json` for naming, metadata, and the remix lineage automatically.
@@ -67,14 +75,28 @@ want the new project created.
 
 The manifest records lineage in two compatible shapes at once:
 
-- `remix.parent` — a single upstream hashKey (the legacy *tree* form; mirrors the backend's
-  `remixOfHashKey`). Always the first parent.
+- `remix.parent` — a single upstream hashKey. This is sent as backend `remixOfHashKey`,
+  populates the legacy source/root columns, and should be the parent with the strongest
+  structural contribution (usually gameplay). Always the first parent.
 - `remix.parents[]` — the full *graph* form: every direct upstream, each with the borrowed
   aspect (`role`) and a suggested revenue `weight`. This is the adjacency list of the remix
-  DAG (this game → each parent) that upstream revenue-sharing consumes.
+  DAG (this game → each parent). On publish these hashKeys are sent as backend
+  `remixOfHashKeys`, which creates `SquareRemixEdge` rows for the full graph.
 
 Keeping both in sync means tree-only consumers keep working while graph-aware consumers get
-the complete multi-parent picture.
+the complete multi-parent picture. Do not include transitive ancestors unless the new work
+directly used them as sources.
+
+## Copyright and attribution
+
+- Keep or add the standard `index.html` copyright comment near `<head>`:
+  `Copyright (c) 2026 paean.ai and the game's creator(s).`
+- Keep a project `LICENSE`. Default to `MIT` only for original/local code. If upstream code or
+  assets impose a stricter license, preserve that license and attribution.
+- Ship top-level `favicon.svg` and an 800x400 `banner.jpg` for Square presentation.
+- Add a short README or `clide.json.summary` provenance note when the remix materially keeps a
+  parent loop, art direction, asset, or system.
+- Never publish `.remix-sources/`; `.clideignore` excludes it.
 
 ## Flags
 
@@ -83,7 +105,8 @@ the complete multi-parent picture.
 
 ## Failure handling
 
-- Missing credentials → tell the user to set `PAEAN_AUTH_TOKEN`.
+- Missing credentials → use the **paean-zero-setup** skill, or tell the user to set
+  `PAEAN_AUTH_TOKEN`.
 - A source that is not found / not listed / not remixable → the script reports which hash
   failed before any download. Fix or drop that source and re-run.
 - `unzip` not found → install it (ships with macOS and most Linux distros).

@@ -19,8 +19,8 @@ The script authenticates with a Paean JWT, resolved in this order:
 2. `~/.paean/credentials.json` or `~/.zero/credentials.json` as `{"token":"<jwt>"}`.
 
 If none is set, the script stops with an error. Get a token from your Paean account
-(the same JWT the Paean web app / Zero CLI uses). Never paste the token into chat — set
-it as an environment variable.
+(the same JWT the Paean web app / Zero CLI uses). Prefer the **paean-zero-setup** skill to
+install Zero and run `zero login`; never paste the token into chat.
 
 ## Run
 
@@ -60,6 +60,11 @@ root so the script treats the current directory as the project to publish.
 - Before a real publish it ensures the project files are complete: `.clideignore` (safety
   defaults), `clide.json` (the metadata manifest), and `LICENSE` are created if missing.
   `clide.json` and `.remix-sources/` are excluded from the published site.
+- Published games should carry the standard `index.html` copyright comment near `<head>`:
+  `Copyright (c) 2026 paean.ai and the game's creator(s).` If it is missing, add it before
+  publishing.
+- Games should include top-level `favicon.svg` and `banner.jpg` (exactly 800x400). Missing or
+  wrong-size media is reported as `assetWarnings`; it does not block publishing.
 - Naming precedence: `--title` > `clide.json` title > `package.json` name > a meaningful
   `index.html` `<title>` > directory name (last resort, surfaced as a warning).
 - `--license <spdx>` sets the license (default `MIT`; e.g. `MIT`, `Apache-2.0`, `CC-BY-4.0`,
@@ -69,8 +74,9 @@ root so the script treats the current directory as the project to publish.
   If the scan blocks the publish, add the file to `.clideignore`, or use `--allow-secrets`
   only when the match is intentional.
 - Remix lineage: if `clide.json` records a remix (written by the **paean-remix** skill), the
-  publish sends `remixOfHashKey` (the primary parent) plus the full `parents` graph so
-  upstream creators are credited.
+  publish sends `remixOfHashKey` (the primary parent) plus `remixOfHashKeys` (all direct
+  parents) so zero-api records both the legacy primary parent and the full
+  `SquareRemixEdge` DAG.
 - Re-publishing reuses the saved workspace (`.clide/publish.json`) to update the same Square
   listing.
 
@@ -81,7 +87,8 @@ root so the script treats the current directory as the project to publish.
 
 ## Failure handling
 
-- Missing credentials → tell the user to set `PAEAN_AUTH_TOKEN`.
+- Missing credentials → use the **paean-zero-setup** skill, or tell the user to set
+  `PAEAN_AUTH_TOKEN`.
 - No top-level `index.html` → built apps must publish their build output directory, not the
   source directory. Build first, or pass `--dir <build-output>`.
 - `zip` not found → install it (it ships with macOS and most Linux distros).
