@@ -352,6 +352,61 @@ function scanSecrets(publishDir, files) {
   return findings
 }
 
+function readJpegDimensions(file) {
+  let buf
+  try {
+    buf = readFileSync(file)
+  } catch {
+    return null
+  }
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null
+  let offset = 2
+  while (offset + 9 < buf.length) {
+    if (buf[offset] !== 0xff) {
+      offset += 1
+      continue
+    }
+    const marker = buf[offset + 1]
+    offset += 2
+    if (marker === 0xd8 || marker === 0xd9) continue
+    if (offset + 2 > buf.length) return null
+    const length = buf.readUInt16BE(offset)
+    if (length < 2 || offset + length > buf.length) return null
+    if (
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf)
+    ) {
+      if (length < 7) return null
+      return {
+        width: buf.readUInt16BE(offset + 5),
+        height: buf.readUInt16BE(offset + 3),
+      }
+    }
+    offset += length
+  }
+  return null
+}
+
+function assetWarnings(publishDir, files) {
+  const warnings = []
+  if (!files.includes('favicon.svg')) {
+    warnings.push('Missing top-level favicon.svg. Publishing is allowed, but generate one before listing if possible.')
+  }
+  if (!files.includes('banner.jpg')) {
+    warnings.push('Missing top-level banner.jpg. Publishing is allowed, but Paean game templates expect an 800x400 banner.jpg.')
+  } else {
+    const dims = readJpegDimensions(path.join(publishDir, 'banner.jpg'))
+    if (!dims) {
+      warnings.push('Could not verify banner.jpg dimensions. Expected 800x400.')
+    } else if (dims.width !== 800 || dims.height !== 400) {
+      warnings.push('banner.jpg is ' + dims.width + 'x' + dims.height + '; expected 800x400.')
+    }
+  }
+  return warnings
+}
+
 function archiveSummary(publishDir, files) {
   let totalBytes = 0
   const largest = []
@@ -678,13 +733,11 @@ async function publishSquare(token, workspaceHashKey, metadata, remix) {
     visibility: 'public',
   }
   if (remix && remix.parent) {
-    // Primary upstream — the field the backend records today (single-parent tree).
+    // Primary upstream for legacy columns/provenance.
     body.remixOfHashKey = remix.parent
-    // Full multi-parent graph for upstream revenue sharing. The backend reads
-    // body fields individually and ignores unknown keys, so this is a safe
-    // forward-compatible signal until multi-parent splitting ships server-side.
-    body.parents = remix.parents
-    body.remixGraph = remix.info
+    // Full declared parent set. The backend dedupes this with remixOfHashKey
+    // and records SquareRemixEdge rows for the multi-parent DAG.
+    body.remixOfHashKeys = remix.parents.map(p => p.hashKey).filter(Boolean)
   }
   const json = await apiJson('/square/publish', token, body)
   if (!json.data || !json.data.playUrl || !json.data.hashKey) throw new Error('Square publish response missing data.playUrl or data.hashKey')
@@ -761,6 +814,7 @@ async function main() {
     : undefined
   const summary = archiveSummary(publishDir, files)
   const secretFindings = scanSecrets(publishDir, files)
+  const mediaWarnings = assetWarnings(publishDir, files)
   if (secretFindings.length > 0 && !args.allowSecrets) {
     throw new Error('Publish blocked: possible secrets found in included files:\n' + secretFindings.slice(0, 10).map(f => '  - ' + f.file + ' (' + f.kind + ')').join('\n') + (secretFindings.length > 10 ? '\n  ...and ' + (secretFindings.length - 10) + ' more' : '') + '\nAdd patterns to .clideignore or rerun with --allow-secrets if this is intentional.')
   }
@@ -777,6 +831,7 @@ async function main() {
       license,
       titleSource: resolvedTitle.source,
       titleWarning,
+      assetWarnings: mediaWarnings,
       remix: remix ? { parent: remix.parent, parents: remix.parents } : null,
       secretScan: {
         status: secretFindings.length > 0 ? 'allowed-by-flag' : 'passed',
@@ -788,6 +843,10 @@ async function main() {
   }
 
   await confirmPublicPublish(args, summary, publishDir, projectRoot, metadata)
+  if (mediaWarnings.length > 0) {
+    console.warn('Asset warnings:')
+    for (const warning of mediaWarnings) console.warn('  - ' + warning)
+  }
   const token = getPaeanToken()
   if (!token) throw new Error('Paean credentials not found. Set the PAEAN_AUTH_TOKEN environment variable to your Paean JWT (or place it in ~/.paean/credentials.json as {"token":"..."}). See the skill README for how to obtain one.')
   const ensuredFiles = ensureProjectFiles(projectRoot, metadata, license, remix)
@@ -827,8 +886,16 @@ async function main() {
       title: metadata.title,
       titleSource: resolvedTitle.source,
       titleWarning,
+      assetWarnings: mediaWarnings,
       license,
-      remix: remix ? { parent: remix.parent, parents: remix.parents } : null,
+      remix: remix ? {
+        parent: remix.parent,
+        parents: remix.parents,
+        api: {
+          remixOfHashKey: remix.parent,
+          remixOfHashKeys: remix.parents.map(p => p.hashKey).filter(Boolean),
+        },
+      } : null,
       wroteProjectFiles: ensuredFiles,
       fileCount: imported.fileCount || summary.fileCount,
       totalBytes: imported.totalBytes || summary.totalBytes,

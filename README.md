@@ -6,6 +6,8 @@ from **Claude Code** and **Codex** (or any agent that can read a `SKILL.md` and 
 
 | Skill | What it does |
 |-------|--------------|
+| **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Claude Code or Codex projects. |
+| **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-publish** | Publish a static frontend (top-level `index.html`) to a Paean workspace, deploy it to a `*.clide.app` URL, and list it in Paean Apps Square. Picks a meaningful title, ensures `.clideignore` / `clide.json` / `LICENSE` are complete, scans for secrets, and forwards remix lineage. |
 | **paean-remix** | Download the source of one or more published games by hash and scaffold a new game that remixes them, recording a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so upstream creators can be credited. |
 
@@ -15,9 +17,13 @@ the Node runtime and a system `zip`/`unzip`.
 ```
 8x-skills/
 ├── claude-code/
+│   ├── paean-skills-update/ SKILL.md
+│   ├── paean-zero-setup/ SKILL.md
 │   ├── paean-publish/   SKILL.md + scripts/publish.mjs
 │   └── paean-remix/     SKILL.md + scripts/remix.mjs
 └── codex/
+    ├── paean-skills-update/ SKILL.md
+    ├── paean-zero-setup/ SKILL.md
     ├── paean-publish/   SKILL.md + scripts/publish.mjs
     └── paean-remix/     SKILL.md + scripts/remix.mjs
 ```
@@ -35,7 +41,17 @@ explicitly).
 
 ## Credentials
 
-Set your Paean JWT via the environment (recommended), or a credentials file:
+Install Zero CLI and log in to Paean (recommended):
+
+```bash
+npm install -g @paean-ai/zero-cli
+zero provider clear
+zero login
+zero auth status --json
+```
+
+The publish/remix scripts read the Paean credentials saved by Zero in `~/.zero/credentials.json`.
+If browser login is not possible, set your Paean JWT via the environment, or a credentials file:
 
 ```bash
 export PAEAN_AUTH_TOKEN="<your-paean-jwt>"
@@ -56,6 +72,8 @@ Copy a skill directory into your skills folder (project `.claude/skills/` or glo
 ```bash
 cp -r 8x-skills/claude-code/paean-publish ~/.claude/skills/
 cp -r 8x-skills/claude-code/paean-remix   ~/.claude/skills/
+cp -r 8x-skills/claude-code/paean-zero-setup ~/.claude/skills/
+cp -r 8x-skills/claude-code/paean-skills-update ~/.claude/skills/
 ```
 
 Claude Code auto-discovers the `SKILL.md` and offers the skill when relevant. You can also
@@ -68,6 +86,8 @@ repo in your project and add a pointer to your `AGENTS.md`:
 
 ```markdown
 ## Skills
+- To update Paean skills, follow `8x-skills/codex/paean-skills-update/SKILL.md`.
+- To install Zero CLI or log in to Paean for publishing, follow `8x-skills/codex/paean-zero-setup/SKILL.md`.
 - To publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
 - To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
 ```
@@ -117,15 +137,20 @@ once:
 }
 ```
 
-`remix.parent` keeps tree-only consumers (and the current single-parent backend field
-`remixOfHashKey`) working, while `remix.parents[]` is the adjacency list of the multi-parent
-remix DAG — each direct upstream with the aspect it contributed and a suggested revenue
-`weight`. `paean-publish` forwards both, so the data is ready for upstream revenue-sharing.
+`remix.parent` keeps tree-only consumers (and the backend `remixOfHashKey` primary-parent
+field) working, while `remix.parents[]` is the adjacency list of the multi-parent remix DAG —
+each direct upstream with the aspect it contributed and a suggested revenue `weight`.
+`paean-publish` forwards the direct parent hashKeys as `remixOfHashKeys`, so zero-api records
+`SquareRemixEdge` rows for the full graph.
 
 ## Safety
 
 - Publishing is **public**. The scripts require explicit confirmation (or `--yes`) and warn
   before listing.
+- Published games should include the standard paean.ai copyright comment in `index.html` and
+  carry a project `LICENSE`; remixes should also record direct parents in `clide.json`.
+- Games should ship a top-level `favicon.svg` and an 800x400 `banner.jpg`. The publish script
+  warns when either is missing or the banner size is wrong, but does not block publishing.
 - Credentials are read from the environment / a credentials file only — never hard-coded, and
   never written into the published output.
 - A high-confidence secret scanner blocks publishing files that look like private keys or API

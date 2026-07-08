@@ -17,7 +17,8 @@ The script authenticates with a Paean JWT, resolved in order:
 1. `PAEAN_AUTH_TOKEN` environment variable (your Paean JWT) — recommended.
 2. `~/.paean/credentials.json` or `~/.zero/credentials.json` as `{"token":"<jwt>"}`.
 
-Set the token via the environment; never paste it into the conversation.
+Prefer the `paean-zero-setup` skill to install Zero and run `zero login`. Otherwise set the
+token via the environment; never paste it into the conversation.
 
 ## Run
 
@@ -52,13 +53,19 @@ Set the token via the environment; never paste it into the conversation.
   if needed.
 - A real publish ensures `.clideignore`, `clide.json` (metadata manifest), and `LICENSE` exist.
   `clide.json` and `.remix-sources/` are excluded from the published site.
+- Published games should carry the standard `index.html` copyright comment near `<head>`:
+  `Copyright (c) 2026 paean.ai and the game's creator(s).` If it is missing, add it before
+  publishing.
+- Games should include top-level `favicon.svg` and `banner.jpg` (exactly 800x400). Missing or
+  wrong-size media is reported as `assetWarnings`; it does not block publishing.
 - Naming precedence: `--title` > `clide.json` > `package.json` name > meaningful `<title>` >
   directory name (last resort, warned).
 - `--license <spdx>` sets the license (default `MIT`).
 - Secrets are excluded by default and scanned; the scan blocks on a high-confidence match
   (override with `--allow-secrets` only when intentional).
-- If `clide.json` records a remix (from the paean-remix skill), the publish forwards
-  `remixOfHashKey` (primary parent) + the full `parents` graph to credit upstream creators.
+- If `clide.json` records a remix (from the paean-remix skill), the publish sends
+  `remixOfHashKey` (primary parent) plus `remixOfHashKeys` (all direct parents) so zero-api
+  records both the legacy primary parent and the full `SquareRemixEdge` DAG.
 
 ## Flags
 
@@ -67,6 +74,6 @@ Set the token via the environment; never paste it into the conversation.
 
 ## Failure handling
 
-- Missing credentials → set `PAEAN_AUTH_TOKEN`.
+- Missing credentials → follow `../paean-zero-setup/SKILL.md`, or set `PAEAN_AUTH_TOKEN`.
 - No top-level `index.html` → publish the build output, not source (build first or `--dir`).
 - `zip` not found → install it.
