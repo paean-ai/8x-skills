@@ -37,6 +37,7 @@ function createPaeanPlatform(opts) {
   var SAVE_THROTTLE_MS = opts.saveThrottleMs || 5000;
   var LK_AUTHED = NS + '.paeanAuthed';   // remembers a prior grant on this device
   var LK_QUEUE = NS + '.scoreQueue';     // offline / pre-auth score queue
+  var LK_SAVE = NS + '.save';            // localStorage fallback for the save blob
 
   // mode: 'boot' | 'local' | 'preview' | 'paean'
   var S = {
@@ -66,6 +67,7 @@ function createPaeanPlatform(opts) {
 
   // ── detection / connection ────────────────────────────────────────────────
   function init() {
+    localLoad(); // restore the localStorage fallback save (any mode; cloud merges later)
     if (typeof PaeanSDK === 'undefined') { S.mode = 'local'; emit(); return; }
     try {
       var d = PaeanSDK.detect();
@@ -93,10 +95,12 @@ function createPaeanPlatform(opts) {
       // GOTCHA (late injection): some native hosts inject window.paean AFTER
       // ready()'s grace window. Keep polling and reconnect when it appears,
       // instead of staying stuck in local mode for the whole session.
+      // readyPolls is a TOTAL budget across reconnect attempts, so a bridge
+      // that appears but whose ready() keeps rejecting (bridge-unreachable /
+      // sdk-too-old) can't spin an endless retry loop.
       var iv = setInterval(function () {
-        readyPolls++;
+        if (++readyPolls > 40) { clearInterval(iv); return; } // ~20s total
         if (PaeanSDK.isAvailable && PaeanSDK.isAvailable()) { clearInterval(iv); connectReady(); }
-        else if (readyPolls > 40) clearInterval(iv); // ~20s
       }, 500);
     });
   }
@@ -131,10 +135,12 @@ function createPaeanPlatform(opts) {
     }
     var req;
     try { req = S.p.auth.ensure(want); } catch (e) { return Promise.resolve(false); }
-    return Promise.resolve(req).then(applyScopes).catch(function () {
+    return Promise.resolve(req).then(applyScopes).catch(function (err) {
       // GOTCHA (wholesale rejection): a host may reject a request containing an
       // unknown scope outright. Retry with the bare minimum so at least cloud
-      // save survives.
+      // save survives — but if the USER declined, don't re-prompt immediately.
+      var m = (err && err.message) || '';
+      if (/denied|declined|reject|cancel/i.test(m)) { S.denied = true; emit(); return false; }
       var req2;
       try { req2 = S.p.auth.ensure(['storage.kv']); }
       catch (e) { S.denied = true; emit(); return false; }
@@ -165,11 +171,30 @@ function createPaeanPlatform(opts) {
     } catch (e) {}
   }
 
-  // ── cloud save (KV) ─────────────────────────────────────────────────────────
-  // S.loaded gates the first push: never overwrite the cloud with a fresh
-  // device's empty save before we've read (or failed to read) what's up there.
+  // ── save persistence: localStorage fallback + cloud KV ─────────────────────
+  // The save blob ALWAYS persists to localStorage (so a plain browser keeps
+  // progress across refreshes); when a host grant is present it additionally
+  // syncs to cloud KV. S.loaded gates the first cloud push: never overwrite
+  // the cloud with a fresh device's empty save before we've read (or truly
+  // failed to read) what's up there.
+  function localLoad() {
+    var raw = lsGet(LK_SAVE);
+    if (!raw) return;
+    var saved = null;
+    try { saved = JSON.parse(raw); } catch (e) { return; }
+    if (!saved || typeof saved !== 'object') return;
+    var merged = typeof opts.mergeSave === 'function' ? opts.mergeSave(saved, safeLocalSave()) : saved;
+    if (typeof opts.applySave === 'function') { try { opts.applySave(merged); } catch (e) {} }
+  }
+  function localSave() {
+    try { lsSet(LK_SAVE, JSON.stringify(safeLocalSave())); } catch (e) {}
+  }
+
+  var cloudLoading = false, loadRetries = 0;
   function cloudLoad() {
+    if (S.loaded || cloudLoading) return; // one load-merge-push cycle per session
     if (!caps().storage || !S.kvGranted) { S.loaded = true; return; }
+    cloudLoading = true;
     try {
       Promise.resolve(S.p.host.storage.get(SAVE_KEY)).then(function (v) {
         // GOTCHA (return shape): some hosts return the entry wrapper
@@ -181,20 +206,27 @@ function createPaeanPlatform(opts) {
             : cloud;
           if (typeof opts.applySave === 'function') opts.applySave(merged);
         }
-        S.loaded = true; S.lastError = null;
-        S.dirty = true; cloudSave(); // push the merged result straight back up
+        cloudLoading = false; S.loaded = true; S.lastError = null;
+        S.dirty = true; flushSave(); // push the merged result straight back up
         emit();
       }).catch(function (e) {
-        S.loaded = true;
+        cloudLoading = false;
         // GOTCHA (missing save): a fresh account has no save. Some hosts express
         // that as a rejected "key not found", others resolve null (handled
         // above). A rejected not-found is NOT an error — seed the first save.
         var msg = (e && e.message) || '';
-        if (/not found/i.test(msg)) { S.dirty = true; cloudSave(); }
-        else S.lastError = 'load: ' + (msg || 'failed');
+        if (/not found/i.test(msg)) { S.loaded = true; S.dirty = true; flushSave(); }
+        else {
+          // GOTCHA (first-write ordering): a TRANSIENT read failure must not
+          // unlock pushes, or this device's empty state could overwrite the
+          // cloud. Retry the read with backoff before giving up.
+          S.lastError = 'load: ' + (msg || 'failed');
+          if (++loadRetries <= 5) setTimeout(cloudLoad, 3000 * loadRetries);
+          else S.loaded = true; // give up: allow saves rather than block forever
+        }
         emit();
       });
-    } catch (e) { S.loaded = true; }
+    } catch (e) { cloudLoading = false; S.loaded = true; }
   }
 
   function safeLocalSave() {
@@ -202,8 +234,11 @@ function createPaeanPlatform(opts) {
     catch (e) { return {}; }
   }
 
-  function cloudSave() {
-    if (!caps().storage || !S.kvGranted || !S.dirty || !S.loaded) return;
+  function flushSave() {
+    if (!S.dirty) return;
+    localSave(); // localStorage fallback always gets the latest state
+    if (!caps().storage || !S.kvGranted) { S.dirty = false; return; } // local-only mode
+    if (!S.loaded) return; // cloud read still pending — stay dirty, retry next tick
     var payload = safeLocalSave();
     try {
       Promise.resolve(S.p.host.storage.put(SAVE_KEY, payload))
@@ -214,15 +249,15 @@ function createPaeanPlatform(opts) {
 
   // call whenever your savable state changes; the push itself is throttled
   function markDirty() { S.dirty = true; }
-  setInterval(cloudSave, SAVE_THROTTLE_MS);
+  setInterval(flushSave, SAVE_THROTTLE_MS);
   // GOTCHA (mobile lifecycle): WebViews get killed without warning — flush the
   // moment we're backgrounded, don't wait for the throttle.
   if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', function () { if (document.hidden) cloudSave(); });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) flushSave(); });
   }
   if (typeof window !== 'undefined') {
-    window.addEventListener('pagehide', function () { cloudSave(); });
-    window.addEventListener('online', function () { cloudSave(); flushQueue(); });
+    window.addEventListener('pagehide', function () { flushSave(); });
+    window.addEventListener('online', function () { flushSave(); flushQueue(); });
   }
 
   // ── leaderboard ─────────────────────────────────────────────────────────────
@@ -284,26 +319,29 @@ function createPaeanPlatform(opts) {
         res = res || {};
         var raw = res.entries || res.list || res.items || (Array.isArray(res) ? res : []);
         if (!Array.isArray(raw)) raw = [];
-        var me = (res.me && typeof res.me === 'object') ? res.me : null;
-        var entries = raw.map(function (e, i) {
+        var meRaw = (res.me && typeof res.me === 'object') ? res.me : null;
+        function norm(e, fallbackRank, selfKnown) {
           e = e || {};
           // GOTCHA (self flag / naming): the authoritative self marker is
           // `isSelf`; also fall back to matching userKey. Names/pictures come
           // under several possible keys across hosts — read defensively.
-          var mine = e.isSelf === true || e.isMe === true
-            || (me && me.userKey && e.userKey === me.userKey)
+          var mine = selfKnown || e.isSelf === true || e.isMe === true
+            || (meRaw && meRaw.userKey && e.userKey === meRaw.userKey)
             || (S.userKey && e.userKey === S.userKey);
           return {
-            rank: e.rank || i + 1,
+            rank: e.rank || e.myRank || fallbackRank,
             name: e.userName || e.displayName || e.name || 'Player',
             score: (typeof e.score === 'number') ? e.score : (parseInt(e.score, 10) || 0),
             userKey: e.userKey || null,
             picture: e.userPicture || e.picture || e.avatar || null,
             metadata: e.metadata || null,
-            isSelf: mine
+            isSelf: !!mine
           };
-        });
-        if (me && (me.rank || me.myRank)) { S.myRank = me.rank || me.myRank; emit(); }
+        }
+        var entries = raw.map(function (e, i) { return norm(e, i + 1, false); });
+        // `me` gets the SAME normalized shape as entries
+        var me = meRaw ? norm(meRaw, null, true) : null;
+        if (me && me.rank) { S.myRank = me.rank; emit(); }
         cb({ entries: entries, me: me });
       }).catch(function () { cb(null); });
     } catch (e) { cb(null); }
@@ -313,7 +351,7 @@ function createPaeanPlatform(opts) {
     init: init,
     connect: ensureAuth,          // call from a "Sync"/"Connect" button
     connectLeaderboard: ensureLeaderboard,
-    save: cloudSave,
+    save: flushSave,
     markDirty: markDirty,
     submitScore: submitScore,
     getLeaderboard: getLeaderboard,
