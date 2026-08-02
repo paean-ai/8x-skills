@@ -183,7 +183,8 @@ Rules:
 - Top-right UI clears `--paean-chrome-inset-top`; the other edges clear `--paean-safe-*`.
 - Backgrounds and canvases SHOULD fill the viewport. It is only what the player
   must read or tap that insets.
-- Optional JS, for relayout on rotation: `window.paean.chromeRect()` /
+- Optional JS, for relayout on rotation: `paeanChrome()` / `onPaeanChromeChange(fn)` in `reference/paean-platform.js` (read the CSS
+  vars, fire on rotation), or the raw `window.paean.chromeRect()` /
   `window.paean.safeArea()` plus the `paeanchromechange` event.
 
 ```css

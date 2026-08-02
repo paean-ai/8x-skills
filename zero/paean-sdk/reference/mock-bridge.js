@@ -27,6 +27,12 @@
  *   seed:         { [key]: value } initial KV store contents
  *   board:        [{ name, score, userKey, picture }] initial leaderboard rows
  *   me:           { userKey, displayName } the signed-in player
+ *   chrome:       simulate the host capsule + safe areas so you can SEE whether
+ *                 your HUD collides with them. `true` uses iPhone-with-island
+ *                 defaults; or pass {capsule:{top,right,width,height}, safeArea:
+ *                 {top,right,bottom,left}}. Default false — a plain browser
+ *                 sets none of these, which is exactly why a layout can look
+ *                 fine locally and land under the capsule on a real device.
  */
 function mockBridgeSource(opts) {
   opts = opts || {};
@@ -38,7 +44,11 @@ function mockBridgeSource(opts) {
     missingAsNull: !!opts.missingAsNull,
     seed: opts.seed || {},
     board: opts.board || [],
-    me: opts.me || { userKey: 'me', displayName: 'Tester' }
+    me: opts.me || { userKey: 'me', displayName: 'Tester' },
+    chrome: opts.chrome === true
+      ? { capsule: { top: 65, right: 16, bottom: 95, left: 346, width: 78, height: 30 },
+          safeArea: { top: 59, right: 0, bottom: 34, left: 0 } }
+      : (opts.chrome || null)
   };
   // Serialize the factory + config into an init script string.
   return '(' + mockBridgeFactory.toString() + ')(' + JSON.stringify(cfg) + ');';
@@ -46,6 +56,21 @@ function mockBridgeSource(opts) {
 
 // Runs INSIDE the page. Kept as a standalone function so it serializes cleanly.
 function mockBridgeFactory(cfg) {
+  // Publish the host-chrome contract the real player injects, so a HUD that
+  // ignores it visibly collides here instead of only on device.
+  if (cfg.chrome) {
+    var s = document.documentElement.style;
+    var c = cfg.chrome.capsule || {}, a = cfg.chrome.safeArea || {};
+    ['top', 'right', 'bottom', 'left', 'width', 'height'].forEach(function (k) {
+      if (typeof c[k] === 'number') s.setProperty('--paean-chrome-' + k, c[k] + 'px');
+    });
+    if (typeof c.top === 'number' && typeof c.height === 'number') {
+      s.setProperty('--paean-chrome-inset-top', (c.top + c.height) + 'px');
+    }
+    ['top', 'right', 'bottom', 'left'].forEach(function (k) {
+      if (typeof a[k] === 'number') s.setProperty('--paean-safe-' + k, a[k] + 'px');
+    });
+  }
   var granted = {};
   (cfg.grant || []).forEach(function (s) { granted[s] = true; });
   var store = {};
