@@ -10,7 +10,7 @@ const CLIDE_STATE_DIR = '.clide'
 const CLIDE_STATE_FILE = 'publish.json'
 const MANIFEST_FILE = 'clide.json'
 const LICENSE_FILE = 'LICENSE'
-const API_BASE = normalizeApiBase(process.env.PAEAN_API_BASE || process.env.ZERO_API_BASE || process.env.ZERO_CLI_BASE_URL || 'https://api.paean.ai')
+const API_BASE = resolveApiBase()
 const DIRECT_ZIP_UPLOAD_MAX_BYTES = Number(process.env.PAEAN_WORKSPACE_DIRECT_UPLOAD_MAX_BYTES || 25 * 1024 * 1024)
 const PUBLISH_DIR_CANDIDATES = ['dist', 'build', 'out', '.output/public', 'public']
 const SAFETY_PATTERNS = [
@@ -99,6 +99,23 @@ function normalizeApiBase(raw) {
   let base = String(raw || '').replace(/\/+$/, '')
   if (base.endsWith('/zero')) base = base.slice(0, -'/zero'.length)
   return base || 'https://api.paean.ai'
+}
+
+// Resolve the Paean API base. PAEAN_API_BASE is an explicit override and is
+// always honoured. ZERO_API_BASE / ZERO_CLI_BASE_URL are accepted only when
+// they actually point at the Paean API: ZERO_CLI_BASE_URL is commonly set to
+// the LLM gateway (e.g. an Anthropic-compatible provider URL), which is NOT
+// the Paean API — blindly using it would route every request at the wrong host.
+function resolveApiBase() {
+  const paeanHost = /(^|\.)paean\.ai$/i
+  for (const raw of [process.env.PAEAN_API_BASE, process.env.ZERO_API_BASE, process.env.ZERO_CLI_BASE_URL]) {
+    if (!raw) continue
+    if (raw === process.env.PAEAN_API_BASE || paeanHost.test(hostOf(raw))) return normalizeApiBase(raw)
+  }
+  return 'https://api.paean.ai'
+}
+function hostOf(base) {
+  try { return new URL(base).hostname } catch { return String(base).split('/')[0] || '' }
 }
 
 function credentialFiles() {

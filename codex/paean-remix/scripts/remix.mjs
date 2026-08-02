@@ -13,7 +13,7 @@ import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 
-const API_BASE = normalizeApiBase(process.env.PAEAN_API_BASE || process.env.ZERO_API_BASE || process.env.ZERO_CLI_BASE_URL || 'https://api.paean.ai')
+const API_BASE = resolveApiBase()
 const REMIX_SOURCES_DIR = '.remix-sources'
 const MANIFEST_FILE = 'clide.json'
 const LICENSE_FILE = 'LICENSE'
@@ -47,7 +47,8 @@ function usage() {
     '                        [--role <aspect>] [--dry-run] [--yes]',
     '',
     'Each <source> must resolve to a published Square app hashKey: a bare hashKey,',
-    'https://8x.gg/<hashKey>, or hashKey=role to tag the aspect you want from it',
+    'https://8x.gg/<hashKey> (also 8x.gg/pub/<hashKey> and 8x.gg/apps/<hashKey>),',
+    'or hashKey=role to tag the aspect you want from it',
     '(e.g. h1=gameplay h2=art h3=theme). A *.clide.app play URL contains the',
     'site handle, not necessarily the Square hashKey; use the hashKey reported by publish.',
     '',
@@ -60,6 +61,23 @@ function normalizeApiBase(raw) {
   let base = String(raw || '').replace(/\/+$/, '')
   if (base.endsWith('/zero')) base = base.slice(0, -'/zero'.length)
   return base || 'https://api.paean.ai'
+}
+
+// Resolve the Paean API base. PAEAN_API_BASE is an explicit override and is
+// always honoured. ZERO_API_BASE / ZERO_CLI_BASE_URL are accepted only when
+// they actually point at the Paean API: ZERO_CLI_BASE_URL is commonly set to
+// the LLM gateway (e.g. an Anthropic-compatible provider URL), which is NOT
+// the Paean API — blindly using it would route every request at the wrong host.
+function resolveApiBase() {
+  const paeanHost = /(^|\.)paean\.ai$/i
+  for (const raw of [process.env.PAEAN_API_BASE, process.env.ZERO_API_BASE, process.env.ZERO_CLI_BASE_URL]) {
+    if (!raw) continue
+    if (raw === process.env.PAEAN_API_BASE || paeanHost.test(hostOf(raw))) return normalizeApiBase(raw)
+  }
+  return 'https://api.paean.ai'
+}
+function hostOf(base) {
+  try { return new URL(base).hostname } catch { return String(base).split('/')[0] || '' }
 }
 
 function credentialFiles() {
@@ -106,7 +124,10 @@ function normalizeToken(token) {
   let hash
   if (lowerHost.endsWith('.clide.app')) hash = host.slice(0, -'.clide.app'.length)
   else if (lowerHost === '8x.gg' || lowerHost === 'www.8x.gg' || lowerHost === 'x.8x.gg') {
-    const segs = (segments[0] || '').toLowerCase() === 'pub' ? segments.slice(1) : segments
+    // Section-prefixed paths (8x.gg/pub/<hash>, 8x.gg/apps/<hash>) carry the
+    // hashKey as their second segment; a bare 8x.gg/<hash> keeps the first.
+    const first = (segments[0] || '').toLowerCase()
+    const segs = (first === 'pub' || first === 'apps') ? segments.slice(1) : segments
     hash = segs[0] || ''
   } else if (lowerHost.endsWith('.8x.gg')) hash = host.slice(0, -'.8x.gg'.length)
   else if (!host.includes('.')) hash = host

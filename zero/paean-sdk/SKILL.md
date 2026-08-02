@@ -1,9 +1,9 @@
 ---
 name: paean-sdk
-description: Add Paean platform capabilities — cross-device cloud save and a shared global leaderboard — to a static app/game published to Paean Apps Square (*.clide.app / 8x.gg), via the Paean Web SDK. Use when the user wants to add cloud save, sync progress across devices, add a global/online leaderboard or high-score board, show player rank, or "接入积分/存档/排行榜" to a Paean/clide.app app. Not for publishing (see paean-publish).
+description: Add Paean platform capabilities — cross-device cloud save and a shared global leaderboard — to a static app/game published to Paean Apps Square (*.clide.app / 8x.gg), via the Paean Web SDK. Use when the user wants to add cloud save, sync progress across devices, add a global/online leaderboard or high-score board, show player rank, or "接入积分/存档/排行榜" to a Paean/clide.app app. Not for publishing (see paean-publish). Runs from Zero CLI.
 ---
 
-# Paean SDK — cloud save + shared leaderboard
+# Paean SDK (Zero CLI) — cloud save + shared leaderboard
 
 Give a published Paean app **cross-device cloud save** and a **shared global
 leaderboard**, using the Paean Web SDK. The app never sees a token or a backend
@@ -12,15 +12,14 @@ URL: every call goes through a host bridge (`window.paean`, wrapped by
 user, isolated per **(app × user)**. In a plain browser there is no host, so
 everything must degrade to `localStorage` and the game must stay fully playable.
 
-> **Using this skill in Codex.** Codex has no frontmatter skill loader, so
-> reference this file explicitly: add a line to your project `AGENTS.md` such as
-> *"To add cloud save / a leaderboard to a Paean app, follow
-> `8x-skills/codex/paean-sdk/SKILL.md`."*, or point Codex at this file in your
-> prompt. The reference files live in `reference/` next to this SKILL.md.
-
 This skill bundles a **verified reference implementation** you copy into the
 project and wire up — it already handles the cross-host edge cases that
 otherwise only surface on a real device.
+
+> **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
+> `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
+> `mkdir -p ~/.zero/skills && cp -R <8x-skills>/zero/paean-sdk ~/.zero/skills/`. The
+> reference files live in `reference/` next to this SKILL.md.
 
 ## Files (`reference/`)
 

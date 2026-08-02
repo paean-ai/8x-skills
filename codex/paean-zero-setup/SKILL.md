@@ -75,8 +75,10 @@ or create `~/.paean/credentials.json`:
 {"token":"<your-paean-jwt>"}
 ```
 
-The publish/remix scripts also read `~/.zero/credentials.json` and honor
-`PAEAN_API_BASE`, `ZERO_API_BASE`, or `ZERO_CLI_BASE_URL` for non-default API endpoints.
+The publish/remix scripts also read `~/.zero/credentials.json`. `PAEAN_API_BASE` overrides the
+API endpoint (default `https://api.paean.ai`); `ZERO_API_BASE` / `ZERO_CLI_BASE_URL` are
+honored only when they point at a `*.paean.ai` host — `ZERO_CLI_BASE_URL` is often the LLM
+gateway (e.g. an Anthropic-compatible provider URL) and is never a Paean API address.
 
 ## Verify for Paean skills
 
