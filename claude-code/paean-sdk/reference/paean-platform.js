@@ -366,8 +366,6 @@ function createPaeanPlatform(opts) {
   };
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { createPaeanPlatform: createPaeanPlatform };
-
 /*
  * ── Host chrome ────────────────────────────────────────────────────────────
  *
@@ -437,5 +435,13 @@ function onPaeanChromeChange(fn) {
     window.removeEventListener('paeanchromechange', handler);
     window.removeEventListener('resize', handler);
     window.removeEventListener('orientationchange', handler);
+  };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    createPaeanPlatform: createPaeanPlatform,
+    paeanChrome: paeanChrome,
+    onPaeanChromeChange: onPaeanChromeChange
   };
 }

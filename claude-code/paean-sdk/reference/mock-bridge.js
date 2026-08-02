@@ -33,6 +33,21 @@
  *                 {top,right,bottom,left}}. Default false — a plain browser
  *                 sets none of these, which is exactly why a layout can look
  *                 fine locally and land under the capsule on a real device.
+ *
+ *                 Both channels of the contract are published, exactly as the
+ *                 player publishes them: the `--paean-chrome-*` /`--paean-safe-*`
+ *                 custom properties AND `window.paean.chromeRect()` /
+ *                 `.safeArea()` + the `paeanchromechange` event.
+ *
+ *                 `right`/`bottom` are DISTANCES FROM THE VIEWPORT EDGE, and
+ *                 `left`/`bottom` are derived from the live viewport (the host
+ *                 derives them the same way) — so give the page a phone-shaped
+ *                 viewport or the fake capsule floats in a desktop window and
+ *                 collides with nothing:
+ *                   await page.setViewportSize({ width: 393, height: 852 });
+ *                 Re-publish after a simulated rotation with
+ *                 `window.__mock.setChrome(spec)`; a plain resize re-derives
+ *                 and fires `paeanchromechange` on its own.
  */
 function mockBridgeSource(opts) {
   opts = opts || {};
@@ -45,8 +60,10 @@ function mockBridgeSource(opts) {
     seed: opts.seed || {},
     board: opts.board || [],
     me: opts.me || { userKey: 'me', displayName: 'Tester' },
+    // Anchored to the top-right edge + a device's insets, NOT to absolute
+    // coordinates: the factory resolves them against the real viewport.
     chrome: opts.chrome === true
-      ? { capsule: { top: 65, right: 16, bottom: 95, left: 346, width: 78, height: 30 },
+      ? { capsule: { top: 65, right: 16, width: 78, height: 30 },
           safeArea: { top: 59, right: 0, bottom: 34, left: 0 } }
       : (opts.chrome || null)
   };
@@ -56,21 +73,63 @@ function mockBridgeSource(opts) {
 
 // Runs INSIDE the page. Kept as a standalone function so it serializes cleanly.
 function mockBridgeFactory(cfg) {
-  // Publish the host-chrome contract the real player injects, so a HUD that
-  // ignores it visibly collides here instead of only on device.
-  if (cfg.chrome) {
-    var s = document.documentElement.style;
-    var c = cfg.chrome.capsule || {}, a = cfg.chrome.safeArea || {};
-    ['top', 'right', 'bottom', 'left', 'width', 'height'].forEach(function (k) {
-      if (typeof c[k] === 'number') s.setProperty('--paean-chrome-' + k, c[k] + 'px');
-    });
-    if (typeof c.top === 'number' && typeof c.height === 'number') {
-      s.setProperty('--paean-chrome-inset-top', (c.top + c.height) + 'px');
-    }
-    ['top', 'right', 'bottom', 'left'].forEach(function (k) {
-      if (typeof a[k] === 'number') s.setProperty('--paean-safe-' + k, a[k] + 'px');
-    });
+  // ── Host chrome ──────────────────────────────────────────────────────────
+  // Publish the contract the real player injects, on BOTH of its channels, so
+  // a HUD that ignores it collides HERE instead of only on device.
+  //
+  // `right`/`bottom` are distances from the viewport edge and `left`/`bottom`
+  // are derived from the live viewport — the same derivation the host does.
+  // Hardcoding them would only be self-consistent at one window size, which is
+  // how a mock ends up blessing a layout the device rejects.
+  var CK = ['top', 'right', 'bottom', 'left', 'width', 'height'];
+  var SK = ['top', 'right', 'bottom', 'left'];
+  var chromeSpec = cfg.chrome || null;
+  var chromeState = null;
+
+  function copy(v) { return v ? JSON.parse(JSON.stringify(v)) : null; }
+  function num(v) { return typeof v === 'number' && isFinite(v) ? v : 0; }
+
+  function resolveChrome(spec) {
+    if (!spec) return null;
+    var c = spec.capsule || {}, a = spec.safeArea || {};
+    var W = window.innerWidth || 0, H = window.innerHeight || 0;
+    var top = num(c.top), width = num(c.width), height = num(c.height);
+    // Anchor from whichever edge was given; derive the opposite one.
+    var left = c.left != null ? num(c.left) : Math.max(0, W - num(c.right) - width);
+    return {
+      chrome: { top: top, right: Math.max(0, W - left - width),
+                bottom: Math.max(0, H - top - height), left: left,
+                width: width, height: height },
+      safeArea: { top: num(a.top), right: num(a.right), bottom: num(a.bottom), left: num(a.left) }
+    };
   }
+
+  // `silent` matches the host: the initial apply doesn't fire the event, every
+  // later move does.
+  function publishChrome(spec, silent) {
+    chromeSpec = spec || null;
+    chromeState = resolveChrome(chromeSpec);
+    var el = document.documentElement, s = el && el.style; // may be absent at document start
+    if (s) {
+      if (chromeState) {
+        CK.forEach(function (k) { s.setProperty('--paean-chrome-' + k, chromeState.chrome[k] + 'px'); });
+        s.setProperty('--paean-chrome-inset-top',
+                      (chromeState.chrome.top + chromeState.chrome.height) + 'px');
+        SK.forEach(function (k) { s.setProperty('--paean-safe-' + k, chromeState.safeArea[k] + 'px'); });
+      } else {
+        CK.forEach(function (k) { s.removeProperty('--paean-chrome-' + k); });
+        s.removeProperty('--paean-chrome-inset-top');
+        SK.forEach(function (k) { s.removeProperty('--paean-safe-' + k); });
+      }
+    }
+    if (silent) return;
+    try {
+      window.dispatchEvent(new CustomEvent('paeanchromechange',
+        { detail: { chrome: copy(chromeState && chromeState.chrome),
+                    safeArea: copy(chromeState && chromeState.safeArea) } }));
+    } catch (e) {}
+  }
+
   var granted = {};
   (cfg.grant || []).forEach(function (s) { granted[s] = true; });
   var store = {};
@@ -90,6 +149,10 @@ function mockBridgeFactory(cfg) {
 
   window.paean = {
     __v: 1,
+    // The JS half of the host-chrome contract. Null until `chrome` is
+    // configured, exactly as the host reports null before it has a layout.
+    chromeRect: function () { return chromeState ? copy(chromeState.chrome) : null; },
+    safeArea: function () { return chromeState ? copy(chromeState.safeArea) : null; },
     auth: {
       status: function () { return Promise.resolve({ scopes: Object.keys(granted) }); },
       request: function (scopes) {
@@ -155,6 +218,15 @@ function mockBridgeFactory(cfg) {
       profile: function () { return Promise.resolve({ displayName: cfg.me.displayName, userKey: cfg.me.userKey }); }
     }
   };
+
+  // Publish AFTER the bridge exists: if anything here throws, the tests fail on
+  // the chrome assertion instead of on a mysteriously undefined `window.paean`.
+  window.__mock.setChrome = function (spec) { publishChrome(spec === undefined ? chromeSpec : spec); };
+  publishChrome(chromeSpec, true);
+  // <html> may not exist yet at document start, and the derived edges move with
+  // the viewport — re-publish on both, as the host does on rotation.
+  document.addEventListener('DOMContentLoaded', function () { publishChrome(chromeSpec, true); });
+  window.addEventListener('resize', function () { publishChrome(chromeSpec); });
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { mockBridgeSource: mockBridgeSource };

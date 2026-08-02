@@ -31,12 +31,43 @@ const cases = [
   { name: 'missing save as resolved null', mock: mockBridgeSource({ grant: ['storage.kv'], missingAsNull: true }) },
   { name: 'missing save as rejected 404', mock: mockBridgeSource({ grant: ['storage.kv'] }) },
   { name: 'bare-value storage.get shape', mock: mockBridgeSource({ grant: ['storage.kv'], returnBare: true, seed: { save: { best: 1 } } }) },
+
+  // Host chrome. The asserts below only prove the contract is published and
+  // self-consistent — whether your HUD actually clears the capsule is a LOOK:
+  // screenshot this case and check nothing readable or tappable sits in the
+  // top-right rect.
+  { name: 'host chrome published on both channels',
+    mock: mockBridgeSource({ grant: ['storage.kv'], chrome: true }),
+    check: async (p) => {
+      const ok = await p.evaluate(() => {
+        const css = getComputedStyle(document.documentElement);
+        const px = (n) => parseFloat(css.getPropertyValue(n));
+        const r = window.paean.chromeRect();
+        return !!r
+          && r.left + r.width + r.right === window.innerWidth   // derived from the live viewport
+          && r.top + r.height + r.bottom === window.innerHeight
+          && px('--paean-chrome-inset-top') === r.top + r.height // CSS agrees with JS
+          && px('--paean-safe-bottom') === window.paean.safeArea().bottom;
+      });
+      // Rotation: the capsule keeps its right-edge anchor and the event fires.
+      await p.evaluate(() => {
+        window.__rotated = null;
+        window.addEventListener('paeanchromechange', (e) => { window.__rotated = e.detail.chrome; });
+      });
+      await p.setViewportSize({ width: 852, height: 393 });
+      await p.waitForTimeout(100);
+      const rotated = await p.evaluate(() => window.__rotated && window.__rotated.right === 16);
+      return ok && rotated;
+    } },
 ];
 
 const browser = await chromium.launch(); // add { executablePath } if using a system browser
 let fail = 0;
 for (const c of cases) {
-  const page = await browser.newPage();
+  // Phone-shaped: the mock derives the capsule's left/bottom edges from the
+  // live viewport, so a desktop window would park the fake capsule far from
+  // wherever your HUD actually sits and hide the collision it exists to show.
+  const page = await browser.newPage({ viewport: { width: 393, height: 852 } });
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
   if (c.mock) await page.addInitScript(c.mock);
