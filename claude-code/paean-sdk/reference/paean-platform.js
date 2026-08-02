@@ -2,6 +2,12 @@
  * paean-platform.js — drop-in cloud-save + shared-leaderboard integration for
  * a Paean Apps Square app (a static site published to *.clide.app).
  *
+ * ⚠ Also read the "Host chrome" section at the BOTTOM of this file. It applies
+ * to EVERY Square app, including ones that use none of the cloud features: the
+ * player runs your page full screen and floats a capsule over the top-right
+ * corner, so a HUD pinned at `top: 8px` lands underneath it. `paeanChrome()`
+ * and `onPaeanChromeChange()` are exported for that.
+ *
  * Requires `paean-sdk.js` loaded first (exposes the global `PaeanSDK`). This
  * module never touches tokens or any backend URL: every call goes through the
  * host bridge (`PaeanSDK.host`), which the Paean app / 8x.gg web shell proxies
@@ -360,4 +366,82 @@ function createPaeanPlatform(opts) {
   };
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { createPaeanPlatform: createPaeanPlatform };
+/*
+ * ── Host chrome ────────────────────────────────────────────────────────────
+ *
+ * REQUIRED READING even if you use nothing else in this file.
+ *
+ * The Paean player runs your page FULL SCREEN — edge to edge, under the notch
+ * / Dynamic Island and under the home indicator — and floats a host capsule
+ * (`···` menu + exit) over the TOP-RIGHT corner. Two regions are therefore not
+ * yours to draw interactive UI in.
+ *
+ * The host publishes both as CSS custom properties on <html>, set before your
+ * first paint and updated on rotation. Read them; never hard-code a top-right
+ * element at `top: 8px` — it lands under the capsule.
+ *
+ *   --paean-chrome-top/right/bottom/left/width/height   the capsule's rect
+ *   --paean-chrome-inset-top    top + height: first y a top-right element may use
+ *   --paean-safe-top/right/bottom/left                  device safe-area insets
+ *
+ * Always supply a 0px fallback so the same page still lays out in a plain
+ * browser, where nothing sets these:
+ *
+ *   .hud-top-right { top: calc(var(--paean-chrome-inset-top, 0px) + 8px);
+ *                    right: calc(var(--paean-safe-right, 0px) + 8px); }
+ *   .hud-bottom    { bottom: calc(var(--paean-safe-bottom, 0px) + 8px); }
+ *
+ * Backgrounds and canvases SHOULD still fill the viewport. It is only what the
+ * player must READ or TAP that insets.
+ *
+ * CSS alone covers most games. `paeanChrome()` below is for the cases it
+ * doesn't: laying out a <canvas> in JS, or recomputing on rotation.
+ */
+function paeanChrome() {
+  var css = window.getComputedStyle(document.documentElement);
+  var px = function (name) {
+    var v = parseFloat(css.getPropertyValue(name));
+    return isFinite(v) ? v : 0;
+  };
+  return {
+    // true only inside the Paean player; false in a plain browser.
+    present: !!parseFloat(css.getPropertyValue('--paean-chrome-height')),
+    capsule: {
+      top: px('--paean-chrome-top'), right: px('--paean-chrome-right'),
+      bottom: px('--paean-chrome-bottom'), left: px('--paean-chrome-left'),
+      width: px('--paean-chrome-width'), height: px('--paean-chrome-height')
+    },
+    // First y a top-right element may occupy without hitting the capsule.
+    insetTop: px('--paean-chrome-inset-top'),
+    safeArea: {
+      top: px('--paean-safe-top'), right: px('--paean-safe-right'),
+      bottom: px('--paean-safe-bottom'), left: px('--paean-safe-left')
+    }
+  };
+}
+
+/*
+ * Re-run `fn` whenever the reserved regions move (rotation, split view).
+ * Fires once immediately so you can use it as your only layout entry point.
+ * Returns an unsubscribe function.
+ */
+function onPaeanChromeChange(fn) {
+  var handler = function () { fn(paeanChrome()); };
+  handler();
+  window.addEventListener('paeanchromechange', handler);
+  window.addEventListener('resize', handler);
+  window.addEventListener('orientationchange', handler);
+  return function () {
+    window.removeEventListener('paeanchromechange', handler);
+    window.removeEventListener('resize', handler);
+    window.removeEventListener('orientationchange', handler);
+  };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    createPaeanPlatform: createPaeanPlatform,
+    paeanChrome: paeanChrome,
+    onPaeanChromeChange: onPaeanChromeChange
+  };
+}

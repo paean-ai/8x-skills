@@ -177,7 +177,8 @@ Rules:
 - Top-right UI clears `--paean-chrome-inset-top`; the other edges clear `--paean-safe-*`.
 - Backgrounds and canvases SHOULD fill the viewport. It is only what the player
   must read or tap that insets.
-- Optional JS, for relayout on rotation: `window.paean.chromeRect()` /
+- Optional JS, for relayout on rotation: `paeanChrome()` / `onPaeanChromeChange(fn)` in `reference/paean-platform.js` (read the CSS
+  vars, fire on rotation), or the raw `window.paean.chromeRect()` /
   `window.paean.safeArea()` plus the `paeanchromechange` event.
 
 ```css
@@ -210,6 +211,12 @@ Prove the integration offline before publishing:
 3. `node reference/test-example.mjs` — it injects `mock-bridge.js` to exercise
    plain-browser, pre-granted, partial-grant, wholesale-reject, both
    missing-save shapes, and the bare-value shape.
+4. Layout: run at a phone viewport with `mockBridgeSource({ chrome: true })`,
+   which publishes the capsule rect + safe insets on both channels the player
+   uses. Without it the browser sets none of them and a HUD pinned at
+   `top: 8px` passes locally, then lands under the capsule on device.
+   Screenshot it — the asserts prove the geometry is published, only your eyes
+   prove nothing readable or tappable sits under it.
 
 Acceptance: plain browser plays with no errors; deleting `window.paean.leaderboard`
 in the mock doesn't crash; in a real `8x.gg` shell the first score submit
