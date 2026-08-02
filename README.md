@@ -1,12 +1,12 @@
 # 8x Skills
 
 Portable agent skills for **building**, **publishing**, and **remixing** games on
-[Paean Apps Square](https://clide.app) (`*.clide.app` / `8x.gg`) — usable outside Zero CLI,
-from **Claude Code** and **Codex** (or any agent that can read a `SKILL.md` and run a Node script).
+[Paean Apps Square](https://clide.app) (`*.clide.app` / `8x.gg`) — usable from **Zero CLI**,
+**Claude Code**, and **Codex** (or any agent that can read a `SKILL.md` and run a Node script).
 
 | Skill | What it does |
 |-------|--------------|
-| **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Claude Code or Codex projects. |
+| **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Zero CLI, Claude Code, or Codex projects. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-sdk** | Add Paean platform capabilities — cross-device **cloud save** and a **shared global leaderboard** — to a static app/game via the Paean Web SDK. Ships a verified, framework-agnostic integration module + a mock host bridge for offline testing. Handles the cross-host edge cases (per-scope grants, return-shape differences, late bridge injection, offline queue) and degrades cleanly to `localStorage` in a plain browser. |
 | **paean-publish** | Publish a static frontend (top-level `index.html`) to a Paean workspace, deploy it to a `*.clide.app` URL, and list it in Paean Apps Square. Picks a meaningful title, ensures `.clideignore` / `clide.json` / `LICENSE` are complete, scans for secrets, and forwards remix lineage. |
@@ -18,6 +18,12 @@ browser reference files (no server, no build) you copy into your app.
 
 ```
 8x-skills/
+├── zero/
+│   ├── paean-skills-update/ SKILL.md
+│   ├── paean-zero-setup/ SKILL.md
+│   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
+│   ├── paean-publish/   SKILL.md + scripts/publish.mjs
+│   └── paean-remix/     SKILL.md + scripts/remix.mjs
 ├── claude-code/
 │   ├── paean-skills-update/ SKILL.md
 │   ├── paean-zero-setup/ SKILL.md
@@ -32,9 +38,11 @@ browser reference files (no server, no build) you copy into your app.
     └── paean-remix/     SKILL.md + scripts/remix.mjs
 ```
 
-The Claude Code and Codex variants ship the **same** scripts and reference files; only the
-`SKILL.md` packaging differs (Claude Code uses YAML frontmatter for auto-loading; Codex
-references the file explicitly).
+All three variants ship the **same** scripts and reference files; only the `SKILL.md`
+packaging differs. The **zero/** and **claude-code/** variants use YAML frontmatter
+(`name:` + `description:`) for auto-loading — Zero CLI discovers skills from
+`.zero/skills/` / `~/.zero/skills/`, Claude Code from `.claude/skills/` /
+`~/.claude/skills/`. Codex has no skill loader and references the files explicitly.
 
 ## Requirements
 
@@ -64,9 +72,29 @@ export PAEAN_AUTH_TOKEN="<your-paean-jwt>"
 
 The scripts also read `~/.zero/credentials.json` if present. **Never paste the token into the
 chat** — keep it in the environment or the credentials file. Optional: `PAEAN_API_BASE`
-overrides the API endpoint (default `https://api.paean.ai`).
+overrides the API endpoint (default `https://api.paean.ai`). `ZERO_API_BASE` /
+`ZERO_CLI_BASE_URL` are only honored when they point at a `*.paean.ai` host — in particular
+`ZERO_CLI_BASE_URL` is often set to the LLM gateway (an Anthropic-compatible provider URL),
+which is *not* a Paean API address and is ignored.
 
 ## Install
+
+### Zero CLI
+
+Zero discovers skills from a `skills/` directory — project `.zero/skills/` or global
+`~/.zero/skills/`. Copy each Zero skill directory in:
+
+```bash
+mkdir -p ~/.zero/skills
+cp -r 8x-skills/zero/paean-publish ~/.zero/skills/
+cp -r 8x-skills/zero/paean-remix   ~/.zero/skills/
+cp -r 8x-skills/zero/paean-zero-setup ~/.zero/skills/
+cp -r 8x-skills/zero/paean-sdk ~/.zero/skills/
+cp -r 8x-skills/zero/paean-skills-update ~/.zero/skills/
+```
+
+Zero auto-offers a skill when a request matches its `description`; you can also invoke it
+explicitly ("use the paean-publish skill").
 
 ### Claude Code
 

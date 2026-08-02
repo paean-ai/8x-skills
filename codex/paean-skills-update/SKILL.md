@@ -1,6 +1,6 @@
 ---
 name: paean-skills-update
-description: Update the local 8x-skills repository and reinstall Paean skills for Claude Code or Codex. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean-publish / paean-remix / paean-zero-setup skill changes.
+description: Update the local 8x-skills repository and reinstall Paean skills for Claude Code, Codex, or Zero CLI. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean-publish / paean-remix / paean-zero-setup skill changes.
 ---
 
 # Paean Skills Update (Codex)
@@ -15,11 +15,14 @@ user asks to update skills, refresh Paean skills, pull the latest skill instruct
 
 ## Locate the skills repo
 
-Prefer the current repo if it contains `claude-code/` and `codex/`. Otherwise use the user's
-known checkout if present:
+Prefer the current repo if it contains `claude-code/`, `codex/`, and `zero/`. Otherwise look
+for the user's checkout (ask where it lives, or check common spots such as
+`~/Zero/opensource/8x-skills` or `~/a8e/paean-opensource/8x-skills`). If there is no
+checkout, clone it:
 
 ```bash
-cd /Users/ryan/a8e/paean-opensource/8x-skills
+git clone https://github.com/paean-ai/8x-skills
+cd 8x-skills
 ```
 
 Check status before pulling. Do not discard local changes.
@@ -67,12 +70,30 @@ Codex can use this repo in place. Ensure the project `AGENTS.md` points at the c
 If the project keeps a vendored copy of `8x-skills/`, update that copy from this checkout with
 the user's approval.
 
+## Reinstall for Zero CLI
+
+Zero CLI discovers skills from a `skills/` directory (project `.zero/skills/` or the global
+config dir). Copy each Zero skill directory in:
+
+```bash
+mkdir -p ~/.zero/skills
+cp -R zero/paean-publish ~/.zero/skills/
+cp -R zero/paean-remix ~/.zero/skills/
+cp -R zero/paean-zero-setup ~/.zero/skills/
+cp -R zero/paean-sdk ~/.zero/skills/
+cp -R zero/paean-skills-update ~/.zero/skills/
+```
+
+If a project uses `.zero/skills/`, copy there instead or in addition.
+
 ## Verify
 
 ```bash
-find claude-code codex -maxdepth 2 -name SKILL.md | sort
+find claude-code codex zero -maxdepth 2 -name SKILL.md | sort
 node --check codex/paean-publish/scripts/publish.mjs
 node --check codex/paean-remix/scripts/remix.mjs
+node --check zero/paean-publish/scripts/publish.mjs
+node --check zero/paean-remix/scripts/remix.mjs
 ```
 
 Report the current commit hash and any files that remain modified.
