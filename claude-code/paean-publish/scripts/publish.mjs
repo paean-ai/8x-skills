@@ -43,10 +43,23 @@ const SAFETY_PATTERNS = [
   '*.tmp',
 ]
 
+// Only checks that a value was actually supplied. The subdomain's format, the
+// minimum length, and the reserved-name list all live in zero-api
+// (publish.service.ts `validateHandle`) and are enforced there for every
+// publish surface. Re-implementing them here would silently drift and start
+// rejecting handles the server would happily accept, so we send the string as
+// typed and let the 400 come back — explainHandleFailure surfaces its reason.
+function requireHandleValue(raw) {
+  const handle = String(raw || '').trim()
+  if (!handle) throw new Error('--handle needs a value, e.g. --handle neon-drift-racer')
+  return handle
+}
+
 function usage() {
   return [
     'Usage: publish-helper.mjs [--dry-run] [--yes] [--allow-secrets] [--dir <publish-dir>]',
     '                          [--title <title>] [--summary <text>] [--category <category>] [--tag <tag>]',
+    '                          [--handle <subdomain>]',
     '       publish-helper.mjs --delete [--handle <legacy-handle>]',
     '',
     'Publishes a static frontend directory with top-level index.html to a Paean workspace, Paean Apps Square, and *.clide.app.',
@@ -54,6 +67,11 @@ function usage() {
     '--dry-run validates and prints the publish directory, archive summary, and safety scan without API calls or local state writes.',
     '--yes skips the interactive public-publish confirmation.',
     '--allow-secrets bypasses the high-confidence secret scanner.',
+    '--handle picks the *.clide.app subdomain; the server validates it (roughly 9-32 chars,',
+    '  lowercase a-z 0-9 and dashes, some names reserved) and is the authority.',
+    '  Claiming a subdomain requires a paid Paean subscription and costs more credits than an',
+    '  auto-assigned one. Omit it to keep the app\'s current subdomain, or to get a random one',
+    '  on first publish. Free accounts must omit it.',
     '--delete only removes a legacy direct publish handle saved by older helpers.',
   ].join('\n')
 }
@@ -81,12 +99,17 @@ function parseArgs(argv) {
       const tag = argv[++i]
       if (tag) out.tags.push(tag)
     } else if (arg.startsWith('--tag=')) out.tags.push(arg.slice('--tag='.length))
-    else if (arg === '--handle') out.handle = argv[++i]
+    // `?? ''` (not undefined) so a bare trailing `--handle` is a hard error in
+    // normalizeHandle rather than silently publishing under a random subdomain.
+    else if (arg === '--handle') out.handle = argv[++i] ?? ''
     else if (arg.startsWith('--handle=')) out.handle = arg.slice('--handle='.length)
     else if (out.delete && !out.handle && !arg.startsWith('-')) out.handle = arg
     else throw new Error('Unknown /publish argument: ' + arg)
   }
-  if (!out.delete && out.handle) throw new Error('--handle is only valid with --delete for legacy direct publishes.')
+  // On publish, --handle picks the *.clide.app subdomain (subscriber-only,
+  // enforced server-side). On --delete it names the legacy handle to remove, and
+  // is passed through verbatim so older non-conforming handles stay deletable.
+  if (!out.delete && out.handle !== undefined) out.handle = requireHandleValue(out.handle)
   if (out.delete && out.dir) throw new Error('--dir is only valid when publishing, not deleting.')
   if (out.delete && out.dryRun) throw new Error('--dry-run is only valid when publishing, not deleting.')
   if (out.delete && out.allowSecrets) throw new Error('--allow-secrets is only valid when publishing, not deleting.')
@@ -738,7 +761,7 @@ async function importZip(token, workspaceHashKey, zipData) {
   return await importZipDirect(token, workspaceHashKey, zipData)
 }
 
-async function publishSquare(token, workspaceHashKey, metadata, remix) {
+async function publishSquare(token, workspaceHashKey, metadata, remix, handle) {
   const body = {
     workspaceHashKey,
     title: metadata.title,
@@ -749,6 +772,9 @@ async function publishSquare(token, workspaceHashKey, metadata, remix) {
     indexFile: 'index.html',
     visibility: 'public',
   }
+  // Omitted entirely when not requested, so the server keeps the app's current
+  // subdomain (or assigns a random one on first publish).
+  if (handle) body.handle = handle
   if (remix && remix.parent) {
     // Primary upstream for legacy columns/provenance.
     body.remixOfHashKey = remix.parent
@@ -756,9 +782,42 @@ async function publishSquare(token, workspaceHashKey, metadata, remix) {
     // and records SquareRemixEdge rows for the multi-parent DAG.
     body.remixOfHashKeys = remix.parents.map(p => p.hashKey).filter(Boolean)
   }
-  const json = await apiJson('/square/publish', token, body)
+  let json
+  try {
+    json = await apiJson('/square/publish', token, body)
+  } catch (err) {
+    throw handle ? explainHandleFailure(err, handle) : err
+  }
   if (!json.data || !json.data.playUrl || !json.data.hashKey) throw new Error('Square publish response missing data.playUrl or data.hashKey')
   return json.data
+}
+
+// The subdomain rejections are the ones a caller can actually act on, so turn
+// the raw status line into a concrete next step. Anything else passes through.
+function explainHandleFailure(err, handle) {
+  const message = err instanceof Error ? err.message : String(err)
+  if (/\b402\b/.test(message)) {
+    return new Error(
+      'Choosing the subdomain "' + handle + '" requires an active Paean subscription (free accounts get an auto-assigned one).\n' +
+      'Either upgrade at https://one.paean.ai, or re-run without --handle to publish under an assigned subdomain.\n' +
+      'Server said: ' + message,
+    )
+  }
+  if (/\b409\b/.test(message)) {
+    return new Error(
+      'The subdomain "' + handle + '" is already taken by another account. Pick a different --handle.\n' +
+      'Server said: ' + message,
+    )
+  }
+  if (/\b400\b/.test(message)) {
+    // The server states the actual reason (too short, bad characters, reserved
+    // name); quote it rather than guessing which rule was hit.
+    return new Error(
+      'The subdomain "' + handle + '" was rejected. Pick a different --handle.\n' +
+      'Server said: ' + message,
+    )
+  }
+  return err
 }
 
 async function unpublishLegacy(handle, token) {
@@ -777,7 +836,13 @@ async function confirmPublicPublish(args, summary, publishDir, projectRoot, meta
   console.log('')
   console.log('Public publish confirmation')
   console.log('This will upload ' + summary.fileCount + ' files (' + summary.totalBytes + ' bytes) from ' + (relativeUnix(projectRoot, publishDir) || '.') + '.')
-  console.log('The app will be listed publicly in Paean Apps Square and reachable at a *.clide.app URL.')
+  if (args.handle) {
+    console.log('The app will be listed publicly in Paean Apps Square at https://' + args.handle + '.clide.app/')
+    console.log('Claiming that subdomain needs an active paid Paean subscription and costs 30 credits (vs 5 for an assigned one).')
+    console.log('If the app is already live on a different subdomain, that old URL stops working.')
+  } else {
+    console.log('The app will be listed publicly in Paean Apps Square and reachable at a *.clide.app URL.')
+  }
   console.log('Title: ' + metadata.title)
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   const answer = await new Promise(resolve => rl.question('Type "publish" to continue: ', resolve))
@@ -844,6 +909,10 @@ async function main() {
       destination: 'Paean Apps Square public listing + *.clide.app',
       ignoredBy: CLIDE_IGNORE_FILE,
       writesLocalState: false,
+      // null = let the server keep the current subdomain or assign a random
+      // one. A value here is a subscriber-only claim, verified on publish.
+      requestedHandle: args.handle || null,
+      requestedUrl: args.handle ? 'https://' + args.handle + '.clide.app/' : null,
       metadata,
       license,
       titleSource: resolvedTitle.source,
@@ -881,7 +950,7 @@ async function main() {
     console.log('Uploading ' + files.length + ' files from ' + (relativeUnix(projectRoot, publishDir) || '.') + ' to workspace...')
     const imported = await importZip(token, workspaceHashKey, zip.data)
     console.log('Publishing public Square listing...')
-    const app = await publishSquare(token, workspaceHashKey, metadata, remix)
+    const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle)
     saveState(projectRoot, {
       workspaceHashKey,
       squareAppHashKey: app.hashKey,
@@ -899,6 +968,8 @@ async function main() {
       workspaceHashKey,
       squareAppHashKey: app.hashKey,
       url: app.playUrl,
+      handle: app.publishedSiteHandle || null,
+      requestedHandle: args.handle || null,
       status: app.status || 'listed',
       title: metadata.title,
       titleSource: resolvedTitle.source,

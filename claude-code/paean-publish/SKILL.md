@@ -1,6 +1,6 @@
 ---
 name: paean-publish
-description: Publish a static frontend (a game or site with a top-level index.html) to Paean Apps Square and a *.clide.app URL using a Paean JWT. Use when the user asks to publish, deploy, ship, or list a static app/game to Paean Apps Square / clide.app (e.g. "publish this game", "deploy to clide.app", "发布到应用广场").
+description: Publish a static frontend (a game or site with a top-level index.html) to Paean Apps Square and a *.clide.app URL using a Paean JWT. Use when the user asks to publish, deploy, ship, or list a static app/game to Paean Apps Square / clide.app (e.g. "publish this game", "deploy to clide.app", "发布到应用广场"). Also use when they want to choose or change the app's *.clide.app subdomain (e.g. "publish it at neon-drift.clide.app", "change my app's subdomain", "自定义子域名", "改子域名") — a paid-subscription feature this skill's --handle flag exposes.
 ---
 
 # Paean Publish
@@ -41,16 +41,47 @@ root so the script treats the current directory as the project to publish.
    explicit `--title` that reflects the theme and gameplay (e.g. `--title "Neon Drift Racer"`).
    Add `--summary`, `--category`, and repeated `--tag` when they improve the listing.
 
-3. **Confirm with the user.** Publishing is public: the site becomes reachable at a
+3. **Only if the user asked for a specific subdomain, add `--handle`.** Do not pass it
+   otherwise — omitting it is what keeps an existing app's URL stable, and it is the only
+   way a free account can publish at all. See **Custom subdomains** below for who may use
+   it and what changing one costs.
+
+4. **Confirm with the user.** Publishing is public: the site becomes reachable at a
    `*.clide.app` URL and is listed in Paean Apps Square. Get explicit confirmation.
 
-4. **Publish:**
+5. **Publish:**
    ```bash
-   node "$SKILL_DIR/scripts/publish.mjs" --yes --title "<Good Name>" [--summary "..."] [--category "..."] [--tag "..."]
+   node "$SKILL_DIR/scripts/publish.mjs" --yes --title "<Good Name>" [--summary "..."] [--category "..."] [--tag "..."] [--handle "<subdomain>"]
    ```
    `--yes` skips the script's own interactive prompt (you already confirmed with the user).
 
-5. Report the resulting `*.clide.app` URL, the Square app hash, and the workspace hash.
+6. Report the resulting `*.clide.app` URL, the Square app hash, and the workspace hash.
+
+## Custom subdomains (paid plans)
+
+Every published app is served at `https://<handle>.clide.app/`. By default the server picks
+that handle: a random one on first publish, and the app's existing one on every re-publish.
+`--handle <subdomain>` overrides it.
+
+- **Who may.** Claiming a subdomain requires an **active paid Paean subscription**. Free
+  accounts get an auto-assigned handle; passing `--handle` fails with a 402 and nothing is
+  published. The server is the authority on this — the script does not pre-check the plan,
+  so never tell the user they are eligible based on anything but a successful publish.
+- **Format.** 9–32 characters, lowercase `a-z`, `0-9`, and `-`, starting with a letter or
+  digit. A set of names is reserved (`admin`, `api`, `app`, …) and rejected with a 400. The
+  script shape-checks the value before uploading anything, so typos fail instantly.
+- **Cost.** Claiming a subdomain costs 30 credits, against 5 for a first publish under an
+  assigned one. Only the claim is surcharged — once the handle is yours, re-publishing over
+  it costs the ordinary 2-credit overwrite. Mention this when the user is choosing.
+- **Changing an existing app's subdomain is destructive.** The app moves to the new URL and
+  the old one is torn down — previously shared links, embeds, and QR codes break. Confirm
+  this explicitly with the user before passing a `--handle` that differs from the app's
+  current one.
+- **Re-publishing keeps the URL.** Once an app has a handle, re-running without `--handle`
+  publishes over the same subdomain. Re-passing the app's current handle is treated as an
+  overwrite too — same URL, no new claim, no subscription check.
+- Handles are globally unique across all Paean users; one taken by someone else fails with
+  a 409. Suggest a different name rather than retrying.
 
 ## Behavior
 
@@ -79,16 +110,25 @@ root so the script treats the current directory as the project to publish.
   `SquareRemixEdge` DAG.
 - Re-publishing reuses the saved workspace (`.clide/publish.json`) to update the same Square
   listing.
+- The dry-run echoes the subdomain you asked for as `requestedHandle` / `requestedUrl`
+  (both `null` when `--handle` is omitted); a real publish reports the handle the server
+  actually assigned as `handle`, alongside `requestedHandle`.
 
 ## Flags
 
 `--dry-run`, `--yes`, `--allow-secrets`, `--dir <dir>`, `--title <t>`, `--summary <t>`,
-`--category <c>`, `--tag <t>` (repeatable), `--license <spdx>`. Run with `--help` for usage.
+`--category <c>`, `--tag <t>` (repeatable), `--license <spdx>`, `--handle <subdomain>`
+(paid plans — see **Custom subdomains**). Run with `--help` for usage.
 
 ## Failure handling
 
 - Missing credentials → use the **paean-zero-setup** skill, or tell the user to set
   `PAEAN_AUTH_TOKEN`.
+- `--handle` rejected with **402** → the account has no active paid subscription. Offer to
+  publish without `--handle` (auto-assigned URL), or point them at https://one.paean.ai to
+  upgrade. Do not retry the same command.
+- `--handle` rejected with **409** (taken) or **400** (reserved/malformed) → propose a
+  different subdomain; the app was not published.
 - No top-level `index.html` → built apps must publish their build output directory, not the
   source directory. Build first, or pass `--dir <build-output>`.
 - `zip` not found → install it (it ships with macOS and most Linux distros).
