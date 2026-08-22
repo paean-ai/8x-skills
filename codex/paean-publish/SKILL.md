@@ -1,115 +1,98 @@
 ---
 name: paean-publish
-description: Publish a static frontend (a game or site with a top-level index.html) to Paean Apps Square and a *.clide.app URL using a Paean JWT. Use when the user asks to publish, deploy, ship, or list a static app/game to Paean Apps Square / clide.app (e.g. "publish this game", "deploy to clide.app", "发布到应用广场"). Also use when they want to choose or change the app's *.clide.app subdomain (e.g. "publish it at neon-drift.clide.app", "change my app's subdomain", "自定义子域名", "改子域名") — a paid-subscription feature this skill's --handle flag exposes.
+description: Publish a static frontend with a top-level index.html to Clide hosting, optionally without an Apps Square listing, or publish it publicly to Paean Apps Square. Use for clide.app hosting/deploy requests, Square listing requests, and custom *.clide.app subdomains. This skill does not deploy server-side Workers or provision D1/R2 bindings.
 ---
 
 # Paean Publish (Codex)
 
-Publish the current project's static frontend (a game or site with a top-level `index.html`)
-to a Paean workspace, deploy it to a `*.clide.app` URL, and list it publicly in **Paean Apps
-Square**.
+Publish a static frontend to a public `*.clide.app` URL using the bundled
+`scripts/publish.mjs`. The script needs Node 18+ and `zip` on PATH.
 
-> **Using this skill in Codex.** Codex has no frontmatter skill loader, so reference this
-> file explicitly: add a line to your project `AGENTS.md` such as
-> *"To publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`."*,
-> or point Codex at this file in your prompt ("use the paean-publish skill"). The skill is a
-> self-contained Node script — `scripts/publish.mjs` — needing Node 18+ and `zip` on PATH.
+## Choose the mode from the user's intent
+
+| User intent | Mode | Remote effect |
+|---|---|---|
+| Host/deploy on Clide, keep it out of the gallery | `--hosting-only` | Direct static hosting only; no workspace and no Apps Square row |
+| Publish/list/share in Apps Square | default | Workspace upload, public Square listing, and `*.clide.app` site |
+
+Do not turn a hosting request into a Square listing. If the user says “do not list in the
+Square”, `--hosting-only` is mandatory. Both modes create a publicly reachable site, so get
+explicit confirmation immediately before the real upload. A prior confirmation for one mode
+does not authorize switching to the other.
 
 ## Credentials
 
-The script authenticates with a Paean JWT, resolved in order:
+Authentication resolves from `PAEAN_AUTH_TOKEN`, then `~/.paean/credentials.json` or
+`~/.zero/credentials.json`. Prefer the `paean-zero-setup` skill when login is missing. Never
+ask the user to paste a token into chat.
 
-1. `PAEAN_AUTH_TOKEN` environment variable (your Paean JWT) — recommended.
-2. `~/.paean/credentials.json` or `~/.zero/credentials.json` as `{"token":"<jwt>"}`.
+## Workflow
 
-Prefer the `paean-zero-setup` skill to install Zero and run `zero login`. Otherwise set the
-token via the environment; never paste it into the conversation.
+Run from the project root. Select the final mode during dry-run so the report describes the
+same destination that will be used for the real publish.
 
-## Run
+```bash
+# Clide hosting only; never creates a Square listing
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist] [--handle paeaninsight]
 
-`$SKILL_DIR` is the directory containing this file. Run all commands from the project root
-(the script publishes the current working directory).
+# Apps Square + Clide site
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist] [--title "Good Name"] [--handle chosen-name]
+```
 
-1. **Inspect first (no API calls, no writes):**
-   ```bash
-   node "$SKILL_DIR/scripts/publish.mjs" --dry-run
-   ```
-   It prints the resolved publish directory, file/byte summary, secret-scan result, the
-   chosen `title` + `titleSource`, the license, and any remix lineage from `clide.json`.
+Review `publishDir`, file/byte summary, `secretScan`, `runtimeCompatibility`, destination,
+and requested/effective handle. If the dry-run is safe and the user confirms that exact
+public destination, run the same command without `--dry-run` and add `--yes`.
 
-2. **Pick a good public name.** Do NOT publish under the bare directory name. If the dry-run
-   reports `titleSource: "directory-name"` or a `titleWarning`, inspect the game's content
-   (`index.html` title/heading, `clide.json`, `package.json`) and pass an explicit `--title`
-   that reflects the theme and gameplay. Add `--summary`, `--category`, and `--tag` as useful.
+Report the URL, handle, file count, mode, and `.clide/publish.json`. Report workspace/Square
+hashes only in Square mode.
 
-3. **Add `--handle` only if the user asked for a specific subdomain.** Omitting it keeps an
-   existing app's URL stable and is the only way a free account can publish. See **Custom
-   subdomains**.
+## Full-stack and Worker projects
 
-4. **Confirm with the user** — publishing is public (a `*.clide.app` site + a Square listing).
+This skill uploads static browser files. It does not deploy Worker code, execute D1
+migrations, create D1/R2/KV/Durable Object resources, or configure Worker bindings/routes.
 
-5. **Publish:**
-   ```bash
-   node "$SKILL_DIR/scripts/publish.mjs" --yes --title "<Good Name>" [--summary "..."] [--category "..."] [--tag "..."] [--handle "<subdomain>"]
-   ```
+The script inspects Wrangler configuration. When it detects server runtime or Cloudflare
+bindings:
 
-6. Report the `*.clide.app` URL, the Square app hash, and the workspace hash.
+- dry-run returns `runtimeCompatibility.status: "blocked"`;
+- a real publish stops before authentication or network mutation;
+- `--allow-static-only` bypasses the block only when the user explicitly accepts that the
+  backend/API will not be deployed and the uploaded frontend may be non-functional.
 
-## Custom subdomains (paid plans)
+Do not use `--allow-static-only` merely to make a deployment succeed. Use the project's
+Worker deployment workflow or add an actual Paean full-stack deployment API instead.
 
-Apps are served at `https://<handle>.clide.app/`. The server picks the handle by default —
-random on first publish, the app's existing one on re-publish. `--handle <subdomain>`
-overrides it.
+## Custom subdomains
 
-- Requires an **active paid Paean subscription**; free accounts get a 402 and nothing is
-  published. The script does not pre-check the plan, so only a successful publish proves
-  eligibility.
-- Format: 9–32 chars, lowercase `a-z`, `0-9`, `-`, starting with a letter or digit. Reserved
-  names (`admin`, `api`, `app`, …) return 400. The script shape-checks before uploading.
-- Claiming costs 30 credits vs 5 for a first publish under an assigned handle. Only the claim
-  is surcharged; re-publishing over a handle you already own is the ordinary 2-credit overwrite.
-- **Changing an existing app's subdomain tears down the old URL** — shared links, embeds, and
-  QR codes break. Confirm explicitly before passing a handle that differs from the current one.
-- Re-publishing without `--handle` (or re-passing the current handle) is an overwrite: same
-  URL, no new claim, no subscription check.
-- Handles are globally unique; one taken by another user returns 409. Suggest another name
-  instead of retrying.
+`--handle <subdomain>` requests `https://<subdomain>.clide.app/`. The server is authoritative
+for availability and validation. Current server rules are approximately 9–32 lowercase
+letters, digits, and dashes, starting with a letter or digit; some names are reserved.
 
-## Behavior
+- Claiming a new custom handle requires an active paid subscription and may cost more credits.
+- A taken handle returns 409; a malformed/reserved handle returns 400; an ineligible account
+  returns 402. Do not retry unchanged after these responses.
+- Hosting-only re-publishes automatically reuse the handle saved in `.clide/publish.json`.
+- If a hosting-only project already has a saved handle, passing a different handle is blocked
+  instead of silently creating a second site. Rename or delete the old deployment explicitly.
 
-- Publishes a directory with a top-level `index.html`. For built apps it prefers build output
-  (`dist`, `build`, `out`, `.output/public`, `public`) and will run `npm/pnpm/yarn/bun build`
-  if needed.
-- A real publish ensures `.clideignore`, `clide.json` (metadata manifest), and `LICENSE` exist.
-  `clide.json` and `.remix-sources/` are excluded from the published site.
-- Published games should carry the standard `index.html` copyright comment near `<head>`:
-  `Copyright (c) 2026 paean.ai and the game's creator(s).` If it is missing, add it before
-  publishing.
-- Games should include top-level `favicon.svg` and `banner.jpg` (exactly 800x400). Missing or
-  wrong-size media is reported as `assetWarnings`; it does not block publishing.
-- Naming precedence: `--title` > `clide.json` > `package.json` name > meaningful `<title>` >
-  directory name (last resort, warned).
-- `--license <spdx>` sets the license (default `MIT`).
-- Secrets are excluded by default and scanned; the scan blocks on a high-confidence match
-  (override with `--allow-secrets` only when intentional).
-- If `clide.json` records a remix (from the paean-remix skill), the publish sends
-  `remixOfHashKey` (primary parent) plus `remixOfHashKeys` (all direct parents) so zero-api
-  records both the legacy primary parent and the full `SquareRemixEdge` DAG.
-- The dry-run echoes `requestedHandle` / `requestedUrl` (both `null` without `--handle`); a
-  real publish reports the server-assigned `handle` alongside `requestedHandle`.
+## Packaging and safety
+
+- Publish directories must contain top-level `index.html`. Auto-detection prefers `dist`,
+  `build`, `out`, `.output/public`, `public`, then project root; a build runs when needed.
+- `.clideignore` safety defaults exclude credentials, local state, source maps, dependency
+  folders, editor files, logs, and common key formats. Included text assets receive a
+  high-confidence secret scan.
+- `--allow-secrets` is an exceptional override that requires the user to accept the concrete
+  finding. Prefer excluding the file.
+- Square mode ensures `clide.json` and `LICENSE` and uses listing metadata/remix lineage.
+  Hosting-only mode does not create a Square row or require listing metadata/assets.
+- `--dry-run` makes no API calls and writes no local state.
 
 ## Flags
 
-`--dry-run`, `--yes`, `--allow-secrets`, `--dir <dir>`, `--title <t>`, `--summary <t>`,
-`--category <c>`, `--tag <t>` (repeatable), `--license <spdx>`, `--handle <subdomain>` (paid
-plans — see **Custom subdomains**). `--help` prints usage.
+`--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
+`--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
+`--allow-secrets`, `--allow-static-only`, and `--delete [--handle <handle>]`.
 
-## Failure handling
-
-- Missing credentials → follow `../paean-zero-setup/SKILL.md`, or set `PAEAN_AUTH_TOKEN`.
-- `--handle` 402 → no active paid subscription. Offer to publish without `--handle`, or point
-  to https://one.paean.ai. Do not retry the same command.
-- `--handle` 409 (taken) / 400 (reserved or malformed) → propose a different subdomain; the
-  app was not published.
-- No top-level `index.html` → publish the build output, not source (build first or `--dir`).
-- `zip` not found → install it.
+`--delete` removes a direct Clide-hosted deployment owned by the current account. Deletion is
+destructive; resolve the exact saved/explicit handle and obtain confirmation first.

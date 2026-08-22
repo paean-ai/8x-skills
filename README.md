@@ -9,7 +9,7 @@ Portable agent skills for **building**, **publishing**, and **remixing** games o
 | **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Zero CLI, Claude Code, or Codex projects. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-sdk** | Add Paean platform capabilities — cross-device **cloud save** and a **shared global leaderboard** — to a static app/game via the Paean Web SDK. Ships a verified, framework-agnostic integration module + a mock host bridge for offline testing. Handles the cross-host edge cases (per-scope grants, return-shape differences, late bridge injection, offline queue) and degrades cleanly to `localStorage` in a plain browser. |
-| **paean-publish** | Publish a static frontend (top-level `index.html`) to a Paean workspace, deploy it to a `*.clide.app` URL, and list it in Paean Apps Square. Picks a meaningful title, ensures `.clideignore` / `clide.json` / `LICENSE` are complete, scans for secrets, and forwards remix lineage. |
+| **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
 | **paean-remix** | Download the source of one or more published games by hash and scaffold a new game that remixes them, recording a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so upstream creators can be credited. |
 
 The publish/remix skills ship as self-contained Node scripts — no npm install, no external
@@ -120,7 +120,7 @@ repo in your project and add a pointer to your `AGENTS.md`:
 ## Skills
 - To update Paean skills, follow `8x-skills/codex/paean-skills-update/SKILL.md`.
 - To install Zero CLI or log in to Paean for publishing, follow `8x-skills/codex/paean-zero-setup/SKILL.md`.
-- To publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
+- To host on Clide or publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
 - To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
 ```
 
@@ -131,9 +131,13 @@ repo in your project and add a pointer to your `AGENTS.md`:
 From the project you want to publish:
 
 ```bash
-# Preview, then publish under a good name
+# Preview, then publish to Apps Square under a good name
 node <skill-dir>/scripts/publish.mjs --dry-run
 node <skill-dir>/scripts/publish.mjs --yes --title "Neon Drift Racer" --category racing
+
+# Preview, then deploy to Clide hosting without an Apps Square listing
+node <skill-dir>/scripts/publish.mjs --dry-run --hosting-only --dir dist --handle neon-drift
+node <skill-dir>/scripts/publish.mjs --yes --hosting-only --dir dist --handle neon-drift
 ```
 
 To remix existing games into a new one:
@@ -177,8 +181,11 @@ each direct upstream with the aspect it contributed and a suggested revenue `wei
 
 ## Safety
 
-- Publishing is **public**. The scripts require explicit confirmation (or `--yes`) and warn
-  before listing.
+- Both modes create a **publicly reachable site**. The scripts require explicit confirmation
+  (or `--yes`); hosting-only never creates a workspace or Apps Square listing.
+- Wrangler/Worker/D1/R2 projects are reported as runtime-incompatible and blocked before
+  upload unless the user explicitly accepts a frontend-only deployment with
+  `--allow-static-only`.
 - Published games should include the standard paean.ai copyright comment in `index.html` and
   carry a project `LICENSE`; remixes should also record direct parents in `clide.json`.
 - Games should ship a top-level `favicon.svg` and an 800x400 `banner.jpg`. The publish script
