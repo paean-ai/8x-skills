@@ -57,32 +57,37 @@ function requireHandleValue(raw) {
 
 function usage() {
   return [
-    'Usage: publish-helper.mjs [--dry-run] [--yes] [--allow-secrets] [--dir <publish-dir>]',
+    'Usage: publish-helper.mjs [--dry-run] [--yes] [--hosting-only] [--allow-secrets]',
+    '                          [--allow-static-only] [--dir <publish-dir>]',
     '                          [--title <title>] [--summary <text>] [--category <category>] [--tag <tag>]',
     '                          [--handle <subdomain>]',
-    '       publish-helper.mjs --delete [--handle <legacy-handle>]',
+    '       publish-helper.mjs --delete [--handle <owned-handle>]',
     '',
-    'Publishes a static frontend directory with top-level index.html to a Paean workspace, Paean Apps Square, and *.clide.app.',
-    'Publishing is public: the app is listed in Paean Apps Square and the site is reachable at *.clide.app.',
+    'Publishes a static frontend directory with top-level index.html to *.clide.app.',
+    'Default mode also creates a Paean workspace and public Apps Square listing.',
+    '--hosting-only uploads directly to Clide hosting without creating a workspace or Square listing.',
     '--dry-run validates and prints the publish directory, archive summary, and safety scan without API calls or local state writes.',
-    '--yes skips the interactive public-publish confirmation.',
+    '--yes skips the interactive public-site confirmation.',
     '--allow-secrets bypasses the high-confidence secret scanner.',
+    '--allow-static-only acknowledges that detected Worker/server bindings will not be deployed.',
     '--handle picks the *.clide.app subdomain; the server validates it (roughly 9-32 chars,',
     '  lowercase a-z 0-9 and dashes, some names reserved) and is the authority.',
     '  Claiming a subdomain requires a paid Paean subscription and costs more credits than an',
     '  auto-assigned one. Omit it to keep the app\'s current subdomain, or to get a random one',
     '  on first publish. Free accounts must omit it.',
-    '--delete only removes a legacy direct publish handle saved by older helpers.',
+    '--delete removes an owned direct Clide hosting handle.',
   ].join('\n')
 }
 
 function parseArgs(argv) {
-  const out = { delete: false, dryRun: false, allowSecrets: false, yes: false, help: false, dir: undefined, handle: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, tags: [] }
+  const out = { delete: false, dryRun: false, hostingOnly: false, allowSecrets: false, allowStaticOnly: false, yes: false, help: false, dir: undefined, handle: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, tags: [] }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') out.help = true
     else if (arg === '--dry-run') out.dryRun = true
+    else if (arg === '--hosting-only' || arg === '--no-square') out.hostingOnly = true
     else if (arg === '--allow-secrets') out.allowSecrets = true
+    else if (arg === '--allow-static-only') out.allowStaticOnly = true
     else if (arg === '--yes' || arg === '-y') out.yes = true
     else if (arg === '--delete' || arg === '--unpublish') out.delete = true
     else if (arg === '--dir') out.dir = argv[++i]
@@ -107,12 +112,14 @@ function parseArgs(argv) {
     else throw new Error('Unknown /publish argument: ' + arg)
   }
   // On publish, --handle picks the *.clide.app subdomain (subscriber-only,
-  // enforced server-side). On --delete it names the legacy handle to remove, and
+  // enforced server-side). On --delete it names the owned handle to remove, and
   // is passed through verbatim so older non-conforming handles stay deletable.
   if (!out.delete && out.handle !== undefined) out.handle = requireHandleValue(out.handle)
   if (out.delete && out.dir) throw new Error('--dir is only valid when publishing, not deleting.')
   if (out.delete && out.dryRun) throw new Error('--dry-run is only valid when publishing, not deleting.')
+  if (out.delete && out.hostingOnly) throw new Error('--hosting-only is only valid when publishing, not deleting.')
   if (out.delete && out.allowSecrets) throw new Error('--allow-secrets is only valid when publishing, not deleting.')
+  if (out.delete && out.allowStaticOnly) throw new Error('--allow-static-only is only valid when publishing, not deleting.')
   if (out.delete && out.yes) throw new Error('--yes is only valid when publishing, not deleting.')
   if (out.delete && (out.title || out.summary || out.category || out.license || out.tags.length > 0)) throw new Error('metadata options are only valid when publishing, not deleting.')
   return out
@@ -320,6 +327,37 @@ function detectPublishDir(projectRoot, explicitDir) {
   return null
 }
 
+function detectServerRuntime(projectRoot) {
+  const configNames = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
+  const featurePatterns = [
+    ['Worker entrypoint', /(?:\"main\"\s*:|^\s*main\s*=)/m],
+    ['D1 binding', /(?:\"d1_databases\"\s*:|^\s*\[\[d1_databases\]\])/m],
+    ['R2 binding', /(?:\"r2_buckets\"\s*:|^\s*\[\[r2_buckets\]\])/m],
+    ['KV binding', /(?:\"kv_namespaces\"\s*:|^\s*\[\[kv_namespaces\]\])/m],
+    ['Durable Object binding', /(?:\"durable_objects\"\s*:|^\s*\[durable_objects\])/m],
+    ['Service binding', /(?:\"services\"\s*:|^\s*\[\[services\]\])/m],
+  ]
+  for (const name of configNames) {
+    const file = path.join(projectRoot, name)
+    if (!existsSync(file)) continue
+    let source = ''
+    try { source = readFileSync(file, 'utf8') } catch {}
+    const features = featurePatterns.filter(([, pattern]) => pattern.test(source)).map(([label]) => label)
+    if (features.length > 0) return { configFile: name, features }
+  }
+  return null
+}
+
+function runtimeCompatibility(runtime, allowStaticOnly) {
+  if (!runtime) return { status: 'static-compatible', detected: null }
+  return {
+    status: allowStaticOnly ? 'static-only-acknowledged' : 'blocked',
+    detected: runtime,
+    reason: 'Clide static hosting uploads browser assets only; it does not deploy Worker code or provision D1/R2/KV/Durable Object/service bindings.',
+    requiredFlag: allowStaticOnly ? null : '--allow-static-only',
+  }
+}
+
 async function resolvePublishDir(projectRoot, explicitDir) {
   let dir = detectPublishDir(projectRoot, explicitDir)
   if (dir) return dir
@@ -429,11 +467,12 @@ function readJpegDimensions(file) {
   return null
 }
 
-function assetWarnings(publishDir, files) {
+function assetWarnings(publishDir, files, squareListing = true) {
   const warnings = []
   if (!files.includes('favicon.svg')) {
     warnings.push('Missing top-level favicon.svg. Publishing is allowed, but generate one before listing if possible.')
   }
+  if (!squareListing) return warnings
   if (!files.includes('banner.jpg')) {
     warnings.push('Missing top-level banner.jpg. Publishing is allowed, but Paean game templates expect an 800x400 banner.jpg.')
   } else {
@@ -498,10 +537,13 @@ function saveState(projectRoot, input) {
   const dir = path.join(projectRoot, CLIDE_STATE_DIR)
   mkdirSync(dir, { recursive: true })
   const state = {
+    mode: input.mode,
+    handle: input.handle,
     workspaceHashKey: input.workspaceHashKey,
     squareAppHashKey: input.squareAppHashKey,
     url: input.url,
     playUrl: input.url,
+    archiveUrl: input.archiveUrl,
     publishedAt: new Date().toISOString(),
     publishDir: relativeUnix(projectRoot, input.publishDir) || '.',
     fileCount: input.fileCount,
@@ -792,6 +834,26 @@ async function publishSquare(token, workspaceHashKey, metadata, remix, handle) {
   return json.data
 }
 
+async function publishHostingOnly(token, zipData, handle) {
+  const form = new FormData()
+  form.append('archive', new Blob([zipData], { type: 'application/zip' }), 'site.zip')
+  if (handle) form.append('handle', handle)
+  let json
+  try {
+    const res = await fetch(API_BASE + '/publish/clide', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: form,
+    })
+    json = await readJsonResponse(res, '/publish/clide')
+  } catch (err) {
+    throw handle ? explainHandleFailure(err, handle) : err
+  }
+  const data = json.data || json
+  if (!data.handle || !data.url) throw new Error('Clide hosting response missing data.handle or data.url')
+  return data
+}
+
 // The subdomain rejections are the ones a caller can actually act on, so turn
 // the raw status line into a concrete next step. Anything else passes through.
 function explainHandleFailure(err, handle) {
@@ -820,7 +882,7 @@ function explainHandleFailure(err, handle) {
   return err
 }
 
-async function unpublishLegacy(handle, token) {
+async function unpublishHandle(handle, token) {
   const res = await fetch(API_BASE + '/publish/' + encodeURIComponent(handle), {
     method: 'DELETE',
     headers: { Authorization: 'Bearer ' + token },
@@ -828,18 +890,21 @@ async function unpublishLegacy(handle, token) {
   return await readJsonResponse(res, '/publish/:handle')
 }
 
-async function confirmPublicPublish(args, summary, publishDir, projectRoot, metadata) {
+async function confirmPublicPublish(args, summary, publishDir, projectRoot, metadata, effectiveHandle) {
   if (args.yes) return
   if (!process.stdin.isTTY) {
-    throw new Error('Public publish requires confirmation. Re-run with --yes after confirming the Paean Apps Square listing.')
+    throw new Error('Public hosting requires confirmation. Re-run with --yes after confirming the public *.clide.app site' + (args.hostingOnly ? ' (no Square listing).' : ' and Apps Square listing.'))
   }
   console.log('')
-  console.log('Public publish confirmation')
+  console.log(args.hostingOnly ? 'Public Clide hosting confirmation (no Square listing)' : 'Public Apps Square publish confirmation')
   console.log('This will upload ' + summary.fileCount + ' files (' + summary.totalBytes + ' bytes) from ' + (relativeUnix(projectRoot, publishDir) || '.') + '.')
-  if (args.handle) {
-    console.log('The app will be listed publicly in Paean Apps Square at https://' + args.handle + '.clide.app/')
-    console.log('Claiming that subdomain needs an active paid Paean subscription and costs 30 credits (vs 5 for an assigned one).')
-    console.log('If the app is already live on a different subdomain, that old URL stops working.')
+  if (effectiveHandle) {
+    console.log('The site will be reachable at https://' + effectiveHandle + '.clide.app/' + (args.hostingOnly ? ' and will not be listed in Apps Square.' : ' and listed publicly in Paean Apps Square.'))
+    if (args.handle) console.log('Claiming that subdomain needs an active paid Paean subscription and costs 30 credits (vs 5 for an assigned one).')
+    else if (args.hostingOnly) console.log('Reusing the hosting handle saved in .clide/publish.json.')
+    if (!args.hostingOnly) console.log('If the app is already live on a different subdomain, that old URL stops working.')
+  } else if (args.hostingOnly) {
+    console.log('The site will receive an assigned *.clide.app URL and will not be listed in Apps Square.')
   } else {
     console.log('The app will be listed publicly in Paean Apps Square and reachable at a *.clide.app URL.')
   }
@@ -862,9 +927,9 @@ async function main() {
     const token = getPaeanToken()
     if (!token) throw new Error('Paean credentials not found. Set the PAEAN_AUTH_TOKEN environment variable to your Paean JWT (or place it in ~/.paean/credentials.json as {"token":"..."}). See the skill README for how to obtain one.')
     const handle = args.handle || loadLastHandle(projectRoot)
-    if (!handle) throw new Error('No legacy direct-publish handle specified and no saved .clide/publish.json handle found.')
-    console.log('Deleting legacy direct publish for ' + handle + '.clide.app...')
-    const result = await unpublishLegacy(handle, token)
+    if (!handle) throw new Error('No direct-hosting handle specified and no saved .clide/publish.json handle found.')
+    console.log('Deleting direct Clide hosting for ' + handle + '.clide.app...')
+    const result = await unpublishHandle(handle, token)
     markStateDeleted(projectRoot, handle)
     console.log(JSON.stringify({
       success: true,
@@ -877,6 +942,16 @@ async function main() {
   }
 
   const publishDir = await resolvePublishDir(projectRoot, args.dir)
+  const previousState = loadState(projectRoot)
+  const previousHostingHandle = previousState.mode === 'hosting-only' && typeof previousState.handle === 'string'
+    ? previousState.handle
+    : undefined
+  if (args.hostingOnly && previousHostingHandle && args.handle && args.handle !== previousHostingHandle) {
+    throw new Error('This project is already hosted at ' + previousHostingHandle + '.clide.app. Refusing to create a second site implicitly; rename or delete the existing deployment explicitly first.')
+  }
+  const effectiveHandle = args.hostingOnly ? (args.handle || previousHostingHandle) : args.handle
+  const serverRuntime = detectServerRuntime(projectRoot)
+  const compatibility = runtimeCompatibility(serverRuntime, args.allowStaticOnly)
   const patterns = getClideIgnorePatterns(projectRoot, !args.dryRun)
   const files = collectFiles(projectRoot, publishDir, patterns)
   if (!files.includes('index.html')) throw new Error('Publish archive must include top-level index.html after .clideignore filtering.')
@@ -896,7 +971,7 @@ async function main() {
     : undefined
   const summary = archiveSummary(publishDir, files)
   const secretFindings = scanSecrets(publishDir, files)
-  const mediaWarnings = assetWarnings(publishDir, files)
+  const mediaWarnings = assetWarnings(publishDir, files, !args.hostingOnly)
   if (secretFindings.length > 0 && !args.allowSecrets) {
     throw new Error('Publish blocked: possible secrets found in included files:\n' + secretFindings.slice(0, 10).map(f => '  - ' + f.file + ' (' + f.kind + ')').join('\n') + (secretFindings.length > 10 ? '\n  ...and ' + (secretFindings.length - 10) + ' more' : '') + '\nAdd patterns to .clideignore or rerun with --allow-secrets if this is intentional.')
   }
@@ -906,13 +981,17 @@ async function main() {
       success: true,
       action: 'dry-run',
       publishDir: relativeUnix(projectRoot, publishDir) || '.',
-      destination: 'Paean Apps Square public listing + *.clide.app',
+      mode: args.hostingOnly ? 'hosting-only' : 'square',
+      destination: args.hostingOnly ? 'Clide hosting only (*.clide.app; no Apps Square listing)' : 'Paean Apps Square public listing + *.clide.app',
       ignoredBy: CLIDE_IGNORE_FILE,
       writesLocalState: false,
       // null = let the server keep the current subdomain or assign a random
       // one. A value here is a subscriber-only claim, verified on publish.
       requestedHandle: args.handle || null,
-      requestedUrl: args.handle ? 'https://' + args.handle + '.clide.app/' : null,
+      effectiveHandle: effectiveHandle || null,
+      effectiveHandleSource: args.handle ? 'flag' : previousHostingHandle ? 'saved-state' : 'server-assigned',
+      requestedUrl: effectiveHandle ? 'https://' + effectiveHandle + '.clide.app/' : null,
+      runtimeCompatibility: compatibility,
       metadata,
       license,
       titleSource: resolvedTitle.source,
@@ -928,17 +1007,57 @@ async function main() {
     return
   }
 
-  await confirmPublicPublish(args, summary, publishDir, projectRoot, metadata)
+  if (compatibility.status === 'blocked') {
+    throw new Error('Publish blocked: ' + compatibility.reason + ' Detected ' + compatibility.detected.configFile + ' (' + compatibility.detected.features.join(', ') + '). Use the project\'s Worker deployment workflow, or pass --allow-static-only only after the user accepts that backend/API features will not work.')
+  }
+
+  await confirmPublicPublish(args, summary, publishDir, projectRoot, metadata, effectiveHandle)
   if (mediaWarnings.length > 0) {
     console.warn('Asset warnings:')
     for (const warning of mediaWarnings) console.warn('  - ' + warning)
   }
   const token = getPaeanToken()
   if (!token) throw new Error('Paean credentials not found. Set the PAEAN_AUTH_TOKEN environment variable to your Paean JWT (or place it in ~/.paean/credentials.json as {"token":"..."}). See the skill README for how to obtain one.')
-  const ensuredFiles = ensureProjectFiles(projectRoot, metadata, license, remix)
+  const ensuredFiles = args.hostingOnly ? [] : ensureProjectFiles(projectRoot, metadata, license, remix)
   if (ensuredFiles.length > 0) console.log('Wrote project metadata: ' + ensuredFiles.join(', '))
   const zip = await zipFiles(publishDir, files)
   try {
+    if (args.hostingOnly) {
+      console.log('Uploading ' + files.length + ' files from ' + (relativeUnix(projectRoot, publishDir) || '.') + ' to Clide hosting only...')
+      const hosted = await publishHostingOnly(token, zip.data, effectiveHandle)
+      saveState(projectRoot, {
+        mode: 'hosting-only',
+        handle: hosted.handle,
+        url: hosted.url,
+        archiveUrl: hosted.archiveUrl,
+        publishDir,
+        fileCount: hosted.fileCount || summary.fileCount,
+        totalBytes: hosted.totalBytes || summary.totalBytes,
+        title: metadata.title,
+        category: metadata.category,
+      })
+      console.log(JSON.stringify({
+        success: true,
+        action: 'publish',
+        mode: 'hosting-only',
+        listedInSquare: false,
+        handle: hosted.handle,
+        requestedHandle: args.handle || null,
+        url: hosted.url,
+        archiveUrl: hosted.archiveUrl || null,
+        status: 'hosted',
+        title: metadata.title,
+        titleSource: resolvedTitle.source,
+        titleWarning,
+        assetWarnings: mediaWarnings,
+        license,
+        wroteProjectFiles: ensuredFiles,
+        fileCount: hosted.fileCount || summary.fileCount,
+        totalBytes: hosted.totalBytes || summary.totalBytes,
+        stateFile: path.join(CLIDE_STATE_DIR, CLIDE_STATE_FILE),
+      }, null, 2))
+      return
+    }
     const state = loadState(projectRoot)
     let workspaceHashKey = typeof state.workspaceHashKey === 'string' && state.workspaceHashKey ? state.workspaceHashKey : undefined
     if (!workspaceHashKey) {
@@ -952,6 +1071,8 @@ async function main() {
     console.log('Publishing public Square listing...')
     const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle)
     saveState(projectRoot, {
+      mode: 'square',
+      handle: app.publishedSiteHandle,
       workspaceHashKey,
       squareAppHashKey: app.hashKey,
       url: app.playUrl,
