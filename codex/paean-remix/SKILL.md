@@ -48,9 +48,11 @@ result or Square app detail before running the script.
    game), `clide.json` (the remix graph), `LICENSE`, and `.clideignore` (excludes
    `.remix-sources/`).
 
-4. **Build the new game.** Read each `.remix-sources/<hash>/` and synthesize a genuinely new
-   game at the target top level, honoring each source's assigned aspect. Do NOT ship the
-   upstream sources verbatim — combine the chosen aspects into a new `index.html` (+ assets).
+4. **Build the new game with the `paean-game-create` production standard.** Read its `SKILL.md`
+   and `references/production-standard.md`, then inspect each `.remix-sources/<hash>/` and
+   synthesize a genuinely new game at the target top level, honoring each source's assigned
+   aspect. Do NOT ship the upstream sources verbatim — combine the chosen aspects into a new
+   `index.html` (+ assets).
    Keep the remix standalone: no runtime imports from `.remix-sources/`, parent folders, or
    remote assets unless their license explicitly allows it and attribution is recorded.
    Include top-level `favicon.svg` and `banner.jpg`; `banner.jpg` should be exactly 800x400.
@@ -60,7 +62,10 @@ result or Square app detail before running the script.
    gameplay loop, save keys, storage namespaces, and visible title/identity must be changed
    so it does not collide with or impersonate the parent.
 
-6. **Publish** with the paean-publish skill from the target directory; it reads `clide.json`
+6. **Validate** with `paean-game-create/scripts/validate-game.mjs`, including Playwright runtime
+   checks and full-size visual review at its phone and desktop viewports.
+
+7. **Publish** with the paean-publish skill from the target directory; it reads `clide.json`
    for naming, metadata, and lineage automatically.
 
 ## Remix graph (clide.json)

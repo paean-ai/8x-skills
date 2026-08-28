@@ -52,9 +52,11 @@ want the new project created.
      `role` and a revenue `weight`).
    - `LICENSE` and `.clideignore` (which excludes `.remix-sources/` from publishing).
 
-4. **Build the new game.** Read the relevant files under each `.remix-sources/<hash>/` and
-   compose a genuinely new game at the target directory's top level, honoring the aspect the
-   user assigned to each source (the classic recipe is "h1 gameplay + h2 art/visual style +
+4. **Build the new game with the `paean-game-create` production standard.** Read its `SKILL.md`
+   and `references/production-standard.md`, then inspect the relevant files under each
+   `.remix-sources/<hash>/` and compose a genuinely new game at the target directory's top
+   level, honoring the aspect the user assigned to each source (the classic recipe is
+   "h1 gameplay + h2 art/visual style +
    h3 theme/subject"). Do NOT ship the upstream sources verbatim — synthesize a new
    `index.html` (and assets) that combines the chosen aspects. Keep the remix standalone:
    no runtime imports from `.remix-sources/`, parent folders, or remote assets unless their
@@ -68,7 +70,10 @@ want the new project created.
    loop, save keys, storage namespaces, and visible title/identity must be changed so it does
    not collide with or impersonate the parent.
 
-6. **Publish** with the **paean-publish** skill from the target directory. It reads
+6. **Validate** with `paean-game-create/scripts/validate-game.mjs`, including Playwright runtime
+   checks and full-size visual review at its phone and desktop viewports.
+
+7. **Publish** with the **paean-publish** skill from the target directory. It reads
    `clide.json` for naming, metadata, and the remix lineage automatically.
 
 ## Remix graph (clide.json)

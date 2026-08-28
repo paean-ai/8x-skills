@@ -1,0 +1,117 @@
+---
+name: paean-game-create
+description: Create or substantially upgrade a production-quality, self-contained Paean web game. Use for new games, game prototypes that must be finished to release quality, or broad gameplay/visual/UI polish. Produces a directly runnable pure-JavaScript index.html project; not for SDK-only integration or publishing. Runs from Zero CLI.
+---
+
+# Paean Game Create (Zero CLI)
+
+Build a complete, commercially polished web game rather than a rough demo. The result must be
+coherent in gameplay, art direction, characters, enemies, abilities, UI, audio, and presentation.
+Do not call placeholder art, generic large color blocks, incomplete systems, or an unpolished
+prototype finished.
+
+> **Installing in Zero CLI.** Copy this directory into project `.zero/skills/` or global
+> `~/.zero/skills/`; keep `references/` and `scripts/` beside this file.
+
+## Start with a production brief
+
+Before implementation, establish the game's fantasy, core loop, input model, session length,
+progression, fail/win states, target orientation, art pipeline, and performance budget. Make
+reasonable creative decisions when the user leaves these open. Prefer an original direction; when
+references are supplied, extract principles and produce a more resolved result rather than a close
+copy.
+
+Read [references/production-standard.md](references/production-standard.md) before building. It is
+the release bar and contains the attract-mode pattern, responsive layout rules, asset guidance, and
+acceptance matrix.
+
+## Choose the rendering approach deliberately
+
+Use the smallest technology that can deliver the intended look at a high level: Canvas/WebGL or a
+locally bundled Three.js runtime, authored SVG with skeletal animation, a suitable 2D physics
+engine, or a real pixel-art pipeline. Technology is not a substitute for art direction.
+
+- Pixel art needs a controlled palette, consistent pixel density, readable silhouettes, authored
+  animation, and crisp integer scaling.
+- Vector and 3D work needs strong composition, material/lighting discipline, depth, motion, and
+  detail; flat undifferentiated shapes are not a finished visual system.
+- Image-led adventure/AVG work should use high-quality generated or authored imagery where
+  appropriate, then crop, resize, compress, and preload it for fast mobile startup. Use an
+  image-generation or image-editing skill when available and the art direction benefits from it.
+
+Keep characters, monsters, abilities, effects, environment, typography, and UI in the same visual
+language. Avoid emoji as game art or interface icons; author or bundle real icons instead.
+
+## Required project shape
+
+Create each game in its own deployable directory. The directory must contain everything needed at
+runtime and must not import code or assets from a parent, sibling, remix-source, CDN, or other
+external location.
+
+- Top-level `index.html` is the runtime entry and works from a static HTTP server without a build.
+- Implementation is browser JavaScript, HTML, and CSS only: no TypeScript and no Vite/build-only
+  source whose usable result exists only in `dist/`.
+- Split gameplay, rendering, input, audio, data, level, character, monster, and ability definitions
+  into focused files when that improves extension. Keep individual source files compact enough to
+  review and iterate; do not replace useful boundaries with one monolithic file.
+- Bundle required runtimes and assets inside the game directory. Prefer procedural/vector assets
+  when they genuinely meet the visual bar, not merely to avoid making art.
+- Put `<!-- Copyright (c) 2026 paean.ai and the game's creator(s). -->` immediately after the
+  opening `<head>` tag.
+- Ship top-level `favicon.svg` and an exactly 800×400 `banner.jpg`.
+- Use English by default unless the user requests another language. Minimize copy through clear,
+  authored icons and spatial feedback.
+
+Platform save/leaderboard integration is a separate concern: use `paean-sdk` when requested. Use
+`paean-publish` only after the game passes this skill's release checks and the user authorizes the
+public destination.
+
+## Implement through complete playable slices
+
+Build the smallest full loop first: launch/attract state, start, meaningful play, feedback,
+success/failure, restart, and persistence where applicable. Then deepen content and presentation.
+Every mechanic needs readable anticipation, action, impact, recovery, and feedback. Tune touch
+targets, difficulty, camera, hit feedback, transitions, pause/resume, and audio as one system.
+
+Use a clean arcade-style attract mode for gameplay previews: show the game world and representative
+play without normal HUD clutter, with only a restrained `DEMO · TAP TO PLAY` hint. The first
+intentional touch/click stops the demo, reveals the play UI, and enters a deterministic fresh run.
+If the host exposes preview state, keep consent prompts and platform UI out of the attract state.
+
+## Mobile, desktop, and runtime behavior
+
+Design mobile/touch first. Portrait is the default; use landscape only when the game genuinely
+benefits from it. Prevent document scrolling, overscroll, accidental selection, and canvas drag.
+Respect safe areas and Paean host chrome. On desktop, compose the playfield intentionally—usually a
+centered game frame with a suitable `max-width`, while backgrounds can extend to the viewport.
+Never stretch portrait gameplay into a loose full-width desktop layout.
+
+Pause or safely throttle when hidden. Handle resize, orientation change, pointer cancellation,
+audio unlock, and restart without corrupting game state. Keep startup and total transfer small;
+prefer compact MIDI/WebAudio sequencing and a restrained reusable sound bank when audio adds value.
+
+## Validate before claiming completion
+
+Let `$SKILL_DIR` be the directory containing this `SKILL.md`. Run the bundled validator from the
+game directory's parent:
+
+```bash
+node "$SKILL_DIR/scripts/validate-game.mjs" <game-directory> \
+  --screenshots <temporary-screenshot-directory>
+```
+
+Install Playwright/Chromium in the working environment if the validator reports it missing. Do not
+replace this with a static-only check for final acceptance. Inspect every screenshot at full size
+and iterate on composition, hierarchy, legibility, touch affordance, visual artifacts, and desktop
+framing. Also play several complete sessions on touch-sized and desktop viewports.
+
+Completion requires all of the following:
+
+- validator exits successfully with no page errors, console errors, failed local assets, forbidden
+  external/runtime paths, or viewport scrollbars;
+- attract → play → result → restart works, and core interactions are verified rather than merely
+  loaded;
+- portrait phone, landscape phone (when supported), and desktop screenshots meet the production
+  standard with no placeholder or half-finished state;
+- the game remains playable after reload and after background/foreground transitions;
+- final project size and largest assets are reviewed, with obvious waste removed.

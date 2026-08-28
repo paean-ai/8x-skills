@@ -12,6 +12,10 @@ URL: every call goes through a host bridge (`window.paean`, wrapped by
 user, isolated per **(app × user)**. In a plain browser there is no host, so
 everything must degrade to `localStorage` and the game must stay fully playable.
 
+This skill integrates platform services into an existing game. For creating or broadly polishing
+the game itself, use `paean-game-create`; do not load production design requirements into the SDK
+integration task unless both capabilities are requested.
+
 This skill bundles a **verified reference implementation** you copy into the
 project and wire up — it already handles the cross-host edge cases that
 otherwise only surface on a real device.
