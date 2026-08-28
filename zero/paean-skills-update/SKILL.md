@@ -1,6 +1,6 @@
 ---
 name: paean-skills-update
-description: Update the local 8x-skills repository and reinstall the Paean skills for Zero CLI. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean-publish / paean-remix / paean-zero-setup / paean-sdk skill changes.
+description: Update the local 8x-skills repository and reinstall the Paean skills for Zero CLI. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean game-create / SDK / publish / remix / setup skill changes.
 ---
 
 # Paean Skills Update (Zero CLI)
@@ -46,6 +46,7 @@ mkdir -p ~/.zero/skills
 cp -R zero/paean-publish ~/.zero/skills/
 cp -R zero/paean-remix ~/.zero/skills/
 cp -R zero/paean-zero-setup ~/.zero/skills/
+cp -R zero/paean-game-create ~/.zero/skills/
 cp -R zero/paean-sdk ~/.zero/skills/
 cp -R zero/paean-skills-update ~/.zero/skills/
 ```
@@ -58,6 +59,7 @@ If a project should get its own copy, use `.zero/skills/` there instead or in ad
 find claude-code codex zero -maxdepth 2 -name SKILL.md | sort
 node --check zero/paean-publish/scripts/publish.mjs
 node --check zero/paean-remix/scripts/remix.mjs
+node --check zero/paean-game-create/scripts/validate-game.mjs
 ```
 
 Report the current commit hash and any files that remain modified.

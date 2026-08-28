@@ -1,6 +1,6 @@
 ---
 name: paean-skills-update
-description: Update the local 8x-skills repository and reinstall Paean skills for Claude Code, Codex, or Zero CLI. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean-publish / paean-remix / paean-zero-setup skill changes.
+description: Update the local 8x-skills repository and reinstall Paean skills for Claude Code, Codex, or Zero CLI. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean game-create / SDK / publish / remix / setup skill changes.
 ---
 
 # Paean Skills Update
@@ -44,6 +44,8 @@ mkdir -p ~/.claude/skills
 cp -R claude-code/paean-publish ~/.claude/skills/
 cp -R claude-code/paean-remix ~/.claude/skills/
 cp -R claude-code/paean-zero-setup ~/.claude/skills/
+cp -R claude-code/paean-game-create ~/.claude/skills/
+cp -R claude-code/paean-sdk ~/.claude/skills/
 cp -R claude-code/paean-skills-update ~/.claude/skills/
 ```
 
@@ -57,6 +59,8 @@ Codex can use this repo in place. Ensure the project `AGENTS.md` points at the c
 ## Skills
 - To update Paean skills, follow `8x-skills/codex/paean-skills-update/SKILL.md`.
 - To install Zero CLI or log in to Paean for publishing, follow `8x-skills/codex/paean-zero-setup/SKILL.md`.
+- To create or substantially polish a Paean game, follow `8x-skills/codex/paean-game-create/SKILL.md`.
+- To add cloud save or a leaderboard, follow `8x-skills/codex/paean-sdk/SKILL.md`.
 - To publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
 - To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
 ```
@@ -74,6 +78,7 @@ mkdir -p ~/.zero/skills
 cp -R zero/paean-publish ~/.zero/skills/
 cp -R zero/paean-remix ~/.zero/skills/
 cp -R zero/paean-zero-setup ~/.zero/skills/
+cp -R zero/paean-game-create ~/.zero/skills/
 cp -R zero/paean-sdk ~/.zero/skills/
 cp -R zero/paean-skills-update ~/.zero/skills/
 ```
@@ -86,8 +91,10 @@ If a project uses `.zero/skills/`, copy there instead or in addition.
 find claude-code codex zero -maxdepth 2 -name SKILL.md | sort
 node --check codex/paean-publish/scripts/publish.mjs
 node --check codex/paean-remix/scripts/remix.mjs
+node --check codex/paean-game-create/scripts/validate-game.mjs
 node --check zero/paean-publish/scripts/publish.mjs
 node --check zero/paean-remix/scripts/remix.mjs
+node --check zero/paean-game-create/scripts/validate-game.mjs
 ```
 
 Report the current commit hash and any files that remain modified.

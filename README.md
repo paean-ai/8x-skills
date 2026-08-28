@@ -8,12 +8,14 @@ Portable agent skills for **building**, **publishing**, and **remixing** games o
 |-------|--------------|
 | **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Zero CLI, Claude Code, or Codex projects. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
+| **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
 | **paean-sdk** | Add Paean platform capabilities — cross-device **cloud save** and a **shared global leaderboard** — to a static app/game via the Paean Web SDK. Ships a verified, framework-agnostic integration module + a mock host bridge for offline testing. Handles the cross-host edge cases (per-scope grants, return-shape differences, late bridge injection, offline queue) and degrades cleanly to `localStorage` in a plain browser. |
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
 | **paean-remix** | Download the source of one or more published games by hash and scaffold a new game that remixes them, recording a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so upstream creators can be credited. |
 
 The publish/remix skills ship as self-contained Node scripts — no npm install, no external
-dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-sdk** skill ships
+dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-game-create** skill
+ships a game-production standard plus a static/Playwright validator. The **paean-sdk** skill ships
 browser reference files (no server, no build) you copy into your app.
 
 ```
@@ -21,18 +23,21 @@ browser reference files (no server, no build) you copy into your app.
 ├── zero/
 │   ├── paean-skills-update/ SKILL.md
 │   ├── paean-zero-setup/ SKILL.md
+│   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
 │   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
 │   ├── paean-publish/   SKILL.md + scripts/publish.mjs
 │   └── paean-remix/     SKILL.md + scripts/remix.mjs
 ├── claude-code/
 │   ├── paean-skills-update/ SKILL.md
 │   ├── paean-zero-setup/ SKILL.md
+│   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
 │   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
 │   ├── paean-publish/   SKILL.md + scripts/publish.mjs
 │   └── paean-remix/     SKILL.md + scripts/remix.mjs
 └── codex/
     ├── paean-skills-update/ SKILL.md
     ├── paean-zero-setup/ SKILL.md
+    ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
     ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
     ├── paean-publish/   SKILL.md + scripts/publish.mjs
     └── paean-remix/     SKILL.md + scripts/remix.mjs
@@ -89,6 +94,7 @@ mkdir -p ~/.zero/skills
 cp -r 8x-skills/zero/paean-publish ~/.zero/skills/
 cp -r 8x-skills/zero/paean-remix   ~/.zero/skills/
 cp -r 8x-skills/zero/paean-zero-setup ~/.zero/skills/
+cp -r 8x-skills/zero/paean-game-create ~/.zero/skills/
 cp -r 8x-skills/zero/paean-sdk ~/.zero/skills/
 cp -r 8x-skills/zero/paean-skills-update ~/.zero/skills/
 ```
@@ -105,6 +111,8 @@ Copy a skill directory into your skills folder (project `.claude/skills/` or glo
 cp -r 8x-skills/claude-code/paean-publish ~/.claude/skills/
 cp -r 8x-skills/claude-code/paean-remix   ~/.claude/skills/
 cp -r 8x-skills/claude-code/paean-zero-setup ~/.claude/skills/
+cp -r 8x-skills/claude-code/paean-game-create ~/.claude/skills/
+cp -r 8x-skills/claude-code/paean-sdk ~/.claude/skills/
 cp -r 8x-skills/claude-code/paean-skills-update ~/.claude/skills/
 ```
 
@@ -120,6 +128,8 @@ repo in your project and add a pointer to your `AGENTS.md`:
 ## Skills
 - To update Paean skills, follow `8x-skills/codex/paean-skills-update/SKILL.md`.
 - To install Zero CLI or log in to Paean for publishing, follow `8x-skills/codex/paean-zero-setup/SKILL.md`.
+- To create or substantially polish a Paean game, follow `8x-skills/codex/paean-game-create/SKILL.md`.
+- To add cloud save or a global leaderboard, follow `8x-skills/codex/paean-sdk/SKILL.md`.
 - To host on Clide or publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
 - To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
 ```
@@ -138,6 +148,14 @@ node <skill-dir>/scripts/publish.mjs --yes --title "Neon Drift Racer" --category
 # Preview, then deploy to Clide hosting without an Apps Square listing
 node <skill-dir>/scripts/publish.mjs --dry-run --hosting-only --dir dist --handle neon-drift
 node <skill-dir>/scripts/publish.mjs --yes --hosting-only --dir dist --handle neon-drift
+```
+
+Before publishing a newly created or remixed game, validate its self-contained project and browser
+runtime (Playwright must be installed in the working environment):
+
+```bash
+node <paean-game-create-skill-dir>/scripts/validate-game.mjs <game-dir> \
+  --screenshots <temporary-screenshot-dir>
 ```
 
 To remix existing games into a new one:
