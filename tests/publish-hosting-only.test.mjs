@@ -130,6 +130,356 @@ test('hosting-only re-publish reuses the saved handle', async () => {
   }
 })
 
+test('hosting-only delete removes only the saved Clide site', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'hosting-only', handle: 'hostedonly1',
+  }))
+  const api = await mockApi((request, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (request.url === '/square/apps/by-handle/hostedonly1') {
+      assert.equal(request.method, 'GET')
+      res.writeHead(404)
+      res.end(JSON.stringify({ success: false, error: 'app not found' }))
+      return
+    }
+    assert.equal(request.method, 'DELETE')
+    assert.equal(request.url, '/publish/hostedonly1')
+    res.end(JSON.stringify({ success: true, handle: 'hostedonly1', deletedObjects: 3 }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 0, result.stderr)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/hostedonly1',
+      '/publish/hostedonly1',
+    ])
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.mode, 'hosting-only')
+    assert.equal(output.unlistedFromSquare, false)
+    const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(state.handle, undefined)
+    assert.equal(state.lastDeletedHandle, 'hostedonly1')
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('delete fails closed when Square linkage cannot be checked', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'hosting-only', handle: 'lookupfailure1',
+  }))
+  const api = await mockApi((request, res) => {
+    assert.equal(request.method, 'GET')
+    assert.equal(request.url, '/square/apps/by-handle/lookupfailure1')
+    res.writeHead(503, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ success: false, error: 'Square unavailable' }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 1)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/lookupfailure1',
+    ])
+    assert.match(result.stderr, /Square unavailable/)
+    const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(state.handle, 'lookupfailure1')
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Square delete unlists the app before deleting its Clide site', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'square', handle: 'squarehandle1', squareAppHashKey: 'square-app-1',
+  }))
+  const api = await mockApi((request, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (request.url === '/square/apps/by-handle/squarehandle1') {
+      res.end(JSON.stringify({ success: true, data: { hashKey: 'square-app-1' } }))
+      return
+    }
+    if (request.url === '/square/apps/square-app-1') {
+      assert.equal(request.method, 'DELETE')
+      res.end(JSON.stringify({ success: true }))
+      return
+    }
+    if (request.url === '/publish/squarehandle1') {
+      assert.equal(request.method, 'DELETE')
+      res.end(JSON.stringify({ success: true, handle: 'squarehandle1', deletedObjects: 30 }))
+      return
+    }
+    res.writeHead(404)
+    res.end(JSON.stringify({ success: false, error: 'unexpected path' }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 0, result.stderr)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/squarehandle1',
+      '/square/apps/square-app-1',
+      '/publish/squarehandle1',
+    ])
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.mode, 'square')
+    assert.equal(output.squareAppHashKey, 'square-app-1')
+    assert.equal(output.unlistedFromSquare, true)
+    assert.equal(output.siteAlreadyDeleted, false)
+    const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(state.status, 'unlisted')
+    assert.equal(state.handle, undefined)
+    assert.equal(state.lastDeletedHandle, 'squarehandle1')
+    assert.ok(state.squareUnlistedAt)
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Square unlist failure aborts before deleting the site', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'square', handle: 'squarehandle2', squareAppHashKey: 'square-app-2',
+  }))
+  const api = await mockApi((request, res) => {
+    if (request.url === '/square/apps/by-handle/squarehandle2') {
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ success: true, data: { hashKey: 'square-app-2' } }))
+      return
+    }
+    assert.equal(request.url, '/square/apps/square-app-2')
+    res.writeHead(500, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ success: false, error: 'unlist failed' }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 1)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/squarehandle2',
+      '/square/apps/square-app-2',
+    ])
+    assert.match(result.stderr, /unlist failed/)
+    const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(state.handle, 'squarehandle2')
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Square state remains safely unlisted when subsequent site deletion fails', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'square', handle: 'squarehandle3', squareAppHashKey: 'square-app-3',
+  }))
+  const api = await mockApi((request, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (request.url === '/square/apps/by-handle/squarehandle3') {
+      res.end(JSON.stringify({ success: true, data: { hashKey: 'square-app-3' } }))
+      return
+    }
+    if (request.url === '/square/apps/square-app-3') {
+      res.end(JSON.stringify({ success: true }))
+      return
+    }
+    if (request.url === '/publish/squarehandle3') {
+      res.writeHead(500)
+      res.end(JSON.stringify({ success: false, error: 'R2 cleanup failed' }))
+      return
+    }
+    res.writeHead(404)
+    res.end(JSON.stringify({ success: false, error: 'unexpected path' }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 1)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/squarehandle3',
+      '/square/apps/square-app-3',
+      '/publish/squarehandle3',
+    ])
+    assert.match(result.stderr, /was unlisted safely/)
+    assert.match(result.stderr, /retry --delete/)
+    const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(state.status, 'unlisted')
+    assert.equal(state.handle, 'squarehandle3')
+    assert.ok(state.squareUnlistedAt)
+    assert.equal(state.siteDeletedAt, undefined)
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Square delete repairs an orphan left by the old site-only behavior', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'square', lastDeletedHandle: 'orphanhandle1', squareAppHashKey: 'square-orphan-1',
+  }))
+  const api = await mockApi((request, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (request.url === '/square/apps/by-handle/orphanhandle1') {
+      res.end(JSON.stringify({ success: true, data: { hashKey: 'square-orphan-1' } }))
+      return
+    }
+    if (request.url === '/square/apps/square-orphan-1') {
+      res.end(JSON.stringify({ success: true }))
+      return
+    }
+    if (request.url === '/publish/orphanhandle1') {
+      res.writeHead(404)
+      res.end(JSON.stringify({ success: false, error: 'Site not found' }))
+      return
+    }
+    res.writeHead(404)
+    res.end(JSON.stringify({ success: false, error: 'unexpected path' }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 0, result.stderr)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/orphanhandle1',
+      '/square/apps/square-orphan-1',
+      '/publish/orphanhandle1',
+    ])
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.unlistedFromSquare, true)
+    assert.equal(output.siteAlreadyDeleted, true)
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Square delete without a saved app hash stops before touching hosting', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'square', handle: 'unsafehandle1',
+  }))
+  const api = await mockApi((request, res) => {
+    assert.equal(request.method, 'GET')
+    assert.equal(request.url, '/square/apps/by-handle/unsafehandle1')
+    res.writeHead(404, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ success: false, error: 'app not found' }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 1)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/unsafehandle1',
+    ])
+    assert.match(result.stderr, /squareAppHashKey/)
+    assert.match(result.stderr, /Refusing to delete the hosted site/)
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('explicit handle deletion discovers and unlists a linked Square app without local state', async () => {
+  const root = await fixture()
+  const api = await mockApi((request, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (request.url === '/square/apps/by-handle/discovered1') {
+      assert.equal(request.method, 'GET')
+      res.end(JSON.stringify({ success: true, data: { hashKey: 'discovered-square-1' } }))
+      return
+    }
+    if (request.url === '/square/apps/discovered-square-1') {
+      assert.equal(request.method, 'DELETE')
+      res.end(JSON.stringify({ success: true }))
+      return
+    }
+    if (request.url === '/publish/discovered1') {
+      assert.equal(request.method, 'DELETE')
+      res.end(JSON.stringify({ success: true, handle: 'discovered1', deletedObjects: 4 }))
+      return
+    }
+    res.writeHead(404)
+    res.end(JSON.stringify({ success: false, error: 'unexpected path' }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete', '--handle', 'discovered1'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 0, result.stderr)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/discovered1',
+      '/square/apps/discovered-square-1',
+      '/publish/discovered1',
+    ])
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.mode, 'square')
+    assert.equal(output.squareAppHashKey, 'discovered-square-1')
+    assert.equal(output.unlistedFromSquare, true)
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('saved Square hash mismatch aborts before unlisting or deleting either target', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'), { recursive: true })
+  await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+    mode: 'square', handle: 'stalehandle1', squareAppHashKey: 'saved-square-1',
+  }))
+  const api = await mockApi((request, res) => {
+    assert.equal(request.method, 'GET')
+    assert.equal(request.url, '/square/apps/by-handle/stalehandle1')
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ success: true, data: { hashKey: 'different-square-1' } }))
+  })
+  try {
+    const result = await runPublish(root, ['--delete'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 1)
+    assert.deepEqual(api.requests.map(request => request.url), [
+      '/square/apps/by-handle/stalehandle1',
+    ])
+    assert.match(result.stderr, /does not match/)
+    assert.match(result.stderr, /Refusing to delete either target/)
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('Worker and D1 projects are reported in dry-run and blocked before upload', async () => {
   const root = await fixture()
   await writeFile(path.join(root, 'wrangler.jsonc'), '{ "main": "worker/index.ts", "d1_databases": [{ "binding": "DB" }] }')

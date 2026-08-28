@@ -75,7 +75,8 @@ function usage() {
     '  Claiming a subdomain requires a paid Paean subscription and costs more credits than an',
     '  auto-assigned one. Omit it to keep the app\'s current subdomain, or to get a random one',
     '  on first publish. Free accounts must omit it.',
-    '--delete removes an owned direct Clide hosting handle.',
+    '--delete removes an owned deployment. For saved Square projects it first unlists the',
+    '  Square app, then deletes the Clide site; for hosting-only projects it deletes only the site.',
   ].join('\n')
 }
 
@@ -555,21 +556,27 @@ function saveState(projectRoot, input) {
   writeFileSync(path.join(dir, CLIDE_STATE_FILE), JSON.stringify(state, null, 2) + '\n', 'utf8')
 }
 
-function loadLastHandle(projectRoot) {
-  const state = loadState(projectRoot)
-  return typeof state.handle === 'string' && state.handle ? state.handle : undefined
-}
-
-function markStateDeleted(projectRoot, handle) {
+function markStateUnpublished(projectRoot, { handle, squareAppHashKey, siteDeleted }) {
   const file = path.join(projectRoot, CLIDE_STATE_DIR, CLIDE_STATE_FILE)
   if (!existsSync(file)) return
   const state = loadState(projectRoot)
-  if (state && state.handle === handle) {
-    state.deletedAt = new Date().toISOString()
-    state.lastDeletedHandle = handle
-    delete state.handle
-    writeFileSync(file, JSON.stringify(state, null, 2) + '\n', 'utf8')
+  if (!state || typeof state !== 'object') return
+  const now = new Date().toISOString()
+  if (squareAppHashKey && state.squareAppHashKey === squareAppHashKey) {
+    state.status = 'unlisted'
+    state.squareUnlistedAt = now
   }
+  if (siteDeleted && handle && (state.handle === handle || state.lastDeletedHandle === handle)) {
+    state.deletedAt = now
+    state.siteDeletedAt = now
+    state.lastDeletedHandle = handle
+    if (typeof state.url === 'string' && state.url) state.lastDeletedUrl = state.url
+    delete state.handle
+    delete state.url
+    delete state.playUrl
+    delete state.archiveUrl
+  }
+  writeFileSync(file, JSON.stringify(state, null, 2) + '\n', 'utf8')
 }
 
 function readManifest(projectRoot) {
@@ -882,11 +889,40 @@ function explainHandleFailure(err, handle) {
   return err
 }
 
-async function unpublishHandle(handle, token) {
+async function unlistSquareApp(hashKey, token) {
+  const res = await fetch(API_BASE + '/square/apps/' + encodeURIComponent(hashKey), {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + token },
+  })
+  return await readJsonResponse(res, '/square/apps/:hashKey')
+}
+
+async function findSquareAppByHandle(handle, token) {
+  const res = await fetch(API_BASE + '/square/apps/by-handle/' + encodeURIComponent(handle), {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + token },
+  })
+  if (res.status === 404) {
+    await res.text()
+    return null
+  }
+  const json = await readJsonResponse(res, '/square/apps/by-handle/:handle')
+  const app = json.data || json.app || json
+  if (!app || typeof app.hashKey !== 'string' || !app.hashKey) {
+    throw new Error('/square/apps/by-handle/:handle response missing data.hashKey')
+  }
+  return app
+}
+
+async function unpublishHandle(handle, token, allowMissing = false) {
   const res = await fetch(API_BASE + '/publish/' + encodeURIComponent(handle), {
     method: 'DELETE',
     headers: { Authorization: 'Bearer ' + token },
   })
+  if (allowMissing && res.status === 404) {
+    await res.text()
+    return { handle, deletedObjects: 0, alreadyDeleted: true }
+  }
   return await readJsonResponse(res, '/publish/:handle')
 }
 
@@ -926,15 +962,74 @@ async function main() {
   if (args.delete) {
     const token = getPaeanToken()
     if (!token) throw new Error('Paean credentials not found. Set the PAEAN_AUTH_TOKEN environment variable to your Paean JWT (or place it in ~/.paean/credentials.json as {"token":"..."}). See the skill README for how to obtain one.')
-    const handle = args.handle || loadLastHandle(projectRoot)
+    const state = loadState(projectRoot)
+    const savedHandle = (typeof state.handle === 'string' && state.handle) ||
+      (typeof state.lastDeletedHandle === 'string' && state.lastDeletedHandle) || undefined
+    const handle = args.handle || savedHandle
+
+    if (state.mode === 'square' && args.handle && savedHandle && args.handle !== savedHandle) {
+      throw new Error('--handle ' + args.handle + ' does not match the Square project\'s saved handle ' + savedHandle + '. Refusing to unlist one app while deleting another site.')
+    }
+    const savedSquareAppHashKey = typeof state.squareAppHashKey === 'string' && state.squareAppHashKey
+      ? state.squareAppHashKey
+      : undefined
+    let linkedApp
+    if (handle) {
+      console.log('Checking whether ' + handle + '.clide.app belongs to a Square listing...')
+      linkedApp = await findSquareAppByHandle(handle, token)
+    }
+    if (savedSquareAppHashKey && linkedApp && linkedApp.hashKey !== savedSquareAppHashKey) {
+      throw new Error('Saved squareAppHashKey ' + savedSquareAppHashKey + ' does not match the app currently linked to ' + handle + '.clide.app (' + linkedApp.hashKey + '). Refusing to delete either target.')
+    }
+    const squareAppHashKey = savedSquareAppHashKey || (linkedApp && linkedApp.hashKey) || undefined
+    if (state.mode === 'square' && !squareAppHashKey) {
+      throw new Error('Saved publish state says mode "square" but has no squareAppHashKey. Refusing to delete the hosted site because that could leave a listed Square app pointing to a missing page. Unlist the app through DELETE /square/apps/:hashKey after resolving its hashKey.')
+    }
+    if (squareAppHashKey) {
+      console.log('Unlisting Square app ' + squareAppHashKey + ' before deleting its hosted site...')
+      await unlistSquareApp(squareAppHashKey, token)
+      markStateUnpublished(projectRoot, { handle, squareAppHashKey, siteDeleted: false })
+
+      let hosted = { handle, deletedObjects: 0, alreadyDeleted: false }
+      if (handle) {
+        console.log('Deleting Clide hosting for ' + handle + '.clide.app...')
+        try {
+          // A 404 is success here: older publish.mjs versions could already
+          // delete the site while leaving the Square row listed.
+          hosted = await unpublishHandle(handle, token, true)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          throw new Error('Square app ' + squareAppHashKey + ' was unlisted safely, but deleting ' + handle + '.clide.app failed. The gallery no longer points at a broken site; retry --delete to finish hosting cleanup. Server said: ' + message)
+        }
+        markStateUnpublished(projectRoot, { handle, squareAppHashKey, siteDeleted: true })
+      }
+      console.log(JSON.stringify({
+        success: true,
+        action: 'delete',
+        mode: 'square',
+        squareAppHashKey,
+        unlistedFromSquare: true,
+        handle: hosted.handle || handle || null,
+        siteDeleted: !!handle,
+        siteAlreadyDeleted: !!hosted.alreadyDeleted,
+        deletedObjects: hosted.deletedObjects || 0,
+        stateFile: path.join(CLIDE_STATE_DIR, CLIDE_STATE_FILE),
+      }, null, 2))
+      return
+    }
+
     if (!handle) throw new Error('No direct-hosting handle specified and no saved .clide/publish.json handle found.')
     console.log('Deleting direct Clide hosting for ' + handle + '.clide.app...')
     const result = await unpublishHandle(handle, token)
-    markStateDeleted(projectRoot, handle)
+    markStateUnpublished(projectRoot, { handle, siteDeleted: true })
     console.log(JSON.stringify({
       success: true,
       action: 'delete',
+      mode: 'hosting-only',
+      unlistedFromSquare: false,
       handle: result.handle || handle,
+      siteDeleted: true,
+      siteAlreadyDeleted: false,
       deletedObjects: result.deletedObjects,
       stateFile: path.join(CLIDE_STATE_DIR, CLIDE_STATE_FILE),
     }, null, 2))
