@@ -94,5 +94,16 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
 `--allow-secrets`, `--allow-static-only`, and `--delete [--handle <handle>]`.
 
-`--delete` removes a direct Clide-hosted deployment owned by the current account. Deletion is
-destructive; resolve the exact saved/explicit handle and obtain confirmation first.
+`--delete` is mode-aware through `.clide/publish.json`:
+
+- for `hosting-only`, it deletes the owned Clide site;
+- before any handle deletion, it checks `GET /square/apps/by-handle/:handle`; lookup failures or a
+  mismatch with the saved Square hash stop without mutating either target;
+- for `square`, it first calls `DELETE /square/apps/:hashKey` to hide the listing, and only after
+  that succeeds deletes the Clide site. It uses the saved `squareAppHashKey`, or resolves an
+  explicit/saved handle through `GET /square/apps/by-handle/:handle`; if a saved Square project
+  cannot be resolved safely, it stops before deleting hosting;
+- a Square-site 404 after a successful unlist is accepted as already deleted, which repairs state
+  left by older versions that deleted hosting without unlisting Square.
+
+Deletion is destructive; resolve the exact saved app/hash/handle and obtain confirmation first.

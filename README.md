@@ -214,6 +214,10 @@ each direct upstream with the aspect it contributed and a suggested revenue `wei
   tokens.
 - Raw downloaded upstream sources (`.remix-sources/`) and the `clide.json` manifest are
   excluded from the published site by default.
+- `paean-publish --delete` is mode-aware: Square projects are unlisted before their Clide files are
+  removed, while hosting-only projects delete only their site. It can resolve a missing Square hash
+  from the saved/explicit handle and refuses cleanup when the Square identity cannot be established
+  safely.
 
 ## License
 
