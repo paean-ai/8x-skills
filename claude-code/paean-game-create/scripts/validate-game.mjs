@@ -221,8 +221,11 @@ async function runtimeChecks(root, screenshotDir) {
   const address = server.address();
   const origin = `http://127.0.0.1:${address.port}`;
   const profiles = [
+    { name: 'phone-compact', viewport: { width: 320, height: 568 }, mobile: true },
     { name: 'phone-portrait', viewport: { width: 390, height: 844 }, mobile: true },
     { name: 'phone-landscape', viewport: { width: 844, height: 390 }, mobile: true },
+    { name: 'tablet-portrait', viewport: { width: 768, height: 1024 }, mobile: true },
+    { name: 'tablet-landscape', viewport: { width: 1024, height: 768 }, mobile: true },
     { name: 'desktop', viewport: { width: 1440, height: 900 }, mobile: false },
   ];
   const errors = [];

@@ -62,9 +62,14 @@ external location.
 - Use English by default unless the user requests another language. Minimize copy through clear,
   authored icons and spatial feedback.
 
-Platform save/leaderboard integration is a separate concern: use `paean-sdk` when requested. Use
-`paean-publish` only after the game passes this skill's release checks and the user authorizes the
-public destination.
+During the production brief, inspect the current `paean-sdk` skill and make a deliberate platform
+feature plan. Prefer documented Paean SDK capabilities over bespoke third-party services when they
+fit the work: cloud storage and shared leaderboards today, plus payments, ads, multiplayer, or
+social interaction only when the current SDK/host documentation actually exposes them. Do not add
+platform features as checkboxes, invent APIs, or let consent/monetization interrupt attract mode or
+core play. Keep graceful local fallback where applicable, and obtain user approval before enabling
+monetization. Use `paean-publish` only after the game passes this skill's release checks and the user
+authorizes the public destination.
 
 ## Implement through complete playable slices
 
@@ -80,11 +85,15 @@ If the host exposes preview state, keep consent prompts and platform UI out of t
 
 ## Mobile, desktop, and runtime behavior
 
-Design mobile/touch first. Portrait is the default; use landscape only when the game genuinely
-benefits from it. Prevent document scrolling, overscroll, accidental selection, and canvas drag.
-Respect safe areas and Paean host chrome. On desktop, compose the playfield intentionally—usually a
-centered game frame with a suitable `max-width`, while backgrounds can extend to the viewport.
-Never stretch portrait gameplay into a loose full-width desktop layout.
+Design mobile/touch first with portrait as the primary composition. Unless the core mechanic
+intrinsically requires a fixed orientation, support both portrait and landscape by recomposing the
+camera, playfield, HUD, and controls rather than merely shrinking or rotating them. When one
+orientation is genuinely unsuitable, provide an intentional branded rotate treatment. Adapt across
+narrow and short phones, tablets in both orientations, and desktop resolutions. Prevent document
+scrolling, overscroll, accidental selection, and canvas drag. Respect safe areas and Paean host
+chrome. On desktop, compose the playfield intentionally—usually a centered game frame with a
+suitable `max-width`, while backgrounds can extend to the viewport. Never stretch portrait
+gameplay into a loose full-width desktop layout.
 
 Pause or safely throttle when hidden. Handle resize, orientation change, pointer cancellation,
 audio unlock, and restart without corrupting game state. Keep startup and total transfer small;
@@ -111,7 +120,8 @@ Completion requires all of the following:
   external/runtime paths, or viewport scrollbars;
 - attract → play → result → restart works, and core interactions are verified rather than merely
   loaded;
-- portrait phone, landscape phone (when supported), and desktop screenshots meet the production
-  standard with no placeholder or half-finished state;
+- portrait and landscape phone, portrait and landscape tablet, and desktop screenshots meet the
+  production standard (including an intentional rotate treatment where justified), with no
+  placeholder or half-finished state;
 - the game remains playable after reload and after background/foreground transitions;
 - final project size and largest assets are reviewed, with obvious waste removed.
