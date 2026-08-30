@@ -51,7 +51,7 @@ visual style. A game can be small; it cannot feel unfinished.
 Treat the preview as a separate state, not as a normal game with the HUD hidden by CSS.
 
 ```text
-ATTRACT (autonomous, clean scene)
+LOAD COMPLETE → ATTRACT (autonomous, UI-free gameplay highlight)
   └─ intentional tap/click → reset deterministic demo state
                               → unlock audio
                               → reveal essential HUD
@@ -59,9 +59,15 @@ ATTRACT (autonomous, clean scene)
 PLAYING → RESULT → restart → PLAYING
 ```
 
-- Compose `ATTRACT` like an arcade cabinet demonstration: representative action, strong camera,
-  no settings, score panels, consent prompts, leaderboard, debug data, or normal touch controls.
-- Allow only a small, calm `DEMO · TAP TO PLAY` cue. Avoid pulsing full-screen instructions.
+- Enter `ATTRACT` automatically as soon as essential assets are ready; never wait at a title screen
+  or require input to start the demonstration. Showcase the core mechanic's strongest readable
+  moment immediately, then continue or loop without falling into an idle or failure state.
+- Compose it like an arcade cabinet demonstration: representative action and a strong camera, with
+  no gameplay HUD, menus, settings, score panels, consent prompts, leaderboard, debug data, or
+  normal touch controls.
+- Give the highlight an uninterrupted UI-free beat. If play-entry discoverability still requires
+  it, fade in only a small, calm `DEMO · TAP TO PLAY` cue afterward; never cover the action with a
+  persistent panel or pulsing full-screen instruction.
 - Use a deterministic scripted or seeded demonstration that cannot become stuck, fail into a menu,
   spend persistent currency, submit scores, or mutate the player's save.
 - On first intentional input, stop every demo timer/listener, reset to a fair fresh state, reveal
@@ -104,6 +110,21 @@ PLAYING → RESULT → restart → PLAYING
   exactly 800×400 `banner.jpg`; the banner is a deliberate store composition, not a stretched game
   screenshot with UI debris.
 
+### Banner production
+
+- Make the banner a high-quality, 2:1 marketing composition that faithfully represents the
+  finished game's premise, core mechanic, characters, world, art direction, and interface language.
+  It must not advertise actors, environments, polish, or features the playable game does not have.
+- When an image-generation tool or skill is available, use the finished game brief plus actual
+  screenshots, character/scene references, palette, and composition notes to generate the base art.
+  Iterate until the result clearly belongs to this game, then add exact title/logo typography with
+  deterministic design tools rather than relying on generated text.
+- Without image generation, capture the UI-free attract demonstration or render a dedicated
+  promotional camera shot from the game. Crop and color-grade it, then composite authored title,
+  logo, and restrained supporting text as needed; do not reuse an ordinary HUD-covered screenshot.
+- Inspect the final JPEG at 800×400 and at small Square-listing thumbnail size. Check focal point,
+  silhouette, contrast, title legibility, edge safety, JPEG artifacts, and file weight.
+
 ## 7. Paean platform fit
 
 - During the brief, inspect the current `paean-sdk` skill and documented host capabilities. Prefer
@@ -135,7 +156,7 @@ Before completion, record evidence for each row:
 | Area | Required evidence |
 | --- | --- |
 | Core loop | Multiple complete sessions including win/fail/restart and unusual input timing |
-| Preview | Attract mode is clean, deterministic, non-persistent, and converts on first tap |
+| Preview | Load enters an automatic UI-free core highlight; demo is deterministic, non-persistent, and converts on first tap |
 | Mobile portrait | Full-size screenshot plus touch play; safe areas and all targets verified |
 | Mobile landscape | Full-size screenshot plus touch play, or a justified branded rotate treatment |
 | Tablet | Portrait and landscape screenshots/play with intentional composition and reachable controls |
@@ -144,7 +165,8 @@ Before completion, record evidence for each row:
 | Runtime | Playwright reports no page errors, console errors, failed assets, or scrollbars |
 | Lifecycle | Resize, rotate, pointer cancel, hide/show, reload, pause, and audio unlock verified |
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |
-| Assets | Original/licensed, coherent, optimized, favicon present, banner exactly 800×400 |
+| Assets | Original/licensed, coherent, optimized, and favicon present |
+| Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |
 
 Automated checks prove structural and runtime facts only. A human-quality visual pass must inspect
