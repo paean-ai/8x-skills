@@ -1,6 +1,6 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -95,7 +95,7 @@ test('requires exact banner dimensions and immediate copyright comment', async (
   assert.match(result.stderr, /banner.jpg must be 800x400/);
 });
 
-test('runs cleanly in Playwright at phone and desktop viewports', {
+test('runs cleanly in Playwright at phone, tablet, and desktop viewports', {
   skip: !process.env.PAEAN_PLAYWRIGHT_NODE_PATH,
 }, async () => {
   const root = await fixture();
@@ -110,6 +110,14 @@ test('runs cleanly in Playwright at phone and desktop viewports', {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Playwright runtime clean/);
+  await Promise.all([
+    'phone-compact.png',
+    'phone-portrait.png',
+    'phone-landscape.png',
+    'tablet-portrait.png',
+    'tablet-landscape.png',
+    'desktop.png',
+  ].map((name) => access(join(screenshots, name))));
 });
 
 test('closes its local server when Chromium cannot launch', {

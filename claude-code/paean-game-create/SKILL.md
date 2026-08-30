@@ -55,13 +55,19 @@ external location.
   when they genuinely meet the visual bar, not merely to avoid making art.
 - Put `<!-- Copyright (c) 2026 paean.ai and the game's creator(s). -->` immediately after the
   opening `<head>` tag.
-- Ship top-level `favicon.svg` and an exactly 800×400 `banner.jpg`.
+- Ship top-level `favicon.svg` and an exactly 800×400 `banner.jpg`; follow the production
+  standard's banner-production workflow rather than treating the file as a placeholder.
 - Use English by default unless the user requests another language. Minimize copy through clear,
   authored icons and spatial feedback.
 
-Platform save/leaderboard integration is a separate concern: use `paean-sdk` when requested. Use
-`paean-publish` only after the game passes this skill's release checks and the user authorizes the
-public destination.
+During the production brief, inspect the current `paean-sdk` skill and make a deliberate platform
+feature plan. Prefer documented Paean SDK capabilities over bespoke third-party services when they
+fit the work: cloud storage and shared leaderboards today, plus payments, ads, multiplayer, or
+social interaction only when the current SDK/host documentation actually exposes them. Do not add
+platform features as checkboxes, invent APIs, or let consent/monetization interrupt attract mode or
+core play. Keep graceful local fallback where applicable, and obtain user approval before enabling
+monetization. Use `paean-publish` only after the game passes this skill's release checks and the user
+authorizes the public destination.
 
 ## Implement through complete playable slices
 
@@ -70,18 +76,23 @@ success/failure, restart, and persistence where applicable. Then deepen content 
 Every mechanic needs readable anticipation, action, impact, recovery, and feedback. Tune touch
 targets, difficulty, camera, hit feedback, transitions, pause/resume, and audio as one system.
 
-Use a clean arcade-style attract mode for gameplay previews: show the game world and representative
-play without normal HUD clutter, with only a restrained `DEMO · TAP TO PLAY` hint. The first
-intentional touch/click stops the demo, reveals the play UI, and enters a deterministic fresh run.
-If the host exposes preview state, keep consent prompts and platform UI out of the attract state.
+After essential assets finish loading, automatically enter a clean arcade-style attract mode with
+no start input required. Immediately stage a deterministic highlight of the core mechanic with no
+gameplay HUD, menus, controls, consent prompts, or platform UI. Let the scene read fully UI-free
+before any optional restrained `DEMO · TAP TO PLAY` cue fades in. The first intentional touch/click
+stops every demo process, reveals only essential play UI, and enters a deterministic fresh run.
 
 ## Mobile, desktop, and runtime behavior
 
-Design mobile/touch first. Portrait is the default; use landscape only when the game genuinely
-benefits from it. Prevent document scrolling, overscroll, accidental selection, and canvas drag.
-Respect safe areas and Paean host chrome. On desktop, compose the playfield intentionally—usually a
-centered game frame with a suitable `max-width`, while backgrounds can extend to the viewport.
-Never stretch portrait gameplay into a loose full-width desktop layout.
+Design mobile/touch first with portrait as the primary composition. Unless the core mechanic
+intrinsically requires a fixed orientation, support both portrait and landscape by recomposing the
+camera, playfield, HUD, and controls rather than merely shrinking or rotating them. When one
+orientation is genuinely unsuitable, provide an intentional branded rotate treatment. Adapt across
+narrow and short phones, tablets in both orientations, and desktop resolutions. Prevent document
+scrolling, overscroll, accidental selection, and canvas drag. Respect safe areas and Paean host
+chrome. On desktop, compose the playfield intentionally—usually a centered game frame with a
+suitable `max-width`, while backgrounds can extend to the viewport. Never stretch portrait
+gameplay into a loose full-width desktop layout.
 
 Pause or safely throttle when hidden. Handle resize, orientation change, pointer cancellation,
 audio unlock, and restart without corrupting game state. Keep startup and total transfer small;
@@ -98,17 +109,20 @@ node "$SKILL_DIR/scripts/validate-game.mjs" <game-directory> \
 ```
 
 Install Playwright/Chromium in the working environment if the validator reports it missing. Do not
-replace this with a static-only check for final acceptance. Inspect every screenshot at full size
-and iterate on composition, hierarchy, legibility, touch affordance, visual artifacts, and desktop
-framing. Also play several complete sessions on touch-sized and desktop viewports.
+replace this with a static-only check for final acceptance. Inspect every screenshot at full size;
+these initial-load captures must show the automatic attract highlight, not a loading screen, title
+menu, or idle scene. Iterate on composition, hierarchy, legibility, touch affordance, visual
+artifacts, and desktop framing. Also play several complete sessions on touch-sized and desktop
+viewports.
 
 Completion requires all of the following:
 
 - validator exits successfully with no page errors, console errors, failed local assets, forbidden
   external/runtime paths, or viewport scrollbars;
-- attract → play → result → restart works, and core interactions are verified rather than merely
-  loaded;
-- portrait phone, landscape phone (when supported), and desktop screenshots meet the production
-  standard with no placeholder or half-finished state;
+- loading → automatic UI-free attract highlight → play → result → restart works, and core
+  interactions are verified rather than merely loaded;
+- portrait and landscape phone, portrait and landscape tablet, and desktop screenshots meet the
+  production standard (including an intentional rotate treatment where justified), with no
+  placeholder or half-finished state;
 - the game remains playable after reload and after background/foreground transitions;
 - final project size and largest assets are reviewed, with obvious waste removed.

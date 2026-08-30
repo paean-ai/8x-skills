@@ -56,6 +56,13 @@ result or Square app detail before running the script.
    Keep the remix standalone: no runtime imports from `.remix-sources/`, parent folders, or
    remote assets unless their license explicitly allows it and attribution is recorded.
    Include top-level `favicon.svg` and `banner.jpg`; `banner.jpg` should be exactly 800x400.
+   Follow the production standard's banner workflow: use image generation when available only with
+   enough finished-game references to preserve the remix's actual identity; otherwise compose it
+   from the UI-free attract scene or a dedicated in-game promotional camera capture.
+   Reassess platform features for the new loop rather than copying a parent's integration blindly.
+   Prefer the current `paean-sdk` when its documented storage, leaderboard, payment, advertising,
+   multiplayer, or social capabilities suit the remix; never invent unavailable APIs, and preserve
+   graceful local play for optional capabilities.
 
 5. **Finalize `clide.json`** — set `title`, `summary`, `category`, `tags`, and each
    `remix.parents[].role` (and `weight` for an uneven split). If the remix keeps a parent
@@ -63,7 +70,9 @@ result or Square app detail before running the script.
    so it does not collide with or impersonate the parent.
 
 6. **Validate** with `paean-game-create/scripts/validate-game.mjs`, including Playwright runtime
-   checks and full-size visual review at its phone and desktop viewports.
+   checks and full-size visual review at its phone, tablet, and desktop viewports in both mobile
+   orientations. Confirm every initial load automatically reaches the UI-free core-play highlight,
+   and inspect the banner at full 800x400 size and listing-thumbnail size.
 
 7. **Publish** with the paean-publish skill from the target directory; it reads `clide.json`
    for naming, metadata, and lineage automatically.
