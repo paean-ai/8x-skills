@@ -69,6 +69,9 @@ want the new project created.
    license explicitly allows it and attribution is recorded. Keep `.remix-sources/` for
    reference only; it is not published. Include top-level `favicon.svg` and `banner.jpg`;
    `banner.jpg` should be exactly 800x400.
+   If the remix uses vector/skeletal art, resolve it into one coherent cartoon family and explicit
+   head-to-body proportion system for the new game. Rebuild crude source rigs or linework as needed;
+   do not inherit thick black contours, mixed anatomy, or rigid paper-doll animation.
    Follow the production standard's banner workflow: use image generation when available only with
    enough finished-game references to preserve the remix's actual identity; otherwise compose it
    from the UI-free attract scene or a dedicated in-game promotional camera capture.

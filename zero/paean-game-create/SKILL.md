@@ -33,8 +33,12 @@ engine, or a real pixel-art pipeline. Technology is not a substitute for art dir
 
 - Pixel art needs a controlled palette, consistent pixel density, readable silhouettes, authored
   animation, and crisp integer scaling.
-- Vector and 3D work needs strong composition, material/lighting discipline, depth, motion, and
-  detail; flat undifferentiated shapes are not a finished visual system.
+- Vector/skeletal 2D work must choose a coherent cartoon language suited to the theme—for example
+  Japanese animation-inspired, American animation-inspired, or chibi—with an explicit head-to-body
+  proportion system. Use refined layered rigs, clean deformation, and fine palette-aware linework;
+  never fall back to coarse thick black contours or hinged paper-doll motion.
+- 3D work needs strong composition, material/lighting discipline, depth, motion, and detail; flat
+  undifferentiated shapes are not a finished visual system.
 - Image-led adventure/AVG work should use high-quality generated or authored imagery where
   appropriate, then crop, resize, compress, and preload it for fast mobile startup. Use an
   image-generation or image-editing skill when available and the art direction benefits from it.

@@ -25,9 +25,22 @@ visual style. A game can be small; it cannot feel unfinished.
   treatment make it intentional.
 - Pixel work uses one logical pixel grid, nearest-neighbor scaling, a controlled palette, no mixed
   resolutions, and authored animation with strong silhouettes. Inspect at 1× and final scale.
-- Vector work uses authored paths, layers, joints, deformation/pose, and lighting/detail appropriate
-  to the style. 3D work uses composed cameras, coherent materials, lighting, shadows/depth cues,
-  animation, and post-processing that survives mobile performance limits.
+- Before authoring vector characters, choose and record one coherent cartoon family appropriate to
+  the theme—such as Japanese animation-inspired, American animation-inspired, chibi, or another
+  deliberate direction. Define shape language and explicit head-to-body ratios for each archetype;
+  do not accidentally mix incompatible facial construction, anatomy, or proportions.
+- Vector linework must be fine, crisp, and palette-aware. Derive contour color from local forms,
+  taper or vary weight intentionally, and keep interior detail readable at final scale. Do not use
+  thick pure-black outer contours, crude sticker-like borders, or the same heavy stroke everywhere.
+- Build skeletal characters from authored paths and purposeful overlapping layers with well-placed
+  pivots, joint coverage, occlusion order, and deformation around shoulders, elbows, hips, and knees.
+  Facial parts, hair, clothing, and accessories need controlled secondary motion where visible.
+  Animation needs designed key poses, readable arcs, anticipation, impact, recovery, and follow-
+  through rather than rigid limb rotation or hinged paper-doll motion.
+- Inspect vector characters both enlarged and at final gameplay size across representative idle,
+  locomotion, attack/ability, hit, and defeat poses. Silhouette, anatomy, line weight, facial appeal,
+  and deformation must remain polished in motion. 3D work uses composed cameras, coherent materials,
+  lighting, shadows/depth cues, animation, and mobile-safe post-processing.
 - Image-led AVG/adventure scenes need consistent characters, perspective, palette, lighting, and
   crop across the sequence. Generate or author at source quality, then export only the displayed
   dimensions. Prefer WebP/AVIF for scene images where support and alpha needs allow it; preload the
@@ -166,6 +179,7 @@ Before completion, record evidence for each row:
 | Lifecycle | Resize, rotate, pointer cancel, hide/show, reload, pause, and audio unlock verified |
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |
 | Assets | Original/licensed, coherent, optimized, and favicon present |
+| Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |
 
