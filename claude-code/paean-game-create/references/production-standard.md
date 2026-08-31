@@ -25,9 +25,22 @@ visual style. A game can be small; it cannot feel unfinished.
   treatment make it intentional.
 - Pixel work uses one logical pixel grid, nearest-neighbor scaling, a controlled palette, no mixed
   resolutions, and authored animation with strong silhouettes. Inspect at 1× and final scale.
-- Vector work uses authored paths, layers, joints, deformation/pose, and lighting/detail appropriate
-  to the style. 3D work uses composed cameras, coherent materials, lighting, shadows/depth cues,
-  animation, and post-processing that survives mobile performance limits.
+- Before authoring vector characters, choose and record one coherent cartoon family appropriate to
+  the theme—such as Japanese animation-inspired, American animation-inspired, chibi, or another
+  deliberate direction. Define shape language and explicit head-to-body ratios for each archetype;
+  do not accidentally mix incompatible facial construction, anatomy, or proportions.
+- Vector linework must be fine, crisp, and palette-aware. Derive contour color from local forms,
+  taper or vary weight intentionally, and keep interior detail readable at final scale. Do not use
+  thick pure-black outer contours, crude sticker-like borders, or the same heavy stroke everywhere.
+- Build skeletal characters from authored paths and purposeful overlapping layers with well-placed
+  pivots, joint coverage, occlusion order, and deformation around shoulders, elbows, hips, and knees.
+  Facial parts, hair, clothing, and accessories need controlled secondary motion where visible.
+  Animation needs designed key poses, readable arcs, anticipation, impact, recovery, and follow-
+  through rather than rigid limb rotation or hinged paper-doll motion.
+- Inspect vector characters both enlarged and at final gameplay size across representative idle,
+  locomotion, attack/ability, hit, and defeat poses. Silhouette, anatomy, line weight, facial appeal,
+  and deformation must remain polished in motion. 3D work uses composed cameras, coherent materials,
+  lighting, shadows/depth cues, animation, and mobile-safe post-processing.
 - Image-led AVG/adventure scenes need consistent characters, perspective, palette, lighting, and
   crop across the sequence. Generate or author at source quality, then export only the displayed
   dimensions. Prefer WebP/AVIF for scene images where support and alpha needs allow it; preload the
@@ -45,6 +58,25 @@ visual style. A game can be small; it cannot feel unfinished.
   impact, score/resource change, and clear unavailable/cooldown state.
 - Menus, pause, result, restart, settings, and orientation warnings use the same art direction as
   the game. They are not browser-default overlays added at the end.
+
+### Language and localization
+
+- English is the primary release language and required fallback unless the user specifies another
+  primary language. Set the initial document language accordingly (normally `<html lang="en">`) and
+  keep the fallback English catalog complete even when additional locales ship.
+- Put every player-visible string—including HUD labels, tutorials, results, settings, errors,
+  accessibility names, attract cues, and canvas-rendered text—behind stable semantic keys in a
+  central locale catalog and a small `t(key, params)`-style lookup. Do not concatenate translated
+  fragments or bury display strings in gameplay rules.
+- Keep `defaultLocale`, `supportedLocales`, catalog registration/loading, English fallback, and the
+  selected persisted locale in one localization layer. Adding a locale should mean adding its
+  catalog and registering it, not editing simulation, scene, or component logic.
+- Use locale-aware interpolation and `Intl` formatting for plurals, numbers, dates, and relative
+  values where applicable. Update the document `lang` and `dir` when locale changes; reserve a route
+  for RTL even if the initial English-only release does not yet ship an RTL translation.
+- Build responsive text containers rather than fixed-width labels baked around English. Verify
+  wrapping, line height, clipping, button growth, and font coverage with a long-string pseudo-locale
+  or representative expanded copy. Do not bake essential interface text into raster artwork.
 
 ## 4. Attract-mode creation method
 
@@ -162,10 +194,12 @@ Before completion, record evidence for each row:
 | Tablet | Portrait and landscape screenshots/play with intentional composition and reachable controls |
 | Desktop | Full-size screenshot showing deliberate max-width/centering and no loose scene drift |
 | Platform fit | SDK capability plan recorded; chosen integrations verified with graceful fallback |
+| Localization | English default/fallback complete; centralized keys, locale configuration, and expanded-text layout verified |
 | Runtime | Playwright reports no page errors, console errors, failed assets, or scrollbars |
 | Lifecycle | Resize, rotate, pointer cancel, hide/show, reload, pause, and audio unlock verified |
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |
 | Assets | Original/licensed, coherent, optimized, and favicon present |
+| Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |
 

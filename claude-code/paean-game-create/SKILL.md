@@ -30,8 +30,12 @@ engine, or a real pixel-art pipeline. Technology is not a substitute for art dir
 
 - Pixel art needs a controlled palette, consistent pixel density, readable silhouettes, authored
   animation, and crisp integer scaling.
-- Vector and 3D work needs strong composition, material/lighting discipline, depth, motion, and
-  detail; flat undifferentiated shapes are not a finished visual system.
+- Vector/skeletal 2D work must choose a coherent cartoon language suited to the theme—for example
+  Japanese animation-inspired, American animation-inspired, or chibi—with an explicit head-to-body
+  proportion system. Use refined layered rigs, clean deformation, and fine palette-aware linework;
+  never fall back to coarse thick black contours or hinged paper-doll motion.
+- 3D work needs strong composition, material/lighting discipline, depth, motion, and detail; flat
+  undifferentiated shapes are not a finished visual system.
 - Image-led adventure/AVG work should use high-quality generated or authored imagery where
   appropriate, then crop, resize, compress, and preload it for fast mobile startup. Use an
   image-generation or image-editing skill when available and the art direction benefits from it.
@@ -57,8 +61,12 @@ external location.
   opening `<head>` tag.
 - Ship top-level `favicon.svg` and an exactly 800×400 `banner.jpg`; follow the production
   standard's banner-production workflow rather than treating the file as a placeholder.
-- Use English by default unless the user requests another language. Minimize copy through clear,
-  authored icons and spatial feedback.
+- Use English as the primary and fallback language unless the user requests otherwise. Route all
+  player-facing copy through a central locale catalog and translation function; do not scatter
+  display strings through gameplay, UI, or canvas-rendering logic. Define locale configuration so a
+  new language can be added as a resource without changing mechanics. Design text containers for
+  expansion, wrapping, suitable fonts, and future RTL direction. Additional translations are not
+  required unless requested. Minimize copy through clear, authored icons and spatial feedback.
 
 During the production brief, inspect the current `paean-sdk` skill and make a deliberate platform
 feature plan. Prefer documented Paean SDK capabilities over bespoke third-party services when they
