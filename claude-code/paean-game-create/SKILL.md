@@ -61,8 +61,12 @@ external location.
   opening `<head>` tag.
 - Ship top-level `favicon.svg` and an exactly 800×400 `banner.jpg`; follow the production
   standard's banner-production workflow rather than treating the file as a placeholder.
-- Use English by default unless the user requests another language. Minimize copy through clear,
-  authored icons and spatial feedback.
+- Use English as the primary and fallback language unless the user requests otherwise. Route all
+  player-facing copy through a central locale catalog and translation function; do not scatter
+  display strings through gameplay, UI, or canvas-rendering logic. Define locale configuration so a
+  new language can be added as a resource without changing mechanics. Design text containers for
+  expansion, wrapping, suitable fonts, and future RTL direction. Additional translations are not
+  required unless requested. Minimize copy through clear, authored icons and spatial feedback.
 
 During the production brief, inspect the current `paean-sdk` skill and make a deliberate platform
 feature plan. Prefer documented Paean SDK capabilities over bespoke third-party services when they

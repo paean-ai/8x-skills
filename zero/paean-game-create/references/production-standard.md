@@ -59,6 +59,25 @@ visual style. A game can be small; it cannot feel unfinished.
 - Menus, pause, result, restart, settings, and orientation warnings use the same art direction as
   the game. They are not browser-default overlays added at the end.
 
+### Language and localization
+
+- English is the primary release language and required fallback unless the user specifies another
+  primary language. Set the initial document language accordingly (normally `<html lang="en">`) and
+  keep the fallback English catalog complete even when additional locales ship.
+- Put every player-visible string—including HUD labels, tutorials, results, settings, errors,
+  accessibility names, attract cues, and canvas-rendered text—behind stable semantic keys in a
+  central locale catalog and a small `t(key, params)`-style lookup. Do not concatenate translated
+  fragments or bury display strings in gameplay rules.
+- Keep `defaultLocale`, `supportedLocales`, catalog registration/loading, English fallback, and the
+  selected persisted locale in one localization layer. Adding a locale should mean adding its
+  catalog and registering it, not editing simulation, scene, or component logic.
+- Use locale-aware interpolation and `Intl` formatting for plurals, numbers, dates, and relative
+  values where applicable. Update the document `lang` and `dir` when locale changes; reserve a route
+  for RTL even if the initial English-only release does not yet ship an RTL translation.
+- Build responsive text containers rather than fixed-width labels baked around English. Verify
+  wrapping, line height, clipping, button growth, and font coverage with a long-string pseudo-locale
+  or representative expanded copy. Do not bake essential interface text into raster artwork.
+
 ## 4. Attract-mode creation method
 
 Treat the preview as a separate state, not as a normal game with the HUD hidden by CSS.
@@ -175,6 +194,7 @@ Before completion, record evidence for each row:
 | Tablet | Portrait and landscape screenshots/play with intentional composition and reachable controls |
 | Desktop | Full-size screenshot showing deliberate max-width/centering and no loose scene drift |
 | Platform fit | SDK capability plan recorded; chosen integrations verified with graceful fallback |
+| Localization | English default/fallback complete; centralized keys, locale configuration, and expanded-text layout verified |
 | Runtime | Playwright reports no page errors, console errors, failed assets, or scrollbars |
 | Lifecycle | Resize, rotate, pointer cancel, hide/show, reload, pause, and audio unlock verified |
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |
