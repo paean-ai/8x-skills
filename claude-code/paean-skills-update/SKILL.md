@@ -85,6 +85,13 @@ cp -R zero/paean-skills-update ~/.zero/skills/
 
 If a project uses `.zero/skills/`, copy there instead or in addition.
 
+## Mirrors
+
+`claude-code/` is the canonical tree. After pulling, `node scripts/sync-variants.mjs --check`
+confirms `codex/` and `zero/` match it; drift means the checkout is mid-edit — run
+`node scripts/sync-variants.mjs` only when you are editing the skills yourself, never on a
+plain update.
+
 ## Verify
 
 ```bash

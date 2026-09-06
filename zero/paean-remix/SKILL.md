@@ -8,26 +8,45 @@ description: Remix one or more published Paean Apps Square games into a brand-ne
 Download the source of one or more published `*.clide.app` games (by hash) and use them as
 the basis for a new game, recording the full remix lineage so upstream creators are credited.
 
-This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
-(global `fetch`) and the `unzip` command on PATH.
-
 > **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
 > `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
 > `mkdir -p ~/.zero/skills && cp -R <8x-skills>/zero/paean-remix ~/.zero/skills/`. The
 > skill is then auto-offered when a request matches its description.
 
-## Credentials
-
-Same as the publish skill: a Paean JWT from `PAEAN_AUTH_TOKEN`, or
-`~/.paean/credentials.json` / `~/.zero/credentials.json` as `{"token":"<jwt>"}`. Zero CLI's
-own `zero login` writes `~/.zero/credentials.json`, so after a Paean login the script works
-with no further setup. Never paste tokens into chat.
+This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
+(global `fetch`) and the `unzip` command on PATH.
 
 ## Source references
 
 Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare
 hashKey, `https://8x.gg/<hashKey>` (also `8x.gg/pub/<hashKey>` and
-`https://www.8x.gg/apps/<hashKey>`), or `hashKey=role` to tag the aspect you want from it
+`https://www.8x.gg/apps/<hashKey>`), `<hashKey>.8x.gg`, or `hashKey=role` to tag the aspect
+you want from it (e.g. `h1=gameplay h2=art h3=theme`). A `*.clide.app` play URL contains the
+deployed site handle, not necessarily the Square `hashKey`; if the user gives only a play URL,
+ask for the Square hashKey from the publish result or Square app detail before running the
+script.
+
+## Paid sources
+
+A source that is a paid app (`remixable: false`, `remixDisabledReason: "not_owned"`) must be
+bought before it can be remixed — the purchase unlocks both the full app and remixing. The
+script says where to buy (`https://<handle>.8x.gg/`). Remixes of a paid app are published as
+paid apps: the script writes the inherited `access` (parent's price, `standalone: demo`) into
+the new `clide.json`; the publisher may raise the price with `paean-publish --price`, but
+`--free` is rejected by the server (`ACCESS_MODEL_INHERITED`). Tell the user this before
+remixing a paid source.
+
+## Credentials
+
+Same as the publish skill: a Paean JWT from `PAEAN_AUTH_TOKEN`, or
+`~/.paean/credentials.json` / `~/.zero/credentials.json` as `{"token":"<jwt>"}`. Set it via
+the environment, or use the **paean-zero-setup** skill to install Zero and run `zero login`.
+Never paste tokens into chat.
+
+## Source references
+
+Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare
+hashKey, `https://8x.gg/<hashKey>`, or `hashKey=role` to tag the aspect you want from it
 (e.g. `h1=gameplay h2=art h3=theme`). A `*.clide.app` play URL contains the deployed site
 handle, not necessarily the Square `hashKey`; if the user gives only a play URL, ask for the
 Square hashKey from the publish result or Square app detail before running the script.

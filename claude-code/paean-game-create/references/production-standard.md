@@ -104,6 +104,11 @@ PLAYING → RESULT → restart → PLAYING
   spend persistent currency, submit scores, or mutate the player's save.
 - On first intentional input, stop every demo timer/listener, reset to a fair fresh state, reveal
   only essential play UI, and route that same input safely so it cannot cause an accidental move.
+- That same first intentional input is where the paid-app gate lives: call
+  `PaeanSDK.access.require()` and enter `PLAYING` only on `unlocked: true`. A free app passes
+  instantly; a paid one shows the host's purchase sheet at the listing's price. On
+  `unlocked: false` return to `ATTRACT` with the entry cue still visible — never a dead end, never
+  a prompt at boot or mid-demo.
 - Returning from background preserves the current real run; it must not silently re-enter demo.
 
 ## 5. Responsive composition
@@ -156,15 +161,20 @@ PLAYING → RESULT → restart → PLAYING
   logo, and restrained supporting text as needed; do not reuse an ordinary HUD-covered screenshot.
 - Inspect the final JPEG at 800×400 and at small Square-listing thumbnail size. Check focal point,
   silhouette, contrast, title legibility, edge safety, JPEG artifacts, and file weight.
+- Produce `icon.jpg` at exactly 512×512 from the same art direction: a composed square crop with
+  the game's key silhouette centered, no baked-in title text (hosts label tiles themselves),
+  edge-safe for circular and rounded masks, and legible at 64×64. It is not the banner squashed.
 
 ## 7. Paean platform fit
 
 - During the brief, inspect the current `paean-sdk` skill and documented host capabilities. Prefer
   Paean SDK implementations when cloud storage, shared ranking, payments, ads, multiplayer, or
   social interaction genuinely strengthens this game's loop or continuity.
-- Treat the current documentation as authoritative. Storage and leaderboards are currently
-  documented; add payments, ads, multiplayer, or social features only when the installed SDK/host
-  documentation exposes them. Never invent a scope, API, entitlement, reward, or transaction flow.
+- Treat the current documentation as authoritative. Cloud save, leaderboards, shared data, paid
+  apps / durable products (`access.*`), in-app purchases, tips, rewarded ads, rooms, AI and share
+  are documented in SDK 1.10; use only what the installed SDK/host documentation exposes. Never
+  invent a scope, API, entitlement, reward, or transaction flow. The paid-app gate on the first
+  intentional tap is required in every game (free apps pass instantly); prove it with the mock host.
 - Ask only for necessary consent at a natural moment, keep previews free of platform prompts, and
   preserve full local play when an optional capability is unavailable or declined. Monetization
   must be user-approved and must not become a surprise interruption or pay-to-remove defect.
@@ -198,7 +208,8 @@ Before completion, record evidence for each row:
 | Runtime | Playwright reports no page errors, console errors, failed assets, or scrollbars |
 | Lifecycle | Resize, rotate, pointer cancel, hide/show, reload, pause, and audio unlock verified |
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |
-| Assets | Original/licensed, coherent, optimized, and favicon present |
+| Assets | Original/licensed, coherent, optimized; `favicon.svg`, 800×400 `banner.jpg`, 512×512 `icon.jpg` present |
+| Paid gate | `access.require()` on the first intentional tap only; mock-host cases (free, paid, declined, preview) pass |
 | Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |

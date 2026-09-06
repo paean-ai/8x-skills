@@ -8,6 +8,11 @@ description: Publish a static frontend with a top-level index.html to Clide host
 Publish a static frontend to a public `*.clide.app` URL using the bundled
 `scripts/publish.mjs`. The script needs Node 18+ and `zip` on PATH.
 
+> **Using this skill in Codex.** Codex has no frontmatter skill loader, so
+> reference this file explicitly: add a line to your project `AGENTS.md` such as
+> *"For this task, follow `8x-skills/codex/paean-publish/SKILL.md`."*, or point Codex at
+> this file in your prompt. Any scripts and reference files live next to this SKILL.md.
+
 ## Choose the mode from the user's intent
 
 | User intent | Mode | Remote effect |
@@ -62,6 +67,37 @@ bindings:
 Do not use `--allow-static-only` merely to make a deployment succeed. Use the project's
 Worker deployment workflow or add an actual Paean full-stack deployment API instead.
 
+## Paid apps and durable products
+
+A Square listing can be sold Steam-style: everyone may watch the demo; entering the full app
+needs a one-time purchase in credits. Declare it on publish (Square mode only):
+
+```bash
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --dir dist --price 100 [--standalone allow|demo|shell] \
+  [--product season_pass="Season Pass":50]...
+```
+
+- `--price <credits>` lists the app as paid (server limits, roughly 10–100000 credits; the
+  platform keeps 20%, remix ancestors share the creator's cut). The declaration is written to
+  `clide.json` `access`, so a later flag-less publish keeps it. Never invent a price: get the
+  user's explicit number and confirmation.
+- `--standalone` decides what a bare `https://<handle>.clide.app/` visit (no Paean host) does:
+  `allow` = full app, `demo` = stay in demo and offer the 8x.gg shell (default for paid apps),
+  `shell` = redirect to `https://<handle>.8x.gg/`. This is the publisher's choice.
+- `--product sku=Title:credits` (repeatable) declares durable in-app items; the platform records
+  ownership per player and the app reads it via `PaeanSDK.access`.
+- **Paid is one-way**: `--free` on an app that has sold as paid is rejected
+  (`ACCESS_MODEL_LOCKED`). Say so before the first paid publish.
+- **Remixes of a paid app are paid**: `paean-remix` writes the inherited `access` into
+  `clide.json`; publishing such a remix as free is rejected (`ACCESS_MODEL_INHERITED`), and an
+  undeclared one inherits the parent's price.
+- The app must ship the SDK gate (`PaeanSDK.access.require()` on the first intentional tap —
+  see `paean-sdk`) or paying players never leave the demo. Confirm it exists before a paid
+  publish.
+
+Report `access` and `shellUrl` from the publish output. Access options are not valid with
+`--hosting-only`.
+
 ## Custom subdomains
 
 `--handle <subdomain>` requests `https://<subdomain>.clide.app/`. The server is authoritative
@@ -86,13 +122,18 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
   finding. Prefer excluding the file.
 - Square mode ensures `clide.json` and `LICENSE` and uses listing metadata/remix lineage.
   Hosting-only mode does not create a Square row or require listing metadata/assets.
+- Square listings expect three assets at the top level: `favicon.svg`, `banner.jpg` (exactly
+  800×400) and `icon.jpg` (exactly 512×512, the square tile). Dry-run reports `assetWarnings`;
+  fix them before a real publish rather than shipping placeholders.
 - `--dry-run` makes no API calls and writes no local state.
 
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
 `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
-`--allow-secrets`, `--allow-static-only`, and `--delete [--handle <handle>]`.
+`--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
+`--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
+`--delete [--handle <handle>]`.
 
 `--delete` is mode-aware through `.clide/publish.json`:
 

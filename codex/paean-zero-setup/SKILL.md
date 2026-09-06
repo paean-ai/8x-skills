@@ -5,10 +5,8 @@ description: Install Zero CLI and help the user sign in to Paean so Paean publis
 
 # Paean Zero Setup (Codex)
 
-Install Zero CLI and authenticate the local machine with Paean so the Paean publish/remix
-skills can read credentials. Use this when `zero` is missing, Paean credentials are missing,
-login is needed, or the user asks how to set up Zero / Paean auth / `~/.zero` credentials for
-`clide.app` publishing.
+Install Zero CLI and authenticate the local machine with Paean. Use this before
+`paean-publish` or `paean-remix` when credentials are missing.
 
 > **Using this skill in Codex.** Reference this file explicitly — add a pointer in your
 > project `AGENTS.md` ("To install Zero CLI or log in to Paean for publishing, follow

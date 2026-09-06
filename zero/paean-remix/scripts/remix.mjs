@@ -334,8 +334,25 @@ function clideIgnoreText() {
   ].join('\n')
 }
 
+// A remix of a PAID parent is paid too (the server enforces it: publishing a
+// free remix of a paid app is rejected, and an undeclared one inherits the
+// parent's price). Write the inherited declaration into clide.json so the
+// publisher sees it and can raise the price deliberately; a lower one is also
+// theirs to choose, within the platform's spend limits.
+function inheritedAccess(parents) {
+  const paid = parents.find(p => p.access && p.access.model === 'paid' && p.access.price && p.access.price.amount > 0)
+  if (!paid) return undefined
+  return {
+    model: 'paid',
+    price: { amount: paid.access.price.amount, currency: 'credits' },
+    standalone: paid.access.standalone === 'shell' ? 'shell' : 'demo',
+    inheritedFrom: paid.hashKey,
+  }
+}
+
 function buildManifest(args, parents, license) {
   const remixedAt = new Date().toISOString()
+  const access = inheritedAccess(parents)
   return {
     schemaVersion: SCHEMA_VERSION,
     title: deriveTitle(args, parents),
@@ -343,6 +360,7 @@ function buildManifest(args, parents, license) {
     category: (args.category || '').trim() || undefined,
     tags: [],
     license,
+    ...(access ? { access } : {}),
     remix: {
       // Tree-compatible primary upstream (mirrors backend remixOfHashKey).
       parent: parents[0] ? parents[0].hashKey : undefined,
@@ -407,10 +425,20 @@ async function main() {
   for (const s of sources) {
     const app = await fetchAppDetail(token, s.hashKey)
     if (app.remixable === false) {
-      throw new Error('Source ' + s.hashKey + ' is not remixable' + (app.remixDisabledReason ? ': ' + app.remixDisabledReason : '.'))
+      // A paid app the caller has not bought: remix is part of the purchase.
+      // Say where to buy it instead of the bare reason code.
+      if (app.remixDisabledReason === 'not_owned') {
+        const price = app.access && app.access.price ? app.access.price.amount + ' credits' : 'its listed price'
+        const shell = app.publishedSiteHandle ? 'https://' + app.publishedSiteHandle + '.8x.gg/' : 'https://8x.gg/apps/' + app.hashKey
+        throw new Error('Source ' + s.hashKey + ' is a PAID app (' + price + '). Buy it first at ' + shell + ' — the purchase unlocks both the full app and remixing it. Remixes of a paid app are published as paid apps too.')
+      }
+      throw new Error('Source ' + s.hashKey + ' is not remixable' + (app.remixDisabledReason ? ': ' + (app.remixDisabledMessage || app.remixDisabledReason) : '.'))
     }
     parents.push({
       hashKey: app.hashKey,
+      // The parent's access model, so a paid parent's price is inherited into
+      // the child's clide.json (see inheritedAccess).
+      access: app.access && typeof app.access === 'object' ? app.access : undefined,
       role: s.role || '',
       title: app.title || '',
       summary: app.summary || '',
