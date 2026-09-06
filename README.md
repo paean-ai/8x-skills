@@ -11,7 +11,7 @@ Portable agent skills for **building**, **publishing**, and **remixing** games o
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
 | **paean-sdk** | Add Paean platform capabilities — cross-device **cloud save** and a **shared global leaderboard** — to a static app/game via the Paean Web SDK. Ships a verified, framework-agnostic integration module + a mock host bridge for offline testing. Handles the cross-host edge cases (per-scope grants, return-shape differences, late bridge injection, offline queue) and degrades cleanly to `localStorage` in a plain browser. |
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
-| **paean-remix** | Download the source of one or more published games by hash and scaffold a new game that remixes them, recording a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so upstream creators can be credited. |
+| **paean-remix** | Remix one or more published games into a new one. Clones the primary source (full assets) into the user's workspace, reads secondary sources through the 8x.gg MCP server, and scaffolds a project with a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so every upstream creator is credited exactly once. |
 
 The publish/remix skills ship as self-contained Node scripts — no npm install, no external
 dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-game-create** skill
@@ -169,9 +169,21 @@ node <paean-game-create-skill-dir>/scripts/validate-game.mjs <game-dir> \
 To remix existing games into a new one:
 
 ```bash
-# Download h1's gameplay, h2's art, h3's theme; then build the new game and publish it
+# h1 is the primary: cloned server-side (full assets) into the user's workspace.
+# h2/h3 are read through the 8x.gg MCP server (text sources, no workspace).
+# Then build the new game and publish it — every parent is credited exactly once.
 node <skill-dir>/scripts/remix.mjs --yes h1=gameplay h2=art h3=theme --dir my-remix
 ```
+
+## The 8x.gg MCP server
+
+`https://api.paean.ai/8x/mcp` is the discovery/study half of remixing: `find_app` /
+`search_apps` resolve any 8x.gg or clide.app URL, title or description to an app;
+`get_app` / `get_remix_lineage` / `get_app_growth` say whether it is worth remixing;
+`list_app_files` / `read_app_file` let the agent read source without cloning anything.
+The scripts are the delivery half (full assets, local scaffold, publish). `paean-zero-setup`
+registers the server per host (`zero mcp add` / `claude mcp add` / `codex mcp add`) using
+the same Paean token; inside the Paean Mac app it is registered automatically as `8xgg`.
 
 Run any script with `--help` for full usage. See each skill's `SKILL.md` for the complete
 workflow the agent should follow.
