@@ -1,6 +1,6 @@
 ---
 name: paean-zero-setup
-description: Install Zero CLI and authenticate the local machine with Paean so the Paean publish/remix skills can read credentials. Use when `zero` is missing, Paean credentials are missing, login is needed, or the user asks how to set up Zero / Paean auth / `~/.zero` credentials for `clide.app` publishing.
+description: Install Zero CLI and help the user sign in to Paean so Paean publish/remix skills can read credentials. Use when Zero is missing, Paean credentials are missing, login is needed, or the user asks how to set up Zero / Paean auth / ~/.zero credentials for clide.app publishing. Runs from Zero CLI.
 ---
 
 # Paean Zero Setup (Zero CLI)
@@ -8,9 +8,10 @@ description: Install Zero CLI and authenticate the local machine with Paean so t
 Install Zero CLI and authenticate the local machine with Paean. Use this before
 `paean-publish` or `paean-remix` when credentials are missing.
 
-Since this skill is running inside Zero CLI already, the install step is usually a no-op —
-the main job is making sure the machine is signed in to **Paean** (not a third-party
-provider) so the publish/remix scripts can read `~/.zero/credentials.json`.
+> **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
+> `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
+> `mkdir -p ~/.zero/skills && cp -R <8x-skills>/zero/paean-zero-setup ~/.zero/skills/`. Any scripts and
+> reference files live next to this SKILL.md.
 
 ## What to check first
 
@@ -56,8 +57,7 @@ zero auth status --json
 ```
 
 `zero login` is the shortcut for `zero auth login`. It stores Paean auth locally under the
-Zero config directory (`~/.zero/credentials.json`), which is exactly the file the
-publish/remix scripts read. Do not ask the user to paste JWTs or API keys into chat.
+Zero config directory. Do not ask the user to paste JWTs or API keys into chat.
 
 ## Manual fallback
 

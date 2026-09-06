@@ -33,6 +33,12 @@
  *     });
  *     platform.init();
  *   </script>
+ *
+ * PAID APPS (SDK ≥ 1.10): gate the first intentional tap with
+ * `platform.requireAccess().then(r => r.unlocked && startRun())`. Free apps and
+ * the publisher resolve unlocked immediately; a paid app opens the host's
+ * purchase sheet at the listing's price. `state().access` mirrors the last
+ * status for rendering a lock / price / "open on 8x.gg" affordance.
  */
 function createPaeanPlatform(opts) {
   opts = opts || {};
@@ -51,8 +57,11 @@ function createPaeanPlatform(opts) {
     authed: false, denied: false,
     kvGranted: false, lbGranted: false, acGranted: false,
     name: null, userKey: null, myRank: null,
-    loaded: false, dirty: false, lastError: null, lastSyncAt: 0
+    loaded: false, dirty: false, lastError: null, lastSyncAt: 0,
+    // Last PaeanSDK.access.status(): { model, price, unlocked, shellUrl, hosted, ... } or null
+    access: null
   };
+  var disposers = [];
 
   function emit() { if (typeof opts.onState === 'function') { try { opts.onState(view()); } catch (e) {} } }
   function view() {
@@ -60,7 +69,8 @@ function createPaeanPlatform(opts) {
       mode: S.mode, authed: S.authed, denied: S.denied,
       caps: caps(), kvGranted: S.kvGranted, lbGranted: S.lbGranted,
       name: S.name, userKey: S.userKey, myRank: S.myRank,
-      loaded: S.loaded, dirty: S.dirty, lastError: S.lastError, lastSyncAt: S.lastSyncAt
+      loaded: S.loaded, dirty: S.dirty, lastError: S.lastError, lastSyncAt: S.lastSyncAt,
+      access: S.access
     };
   }
 
@@ -89,6 +99,7 @@ function createPaeanPlatform(opts) {
     // user opens the app), and rejects in a plain browser → local fallback.
     PaeanSDK.ready().then(function (p) {
       S.p = p; S.mode = 'paean';
+      watchAccess();
       // Auto-connect silently when the host already holds the grant (granted on
       // another device/session) or when this device connected before — no
       // consent UI needed in either case.
@@ -138,6 +149,9 @@ function createPaeanPlatform(opts) {
     // don't request a scope the host can't serve
     if (want.indexOf('storage.leaderboard') >= 0 && !caps().leaderboard) {
       want = want.filter(function (s) { return s !== 'storage.leaderboard'; });
+    }
+    if (want.indexOf('account.profile') >= 0 && !caps().account) {
+      want = want.filter(function (s) { return s !== 'account.profile'; });
     }
     var req;
     try { req = S.p.auth.ensure(want); } catch (e) { return Promise.resolve(false); }
@@ -255,15 +269,54 @@ function createPaeanPlatform(opts) {
 
   // call whenever your savable state changes; the push itself is throttled
   function markDirty() { S.dirty = true; }
-  setInterval(flushSave, SAVE_THROTTLE_MS);
+  var flushTimer = setInterval(flushSave, SAVE_THROTTLE_MS);
+  disposers.push(function () { clearInterval(flushTimer); });
   // GOTCHA (mobile lifecycle): WebViews get killed without warning — flush the
   // moment we're backgrounded, don't wait for the throttle.
+  function listen(target, type, fn) {
+    if (!target || !target.addEventListener) return;
+    target.addEventListener(type, fn);
+    disposers.push(function () { target.removeEventListener(type, fn); });
+  }
   if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', function () { if (document.hidden) flushSave(); });
+    listen(document, 'visibilitychange', function () { if (document.hidden) flushSave(); });
   }
   if (typeof window !== 'undefined') {
-    window.addEventListener('pagehide', function () { flushSave(); });
-    window.addEventListener('online', function () { flushSave(); flushQueue(); });
+    listen(window, 'pagehide', function () { flushSave(); });
+    listen(window, 'online', function () { flushSave(); flushQueue(); });
+  }
+  // Stop timers/listeners (hot reload, tests). Safe to call twice.
+  function dispose() { var d = disposers; disposers = []; d.forEach(function (f) { try { f(); } catch (e) {} }); }
+
+  // ── access (paid apps / durable products, SDK ≥ 1.10) ──────────────────────
+  // Works in every mode: with no host the SDK reads the site manifest and
+  // reports the publisher's standalone policy; on an old host a paid app
+  // reports unlocked:false with reason 'host-too-old'. Free apps resolve
+  // unlocked:true everywhere, so gating unconditionally is always safe.
+  function hasAccessApi() { return typeof PaeanSDK !== 'undefined' && PaeanSDK.access && typeof PaeanSDK.access.require === 'function'; }
+  function refreshAccess() {
+    if (!hasAccessApi()) return Promise.resolve(null);
+    return Promise.resolve(PaeanSDK.access.status()).then(function (st) { S.access = st || null; emit(); return S.access; })
+      .catch(function () { return S.access; });
+  }
+  function watchAccess() {
+    if (!hasAccessApi() || !PaeanSDK.access.onChange) return;
+    try { disposers.push(PaeanSDK.access.onChange(function (st) { S.access = st || S.access; emit(); })); } catch (e) {}
+  }
+  // Resolves { unlocked, sku, reason, receipt, status }; never rejects.
+  function requireAccess(sku) {
+    if (!hasAccessApi()) return Promise.resolve({ unlocked: true, sku: sku || 'app', reason: 'sdk-too-old', receipt: null, status: null });
+    return Promise.resolve(PaeanSDK.access.require(sku ? { sku: sku } : undefined)).then(function (r) {
+      r = r || { unlocked: false };
+      if (r.status) { S.access = r.status; emit(); }
+      return r;
+    }).catch(function (e) {
+      return { unlocked: false, sku: sku || 'app', reason: (e && e.code) || 'error', receipt: null, status: S.access };
+    });
+  }
+  function openShell() {
+    if (!hasAccessApi() || !PaeanSDK.access.openShell) return Promise.resolve(false);
+    return Promise.resolve(PaeanSDK.access.openShell()).catch(function () { return false; });
   }
 
   // ── leaderboard ─────────────────────────────────────────────────────────────
@@ -362,6 +415,10 @@ function createPaeanPlatform(opts) {
     submitScore: submitScore,
     getLeaderboard: getLeaderboard,
     fetchMyRank: fetchMyRank,
+    requireAccess: requireAccess, // paid apps: gate the first intentional tap
+    refreshAccess: refreshAccess,
+    openShell: openShell,         // "Open on 8x.gg" when standalone = demo
+    dispose: dispose,
     state: view                    // current snapshot for your UI
   };
 }

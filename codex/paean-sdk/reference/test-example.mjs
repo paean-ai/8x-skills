@@ -2,15 +2,24 @@
  * test-example.mjs — how to test your Paean integration offline with Playwright
  * + mock-bridge.js. Adapt the selectors/asserts to your own app. Run:
  *
- *   npm i -D playwright-core            # or use your installed browser
+ *   npm i -D playwright && npx playwright install chromium
  *   node test-example.mjs
+ *
+ * (The game validator uses the same `playwright` package, so one install serves
+ * both. `playwright-core` also works if you point it at a system browser.)
  *
  * The point: mock-bridge.js reproduces the host-shape variations that only show
  * up on real devices, so you can prove your integration handles them BEFORE
  * publishing — no account, no network, no device farm.
  */
-import { chromium } from 'playwright-core';
-import { mockBridgeSource } from './mock-bridge.js';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+// paean-mock.js is CommonJS; requiring it works whether or not YOUR project
+// has "type": "module" in package.json (a bare import would not).
+const { mockBridgeSource } = require('./paean-mock.js');
+let chromium;
+try { ({ chromium } = await import('playwright')); }
+catch { ({ chromium } = await import('playwright-core')); }
 
 const APP_URL = process.env.APP_URL || 'http://localhost:8000/'; // your app
 
@@ -31,6 +40,40 @@ const cases = [
   { name: 'missing save as resolved null', mock: mockBridgeSource({ grant: ['storage.kv'], missingAsNull: true }) },
   { name: 'missing save as rejected 404', mock: mockBridgeSource({ grant: ['storage.kv'] }) },
   { name: 'bare-value storage.get shape', mock: mockBridgeSource({ grant: ['storage.kv'], returnBare: true, seed: { save: { best: 1 } } }) },
+
+  // Feed preview: no bridge, __paeanPreview set. The app must NOT prompt for
+  // anything and must keep running its demo; the bridge arrives on tap-in.
+  { name: 'feed preview stays silent until tap-in',
+    mock: mockBridgeSource({ preview: true, grant: ['storage.kv'] }),
+    check: async (p) => {
+      const parked = await p.evaluate(() => window.__paeanPreview === true && !window.paean
+        && window.PaeanSDK.detect().reason === 'preview' && window.__mock.requests.length === 0);
+      await p.evaluate(() => window.__mock.enterInteractive());
+      await p.waitForTimeout(300);
+      const live = await p.evaluate(() => !!window.paean && window.PaeanSDK.detect().supported);
+      return parked && live;
+    } },
+
+  // Paid app (SDK ≥ 1.10). Boot must stay in demo — no access.require() until
+  // the first intentional tap. Trigger your "start" affordance in the check
+  // and assert the run only starts once `unlocked` is true.
+  { name: 'paid app: demo first, purchase on the first intentional tap',
+    mock: mockBridgeSource({ access: { model: 'paid', price: 100 } }),
+    check: async (p) => {
+      const silentBoot = await p.evaluate(() => window.__mock.accessRequests.length === 0);
+      const r = await p.evaluate(() => window.PaeanSDK.access.require());
+      return silentBoot && r.unlocked === true && r.reason === 'purchased'
+        && (await p.evaluate(() => window.PaeanSDK.access.owned('app')));
+    } },
+  { name: 'paid app: a declined purchase keeps the demo, never throws',
+    mock: mockBridgeSource({ access: { model: 'paid', price: 100, decline: true } }),
+    check: async (p) => {
+      const r = await p.evaluate(() => window.PaeanSDK.access.require());
+      return r.unlocked === false && r.reason === 'declined';
+    } },
+  { name: 'free app: access.require resolves at once with no UI',
+    mock: mockBridgeSource({}),
+    check: async (p) => (await p.evaluate(() => window.PaeanSDK.access.require())).unlocked === true },
 
   // Host chrome. The asserts below only prove the contract is published and
   // self-consistent — whether your HUD actually clears the capsule is a LOOK:

@@ -111,7 +111,7 @@ async function staticChecks(root) {
 
   const files = await walk(root);
   const relFiles = new Set(files.map((file) => relative(root, file).split(sep).join('/')));
-  for (const required of ['index.html', 'favicon.svg', 'banner.jpg']) {
+  for (const required of ['index.html', 'favicon.svg', 'banner.jpg', 'icon.jpg']) {
     if (!relFiles.has(required)) errors.push(`missing top-level ${required}`);
   }
   for (const file of files) {
@@ -172,6 +172,13 @@ async function staticChecks(root) {
     const dimensions = jpegDimensions(await readFile(join(root, 'banner.jpg')));
     if (!dimensions) errors.push('banner.jpg is not a readable JPEG');
     else if (dimensions.width !== 800 || dimensions.height !== 400) errors.push(`banner.jpg must be 800x400, got ${dimensions.width}x${dimensions.height}`);
+  }
+  // Square app icon: the listing's square tile (home-screen shortcuts, the
+  // library, native app grids). Exactly 512x512 so every host can downscale.
+  if (relFiles.has('icon.jpg')) {
+    const dimensions = jpegDimensions(await readFile(join(root, 'icon.jpg')));
+    if (!dimensions) errors.push('icon.jpg is not a readable JPEG');
+    else if (dimensions.width !== 512 || dimensions.height !== 512) errors.push(`icon.jpg must be 512x512, got ${dimensions.width}x${dimensions.height}`);
   }
 
   if (relFiles.has('package.json')) {

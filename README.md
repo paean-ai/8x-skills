@@ -49,6 +49,14 @@ packaging differs. The **zero/** and **claude-code/** variants use YAML frontmat
 `.zero/skills/` / `~/.zero/skills/`, Claude Code from `.claude/skills/` /
 `~/.claude/skills/`. Codex has no skill loader and references the files explicitly.
 
+`claude-code/` is canonical: edit there, then run `node scripts/sync-variants.mjs` to regenerate
+`codex/` and `zero/` (`--check` fails when they drift). Tests: `node --test tests/*.test.mjs`.
+
+Square apps ship three assets at the top level: `favicon.svg`, an 800×400 `banner.jpg` and a
+512×512 `icon.jpg`. Paid apps (Steam-style: watch the demo free, buy once to play) are declared
+with `paean-publish --price <credits>` and gated in the app with `PaeanSDK.access.require()`;
+see `paean-sdk` and its offline mock host `reference/paean-mock.js`.
+
 ## Requirements
 
 - **Node.js 18+** (for global `fetch`).

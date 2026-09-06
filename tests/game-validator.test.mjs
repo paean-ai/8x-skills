@@ -37,6 +37,7 @@ async function fixture(overrides = {}) {
     'scripts/state.js': 'export const state = "attract";',
     'favicon.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M4 4h24v24H4z"/></svg>',
     'banner.jpg': banner(),
+    'icon.jpg': banner(512, 512),
     ...overrides,
   };
   for (const [name, contents] of Object.entries(files)) {
@@ -56,6 +57,15 @@ test('accepts a self-contained pure-JS static game', async () => {
   const result = run(await fixture());
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Validation passed/);
+});
+
+test('requires a 512x512 icon.jpg beside the banner', async () => {
+  const missing = run(await fixture({ 'icon.jpg': null }));
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stdout + missing.stderr, /missing top-level icon\.jpg/);
+  const wrong = run(await fixture({ 'icon.jpg': banner(256, 256) }));
+  assert.notEqual(wrong.status, 0);
+  assert.match(wrong.stdout + wrong.stderr, /icon\.jpg must be 512x512/);
 });
 
 test('rejects TypeScript, external assets, and Vite build dependency', async () => {
