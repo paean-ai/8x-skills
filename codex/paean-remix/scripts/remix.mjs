@@ -2,11 +2,27 @@
 // remix-helper.mjs — download the source of one or more published Paean Apps
 // Square sites by hash and scaffold a new project that remixes them.
 //
-// Flow per source: GET /square/apps/:hash (metadata) → POST /square/apps/:hash/remix
-// (server-side clone into the caller's workspace, credits the upstream creator)
-// → GET /v2/workspace/:ws/export/zip (download source) → extract into
-// <target>/.remix-sources/<hash>/. Then write clide.json (remix graph),
-// LICENSE, and .clideignore so the new game is ready to build + /publish.
+// Every source: GET /square/apps/:hash (metadata, remixability).
+//
+// PRIMARY source (the first one): POST /square/apps/:hash/remix (server-side
+// clone into a workspace owned by the caller — this credits the upstream
+// creator once) → GET /v2/workspace/:ws/export/zip (full source, binaries
+// included) → <target>/.remix-sources/<hash>/. The clone workspace's hashKey
+// is saved to <target>/.clide/publish.json so paean-publish REUSES it: the
+// backend recognises the workspace as already remixed from that parent and
+// does not count or pay it a second time.
+//
+// SECONDARY sources: read through the 8x.gg MCP server (POST /8x/mcp,
+// list_app_files + read_app_file). That records a source read but creates no
+// workspace and pays nothing now — each is credited exactly once, at publish,
+// when clide.json declares it in remixOfHashKeys. Text files only; binaries
+// and >256KB files are listed in .remix-sources/<hash>/REMIX-FETCH.json
+// instead of downloaded. --clone-all forces /remix for every source (full
+// assets) at the cost of crediting each secondary twice: once for the
+// throwaway clone, once at publish.
+//
+// Then write clide.json (remix graph), LICENSE, and .clideignore so the new
+// game is ready to build + /publish.
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -20,6 +36,13 @@ const LICENSE_FILE = 'LICENSE'
 const SCHEMA_VERSION = 1
 const HASH_RE = /^[A-Za-z0-9_-]{3,64}$/
 const ROLE_RE = /^[A-Za-z][A-Za-z0-9 _-]{0,40}$/
+const MCP_PATH = '/8x/mcp'
+const MCP_MAX_READ_BYTES = 256 * 1024
+const FETCH_NOTE_FILE = 'REMIX-FETCH.json'
+// Mirrors paean-publish: it reuses `workspaceHashKey` from this file.
+const CLIDE_STATE_DIR = '.clide'
+const CLIDE_STATE_FILE = 'publish.json'
+const BINARY_EXT_RE = /\.(png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|psd|mp3|ogg|oga|wav|flac|m4a|aac|opus|mp4|m4v|webm|mov|avi|mkv|woff2?|ttf|otf|eot|wasm|zip|gz|tgz|bz2|7z|rar|pdf|bin|dat|glb|fbx|blend|ktx2?|basis|dds|pvr|swf|jar|class|exe|dll|so|dylib)$/i
 
 const SAFETY_PATTERNS = [
   REMIX_SOURCES_DIR + '/',
@@ -44,16 +67,24 @@ function usage() {
   return [
     'Usage: remix-helper.mjs <source> [<source> ...] [--dir <target>]',
     '                        [--title <t>] [--summary <t>] [--category <c>] [--license <spdx>]',
-    '                        [--role <aspect>] [--dry-run] [--yes]',
+    '                        [--role <aspect>] [--clone-all] [--dry-run] [--yes]',
     '',
     'Each <source> must resolve to a published Square app hashKey: a bare hashKey,',
     'https://8x.gg/<hashKey> (also 8x.gg/pub/<hashKey> and 8x.gg/apps/<hashKey>),',
     'or hashKey=role to tag the aspect you want from it',
     '(e.g. h1=gameplay h2=art h3=theme). A *.clide.app play URL contains the',
-    'site handle, not necessarily the Square hashKey; use the hashKey reported by publish.',
+    'site handle, not necessarily the Square hashKey; use the hashKey reported by publish',
+    '(or the 8x.gg MCP find_app tool, which resolves any URL or title).',
     '',
-    'Downloads each source\'s project files into <target>/' + REMIX_SOURCES_DIR + '/<hash>/ and writes',
-    'a clide.json remix graph, LICENSE, and .clideignore. --dry-run resolves metadata only.',
+    'The FIRST source is the primary parent: it is cloned server-side (/remix, full',
+    'source incl. binaries) and its workspace is saved to .clide/publish.json so',
+    'paean-publish reuses it — the creator is credited once. Every other source is',
+    'read through the 8x.gg MCP server (text files only, no workspace, credited once',
+    'at publish via clide.json). --clone-all clones every source with /remix instead',
+    '(full assets for all), which credits each secondary twice.',
+    '',
+    'Writes <target>/' + REMIX_SOURCES_DIR + '/<hash>/ per source plus a clide.json remix graph,',
+    'LICENSE, .clideignore and .clide/publish.json. --dry-run resolves metadata only.',
   ].join('\n')
 }
 
@@ -145,11 +176,12 @@ function splitSourceToken(raw) {
 }
 
 function parseArgs(argv) {
-  const out = { sources: [], dir: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, dryRun: false, yes: false, help: false }
+  const out = { sources: [], dir: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, cloneAll: false, dryRun: false, yes: false, help: false }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') out.help = true
     else if (arg === '--dry-run') out.dryRun = true
+    else if (arg === '--clone-all') out.cloneAll = true
     else if (arg === '--yes' || arg === '-y') out.yes = true
     else if (arg === '--dir') out.dir = argv[++i]
     else if (arg.startsWith('--dir=')) out.dir = arg.slice('--dir='.length)
@@ -231,6 +263,132 @@ async function downloadWorkspaceZip(token, workspaceHashKey) {
   const buf = Buffer.from(await res.arrayBuffer())
   if (buf.length === 0) throw new Error('Workspace export returned an empty archive for ' + workspaceHashKey)
   return buf
+}
+
+// ── 8x.gg MCP (secondary sources) ───────────────────────────────────────────
+// The MCP server is stateless Streamable HTTP: one POST per JSON-RPC call, the
+// reply is either a JSON body or a one-event SSE stream. Same Bearer token as
+// the REST API. Only list_app_files / read_app_file are used here — they read
+// a listed app's source without creating a workspace or paying anything.
+
+let mcpRequestId = 0
+
+function parseMcpBody(text, contentType) {
+  if (/text\/event-stream/i.test(contentType || '')) {
+    // Streamable HTTP wraps the JSON-RPC response as `event: message` +
+    // `data: {...}`; take the last data payload that carries a result/error.
+    let last
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.startsWith('data:')) continue
+      try {
+        const msg = JSON.parse(line.slice(5).trim())
+        if (msg && (msg.result !== undefined || msg.error !== undefined)) last = msg
+      } catch { /* keep scanning */ }
+    }
+    if (!last) throw new Error('MCP stream carried no JSON-RPC response')
+    return last
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('MCP returned non-JSON: ' + text.slice(0, 300))
+  }
+}
+
+async function mcpCall(token, name, args) {
+  const id = ++mcpRequestId
+  const res = await fetch(API_BASE + MCP_PATH, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args || {} } }),
+  })
+  const text = await res.text()
+  if (!res.ok) throw new Error('MCP ' + name + ' HTTP ' + res.status + ': ' + text.slice(0, 300))
+  const msg = parseMcpBody(text, res.headers.get('content-type'))
+  if (msg.error) throw new Error('MCP ' + name + ': ' + (msg.error.message || JSON.stringify(msg.error)))
+  const result = msg.result || {}
+  const first = Array.isArray(result.content) ? result.content.find(c => c && c.type === 'text') : undefined
+  let payload = {}
+  if (first && typeof first.text === 'string') {
+    try { payload = JSON.parse(first.text) } catch { payload = { raw: first.text } }
+  }
+  if (result.isError) throw new Error('MCP ' + name + ': ' + (payload.error || first?.text || 'tool error'))
+  return payload
+}
+
+// read_app_file decodes every file as UTF-8, so binaries come back mangled.
+// Skip by extension and report them; the primary source (zip export) is the
+// path that carries assets intact.
+function isBinaryPath(p) {
+  return BINARY_EXT_RE.test(p)
+}
+
+// Fetch a listed app's text sources through the MCP server into destDir.
+// Returns what was written and what was deliberately left out.
+async function fetchSourceViaMcp(token, hash, destDir) {
+  const listing = await mcpCall(token, 'list_app_files', { hashKey: hash })
+  const files = Array.isArray(listing.files) ? listing.files : []
+  mkdirSync(destDir, { recursive: true })
+  const fetched = []
+  const skipped = []
+  for (const f of files) {
+    const rel = String(f.path || '')
+    if (!rel || rel.startsWith('/') || rel.split('/').includes('..')) continue
+    const size = Number(f.size || 0)
+    if (isBinaryPath(rel)) { skipped.push({ path: rel, size, reason: 'binary' }); continue }
+    if (size > MCP_MAX_READ_BYTES) { skipped.push({ path: rel, size, reason: 'over-256kb' }); continue }
+    const file = await mcpCall(token, 'read_app_file', { hashKey: hash, path: rel, maxBytes: MCP_MAX_READ_BYTES })
+    if (file.truncated) { skipped.push({ path: rel, size, reason: 'truncated' }); continue }
+    const out = path.join(destDir, rel)
+    mkdirSync(path.dirname(out), { recursive: true })
+    writeFileSync(out, String(file.content ?? ''), 'utf8')
+    fetched.push(rel)
+  }
+  const note = {
+    hashKey: hash,
+    fetchedVia: 'mcp',
+    fetchedAt: new Date().toISOString(),
+    fileCount: fetched.length,
+    skipped,
+    note: skipped.length
+      ? 'Text sources only. The files listed in `skipped` were not downloaded (binary or too large). ' +
+        'If the remix needs them as-is, re-run with --clone-all (credits this source twice) or recreate them.'
+      : 'Text sources only; nothing was skipped.',
+  }
+  writeFileSync(path.join(destDir, FETCH_NOTE_FILE), JSON.stringify(note, null, 2) + '\n', 'utf8')
+  return { fetched, skipped, entrypoint: listing.entrypoint || null }
+}
+
+// Hand the /remix clone workspace to paean-publish so it publishes INTO that
+// workspace instead of creating a fresh one. The backend already recorded
+// this workspace as a remix of the primary, so the publish-time declaration
+// dedupes against it instead of counting the parent again.
+function savePublishState(targetDir, workspaceHashKey, primaryHashKey) {
+  const dir = path.join(targetDir, CLIDE_STATE_DIR)
+  const file = path.join(dir, CLIDE_STATE_FILE)
+  let existing = {}
+  if (existsSync(file)) {
+    try { existing = JSON.parse(readFileSync(file, 'utf8')) } catch { existing = {} }
+  }
+  if (typeof existing.workspaceHashKey === 'string' && existing.workspaceHashKey) {
+    // A project that was already published (or already remixed) keeps its
+    // workspace — silently swapping it would orphan a listing.
+    return { file: path.join(CLIDE_STATE_DIR, CLIDE_STATE_FILE), workspaceHashKey: existing.workspaceHashKey, reused: true }
+  }
+  mkdirSync(dir, { recursive: true })
+  const state = {
+    ...existing,
+    workspaceHashKey,
+    workspaceOrigin: 'remix',
+    remixOfHashKey: primaryHashKey,
+    remixedAt: new Date().toISOString(),
+  }
+  writeFileSync(file, JSON.stringify(state, null, 2) + '\n', 'utf8')
+  return { file: path.join(CLIDE_STATE_DIR, CLIDE_STATE_FILE), workspaceHashKey, reused: false }
 }
 
 async function run(command, args, opts = {}) {
@@ -362,15 +520,36 @@ function buildManifest(args, parents, license) {
   }
 }
 
+// How each source will be fetched, and when its creator gets credited.
+function planSources(args, parents) {
+  return parents.map((p, i) => {
+    const clone = i === 0 || args.cloneAll
+    return {
+      hashKey: p.hashKey,
+      role: p.role,
+      title: p.title,
+      category: p.category,
+      playUrl: p.playUrl,
+      author: p.author,
+      fetch: clone ? 'remix-clone' : 'mcp-read',
+      credit: i === 0
+        ? 'now (/remix); publish reuses the clone workspace, no second count'
+        : clone
+          ? 'now (/remix) AND again at publish — --clone-all double-credits this source'
+          : 'once, at publish (clide.json remixOfHashKeys); text files only',
+    }
+  })
+}
+
 function confirmRemix(args, parents, targetDir) {
   if (args.yes) return Promise.resolve()
   if (!process.stdin.isTTY) {
-    return Promise.reject(new Error('Remix downloads upstream sources and records remix lineage (crediting each upstream creator). Re-run with --yes to confirm.'))
+    return Promise.reject(new Error('Remix clones the primary source into your workspace (crediting its creator) and records remix lineage for every source. Re-run with --yes to confirm.'))
   }
   console.log('')
   console.log('Remix confirmation')
   console.log('Sources (' + parents.length + '):')
-  for (const p of parents) console.log('  - ' + p.hashKey + (p.role ? ' [' + p.role + ']' : '') + (p.title ? ' — ' + p.title : ''))
+  for (const p of planSources(args, parents)) console.log('  - ' + p.hashKey + (p.role ? ' [' + p.role + ']' : '') + (p.title ? ' — ' + p.title : '') + '  (' + p.fetch + '; credited ' + p.credit + ')')
   console.log('Target: ' + targetDir)
   console.log('This records remix lineage for each source (credits the upstream creators).')
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -432,7 +611,7 @@ async function main() {
       targetDir: path.relative(projectRoot, targetDir) || '.',
       title,
       license,
-      sources: parents.map(p => ({ hashKey: p.hashKey, role: p.role, title: p.title, category: p.category, playUrl: p.playUrl, author: p.author })),
+      sources: planSources(args, parents),
       writesLocalFiles: false,
     }, null, 2))
     return
@@ -452,16 +631,35 @@ async function main() {
   mkdirSync(sourcesDir, { recursive: true })
 
   const downloaded = []
-  for (const p of parents) {
-    console.log('Remixing ' + p.hashKey + (p.role ? ' [' + p.role + ']' : '') + '...')
-    const remix = await remixApp(token, p.hashKey)
-    console.log('  cloned to workspace ' + remix.workspaceHashKey + ' (' + (remix.fileCount || '?') + ' files); downloading source...')
-    const zip = await downloadWorkspaceZip(token, remix.workspaceHashKey)
+  let publishState
+  for (let i = 0; i < parents.length; i++) {
+    const p = parents[i]
     const dest = path.join(sourcesDir, p.hashKey)
-    await extractZip(zip, dest)
-    const fileCount = countFiles(dest)
-    downloaded.push({ hashKey: p.hashKey, role: p.role, workspaceHashKey: remix.workspaceHashKey, dir: path.relative(targetDir, dest), fileCount })
-    console.log('  extracted ' + fileCount + ' files into ' + path.relative(projectRoot, dest))
+    const label = p.hashKey + (p.role ? ' [' + p.role + ']' : '')
+    if (i === 0 || args.cloneAll) {
+      console.log((i === 0 ? 'Remixing primary ' : 'Cloning ') + label + '...')
+      const remix = await remixApp(token, p.hashKey)
+      console.log('  cloned to workspace ' + remix.workspaceHashKey + ' (' + (remix.fileCount || '?') + ' files); downloading source...')
+      const zip = await downloadWorkspaceZip(token, remix.workspaceHashKey)
+      await extractZip(zip, dest)
+      const fileCount = countFiles(dest)
+      downloaded.push({ hashKey: p.hashKey, role: p.role, fetchedVia: 'remix-clone', workspaceHashKey: remix.workspaceHashKey, dir: path.relative(targetDir, dest), fileCount })
+      console.log('  extracted ' + fileCount + ' files into ' + path.relative(projectRoot, dest))
+      if (i === 0) {
+        publishState = savePublishState(targetDir, remix.workspaceHashKey, p.hashKey)
+        console.log(publishState.reused
+          ? '  kept existing publish workspace ' + publishState.workspaceHashKey + ' in ' + publishState.file
+          : '  saved workspace to ' + publishState.file + ' so paean-publish reuses it')
+      } else {
+        console.log('  note: --clone-all left workspace ' + remix.workspaceHashKey + ' in your account; this source is credited again at publish')
+      }
+    } else {
+      console.log('Reading ' + label + ' via 8x.gg MCP (text sources, credited at publish)...')
+      const got = await fetchSourceViaMcp(token, p.hashKey, dest)
+      downloaded.push({ hashKey: p.hashKey, role: p.role, fetchedVia: 'mcp-read', dir: path.relative(targetDir, dest), fileCount: got.fetched.length, skipped: got.skipped })
+      console.log('  wrote ' + got.fetched.length + ' text files into ' + path.relative(projectRoot, dest) +
+        (got.skipped.length ? '; skipped ' + got.skipped.length + ' (see ' + FETCH_NOTE_FILE + ')' : ''))
+    }
   }
 
   // Scaffold project metadata. clide.json is authoritative for /publish.
@@ -488,8 +686,9 @@ async function main() {
     manifest: MANIFEST_FILE,
     sourcesDir: path.relative(targetDir, sourcesDir),
     sources: downloaded,
+    publishWorkspace: publishState ? { workspaceHashKey: publishState.workspaceHashKey, stateFile: publishState.file, reusedExisting: publishState.reused } : undefined,
     remixGraph: manifest.remix,
-    nextSteps: 'Build the new game in ' + (path.relative(projectRoot, targetDir) || '.') + ' using the downloaded sources under ' + REMIX_SOURCES_DIR + '/, then run /publish from that directory.',
+    nextSteps: 'Build the new game in ' + (path.relative(projectRoot, targetDir) || '.') + ' using the sources under ' + REMIX_SOURCES_DIR + '/ (secondary sources are text-only; see each ' + FETCH_NOTE_FILE + '), then publish with paean-publish from that directory — it reuses the saved workspace and declares every parent in clide.json.',
   }, null, 2))
 }
 

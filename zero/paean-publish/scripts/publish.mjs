@@ -764,6 +764,32 @@ async function apiJson(pathname, token, body) {
   return await readJsonResponse(res, pathname)
 }
 
+async function apiRequest(method, pathname, token) {
+  const res = await fetch(API_BASE + pathname, {
+    method,
+    headers: { Authorization: 'Bearer ' + token },
+  })
+  return await readJsonResponse(res, pathname)
+}
+
+// A workspace handed over by paean-remix still holds the upstream clone. Zip
+// import adds and overwrites but never removes, so on the FIRST publish into
+// such a workspace drop every file that is not in this archive — otherwise
+// upstream files the remix deleted (or renamed) locally would ship under the
+// new listing. Later publishes are ordinary republishes and are left alone.
+async function pruneWorkspaceLeftovers(token, workspaceHashKey, archiveFiles) {
+  const keep = new Set(archiveFiles)
+  const listing = await apiRequest('GET', '/v2/workspace/' + encodeURIComponent(workspaceHashKey) + '/files?limit=5000', token)
+  const entries = Array.isArray(listing.entries) ? listing.entries : []
+  const stale = entries.map(e => String(e.path || '')).filter(p => p && !keep.has(p))
+  const removed = []
+  for (const p of stale) {
+    await apiRequest('DELETE', '/v2/workspace/' + encodeURIComponent(workspaceHashKey) + '/file?path=' + encodeURIComponent(p), token)
+    removed.push(p)
+  }
+  return { removed, truncated: listing.truncated === true }
+}
+
 async function createWorkspace(token, metadata) {
   const json = await apiJson('/v2/workspace', token, {
     title: metadata.title,
@@ -1163,6 +1189,14 @@ async function main() {
     }
     console.log('Uploading ' + files.length + ' files from ' + (relativeUnix(projectRoot, publishDir) || '.') + ' to workspace...')
     const imported = await importZip(token, workspaceHashKey, zip.data)
+    if (state.workspaceOrigin === 'remix' && !state.publishedAt) {
+      const pruned = await pruneWorkspaceLeftovers(token, workspaceHashKey, files)
+      if (pruned.removed.length) {
+        console.log('Removed ' + pruned.removed.length + ' clone-only file(s) from the reused remix workspace: ' +
+          pruned.removed.slice(0, 5).join(', ') + (pruned.removed.length > 5 ? ', ...' : ''))
+      }
+      if (pruned.truncated) console.log('Warning: workspace listing was truncated; some clone-only files may remain.')
+    }
     console.log('Publishing public Square listing...')
     const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle)
     saveState(projectRoot, {
