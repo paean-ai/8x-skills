@@ -5,9 +5,7 @@ description: Update the local 8x-skills repository and reinstall Paean skills fo
 
 # Paean Skills Update (Codex)
 
-Update the local `8x-skills` checkout and refresh Paean skill instructions. Use this when the
-user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync
-`paean-game-create` / `paean-sdk` / `paean-publish` / `paean-remix` / `paean-zero-setup` changes.
+Update the local `8x-skills` checkout and reinstall the Paean skills into the target agent.
 
 > **Using this skill in Codex.** Reference this file explicitly — add a pointer in your
 > project `AGENTS.md` ("To update Paean skills, follow
@@ -90,6 +88,13 @@ cp -R zero/paean-skills-update ~/.zero/skills/
 ```
 
 If a project uses `.zero/skills/`, copy there instead or in addition.
+
+## Mirrors
+
+`claude-code/` is the canonical tree. After pulling, `node scripts/sync-variants.mjs --check`
+confirms `codex/` and `zero/` match it; drift means the checkout is mid-edit — run
+`node scripts/sync-variants.mjs` only when you are editing the skills yourself, never on a
+plain update.
 
 ## Verify
 

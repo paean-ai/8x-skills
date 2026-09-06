@@ -549,3 +549,92 @@ test('default mode remains the workspace and Apps Square pipeline', async () => 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('paid listing flags reach clide.json, the dry-run report and the Square payload', async () => {
+  const root = await fixture()
+  const dry = await runPublish(root, ['--dry-run', '--dir', 'dist', '--title', 'Paid Fixture', '--price', '120', '--product', 'season_pass=Season Pass:50'], {
+    PAEAN_API_BASE: 'http://127.0.0.1:1',
+  })
+  assert.equal(dry.code, 0, dry.stderr)
+  const report = JSON.parse(dry.stdout)
+  assert.deepEqual(report.access, {
+    model: 'paid',
+    price: { amount: 120, currency: 'credits' },
+    products: [{ sku: 'season_pass', title: 'Season Pass', amount: 50, currency: 'credits' }],
+  })
+
+  const api = await mockApi((request, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (request.url === '/v2/workspace') {
+      res.end(JSON.stringify({ success: true, workspace: { hashKey: 'workspace-paid' } }))
+      return
+    }
+    if (request.url === '/v2/workspace/workspace-paid/files/zip') {
+      res.end(JSON.stringify({ success: true, fileCount: 2, totalBytes: 64 }))
+      return
+    }
+    if (request.url === '/square/publish') {
+      const body = JSON.parse(request.body.toString('utf8'))
+      assert.deepEqual(body.access, {
+        model: 'paid',
+        price: { amount: 120, currency: 'credits' },
+        standalone: 'shell',
+        products: [{ sku: 'season_pass', title: 'Season Pass', amount: 50, currency: 'credits' }],
+      })
+      res.end(JSON.stringify({ success: true, data: {
+        hashKey: 'square-paid',
+        playUrl: 'https://paidfixture1.clide.app/',
+        publishedSiteHandle: 'paidfixture1',
+        status: 'listed',
+        access: { model: 'paid', price: { amount: 120, currency: 'credits' }, standalone: 'shell', products: [] },
+      } }))
+      return
+    }
+    res.writeHead(404)
+    res.end(JSON.stringify({ success: false, error: 'unexpected path' }))
+  })
+  try {
+    const result = await runPublish(root, ['--yes', '--dir', 'dist', '--title', 'Paid Fixture', '--price', '120', '--standalone', 'shell', '--product', 'season_pass=Season Pass:50'], {
+      PAEAN_API_BASE: api.baseUrl,
+      PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(result.code, 0, result.stderr)
+    const manifest = JSON.parse(await readFile(path.join(root, 'clide.json'), 'utf8'))
+    assert.equal(manifest.access.model, 'paid')
+    assert.equal(manifest.access.price.amount, 120)
+    assert.equal(manifest.access.standalone, 'shell')
+    const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(state.access.model, 'paid')
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.shellUrl, 'https://paidfixture1.8x.gg/')
+    assert.equal(output.access.model, 'paid')
+
+    // A flag-less re-publish keeps the declaration through clide.json.
+    const again = await runPublish(root, ['--dry-run', '--dir', 'dist'], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
+    assert.equal(again.code, 0, again.stderr)
+    assert.equal(JSON.parse(again.stdout).access.model, 'paid')
+    // …and --free resets it.
+    const free = await runPublish(root, ['--dry-run', '--dir', 'dist', '--free'], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
+    assert.equal(JSON.parse(free.stdout).access.model, 'free')
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('access flags are rejected for hosting-only and malformed input', async () => {
+  const root = await fixture()
+  try {
+    const hosting = await runPublish(root, ['--dry-run', '--hosting-only', '--dir', 'dist', '--price', '50'], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
+    assert.notEqual(hosting.code, 0)
+    assert.match(hosting.stderr, /need a Square listing/)
+    const bad = await runPublish(root, ['--dry-run', '--dir', 'dist', '--price', '12.5'], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
+    assert.notEqual(bad.code, 0)
+    assert.match(bad.stderr, /whole number of credits/)
+    const reserved = await runPublish(root, ['--dry-run', '--dir', 'dist', '--product', 'app=The app:50'], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
+    assert.notEqual(reserved.code, 0)
+    assert.match(reserved.stderr, /reserved/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

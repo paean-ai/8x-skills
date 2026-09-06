@@ -1,6 +1,6 @@
 ---
 name: paean-zero-setup
-description: Install Zero CLI, authenticate the local machine with Paean so the Paean publish/remix skills can read credentials, and register the 8x.gg MCP server (`8xgg`) used for remix discovery. Use when `zero` is missing, Paean credentials are missing, login is needed, the 8x.gg / `8xgg` MCP server is missing, or the user asks how to set up Zero / Paean auth / `~/.zero` credentials for `clide.app` publishing.
+description: Install Zero CLI, help the user sign in to Paean so Paean publish/remix skills can read credentials, and register the 8x.gg MCP server (8xgg) used for remix discovery. Use when Zero is missing, Paean credentials are missing, login is needed, the 8x.gg / 8xgg MCP server is missing, or the user asks how to set up Zero / Paean auth / ~/.zero credentials for clide.app publishing. Runs from Zero CLI.
 ---
 
 # Paean Zero Setup (Zero CLI)
@@ -8,9 +8,10 @@ description: Install Zero CLI, authenticate the local machine with Paean so the 
 Install Zero CLI and authenticate the local machine with Paean. Use this before
 `paean-publish` or `paean-remix` when credentials are missing.
 
-Since this skill is running inside Zero CLI already, the install step is usually a no-op —
-the main job is making sure the machine is signed in to **Paean** (not a third-party
-provider) so the publish/remix scripts can read `~/.zero/credentials.json`.
+> **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
+> `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
+> `mkdir -p ~/.zero/skills && cp -R <8x-skills>/zero/paean-zero-setup ~/.zero/skills/`. Any scripts and
+> reference files live next to this SKILL.md.
 
 ## What to check first
 
@@ -56,8 +57,7 @@ zero auth status --json
 ```
 
 `zero login` is the shortcut for `zero auth login`. It stores Paean auth locally under the
-Zero config directory (`~/.zero/credentials.json`), which is exactly the file the
-publish/remix scripts read. Do not ask the user to paste JWTs or API keys into chat.
+Zero config directory. Do not ask the user to paste JWTs or API keys into chat.
 
 ## Manual fallback
 
@@ -85,29 +85,25 @@ The **paean-remix** flow pairs with the 8x.gg MCP server at `https://api.paean.a
 It gives the agent `find_app` / `search_apps` (resolve any 8x.gg or clide.app URL, a title or a
 description to an app), `get_app` / `get_remix_lineage` / `get_app_growth` (decide whether a
 remix is worth doing) and `list_app_files` / `read_app_file` (study source without cloning
-anything). It authenticates with the same Paean token the scripts use.
+anything). It authenticates with the same Paean token the scripts use. Add it once:
 
-- **Inside the Paean Mac app (Deeptide engine)** the server is registered automatically as
-  `8xgg` for the signed-in account — nothing to do. Check with `/mcp`; a user-defined `8xgg`
-  entry always overrides the automatic one.
-- **Standalone Zero CLI** does not auto-register it. Add it once at user scope:
+```bash
+claude mcp add --transport http --scope user 8xgg https://api.paean.ai/8x/mcp \
+  --header 'Authorization: Bearer ${PAEAN_AUTH_TOKEN}'
+claude mcp list
+```
 
-  ```bash
-  zero mcp add --transport http --scope user 8xgg https://api.paean.ai/8x/mcp \
-    --header 'Authorization: Bearer ${PAEAN_AUTH_TOKEN}'
-  zero mcp list
-  ```
+Claude Code expands `${VAR}` in MCP server config when it connects, so the token never lands
+in `~/.claude.json` — `PAEAN_AUTH_TOKEN` must be exported in the shell that launches `claude`.
+If the token only lives in `~/.paean/credentials.json` / `~/.zero/credentials.json`, either
+export it from there in the shell profile, or register a literal `os_ak_…` API key (Paean
+dashboard → API keys) instead of the login JWT: a literal header is written to
+`~/.claude.json`, and an API key can be revoked on its own without signing the machine out.
+`--scope project` writes a shareable `.mcp.json` instead — never put a literal token there.
 
-  Zero expands `${VAR}` in headers when it connects, so the token never lands in the config
-  file — `PAEAN_AUTH_TOKEN` must be exported in the shell that launches `zero`. If the token
-  only lives in `~/.paean/credentials.json` / `~/.zero/credentials.json`, either export it
-  from there in the shell profile, or register a literal `os_ak_…` API key (Paean dashboard →
-  API keys) instead of the login JWT: a literal header is stored on disk in Zero's config, and
-  an API key can be revoked on its own without signing the machine out.
-
-`zero mcp list` must show `8xgg` as connected; `zero mcp remove --scope user 8xgg` undoes it.
-Without the server `remix.mjs` still works (it calls `/8x/mcp` itself for secondary sources) —
-only URL/title discovery is lost, so ask the user for hashKeys instead.
+`claude mcp list` must show `8xgg` as connected; `claude mcp remove --scope user 8xgg` undoes
+it. Without the server `remix.mjs` still works (it calls `/8x/mcp` itself for secondary
+sources) — only URL/title discovery is lost, so ask the user for hashKeys instead.
 
 ## Verify for Paean skills
 

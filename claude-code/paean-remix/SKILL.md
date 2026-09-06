@@ -11,6 +11,27 @@ the basis for a new game, recording the full remix lineage so upstream creators 
 This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
 (global `fetch`) and the `unzip` command on PATH.
 
+## Source references
+
+Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare
+hashKey, `https://8x.gg/<hashKey>` (also `8x.gg/pub/<hashKey>` and
+`https://www.8x.gg/apps/<hashKey>`), `<hashKey>.8x.gg`, or `hashKey=role` to tag the aspect
+you want from it (e.g. `h1=gameplay h2=art h3=theme`). A `*.clide.app` play URL contains the
+deployed site handle, not necessarily the Square `hashKey`. If the user gives only a play URL,
+a title or a description, resolve it with the MCP `find_app` / `search_apps` tools first (they
+accept any 8x.gg / clide.app URL or a title); without the MCP server, ask for the hashKey from
+the publish result or Square app detail before running the script.
+
+## Paid sources
+
+A source that is a paid app (`remixable: false`, `remixDisabledReason: "not_owned"`) must be
+bought before it can be remixed — the purchase unlocks both the full app and remixing. The
+script says where to buy (`https://<handle>.8x.gg/`). Remixes of a paid app are published as
+paid apps: the script writes the inherited `access` (parent's price, `standalone: demo`) into
+the new `clide.json`; the publisher may raise the price with `paean-publish --price`, but
+`--free` is rejected by the server (`ACCESS_MODEL_INHERITED`). Tell the user this before
+remixing a paid source.
+
 ## Credentials
 
 Same as the publish skill: a Paean JWT from `PAEAN_AUTH_TOKEN`, or
@@ -47,16 +68,6 @@ Rules:
   cloud, I will edit it there" — not for this local flow.
 - Without the MCP server, `remix.mjs` still works (it calls `/8x/mcp` itself with the same
   token). Only URL/title discovery is lost: ask the user for hashKeys.
-
-## Source references
-
-Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare
-hashKey, `https://8x.gg/<hashKey>`, or `hashKey=role` to tag the aspect you want from it
-(e.g. `h1=gameplay h2=art h3=theme`). A `*.clide.app` play URL contains the deployed site
-handle, not necessarily the Square `hashKey`. If the user gives only a play URL, a title or a
-description, resolve it with the MCP `find_app` / `search_apps` tools first (they accept any
-8x.gg / clide.app URL or a title); without the MCP server, ask for the hashKey from the
-publish result or Square app detail before running the script.
 
 ## Run
 

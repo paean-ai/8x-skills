@@ -63,8 +63,11 @@ external location.
   when they genuinely meet the visual bar, not merely to avoid making art.
 - Put `<!-- Copyright (c) 2026 paean.ai and the game's creator(s). -->` immediately after the
   opening `<head>` tag.
-- Ship top-level `favicon.svg` and an exactly 800×400 `banner.jpg`; follow the production
-  standard's banner-production workflow rather than treating the file as a placeholder.
+- Ship top-level `favicon.svg`, an exactly 800×400 `banner.jpg`, and an exactly 512×512
+  `icon.jpg` (the square tile used by the library, home-screen shortcuts and native grids);
+  follow the production standard's banner-production workflow rather than treating any of them
+  as a placeholder. The icon is a composed square crop of the same art direction, not the
+  banner squashed.
 - Use English as the primary and fallback language unless the user requests otherwise. Route all
   player-facing copy through a central locale catalog and translation function; do not scatter
   display strings through gameplay, UI, or canvas-rendering logic. Define locale configuration so a
@@ -74,11 +77,23 @@ external location.
 
 During the production brief, inspect the current `paean-sdk` skill and make a deliberate platform
 feature plan. Prefer documented Paean SDK capabilities over bespoke third-party services when they
-fit the work: cloud storage and shared leaderboards today, plus payments, ads, multiplayer, or
-social interaction only when the current SDK/host documentation actually exposes them. Do not add
-platform features as checkboxes, invent APIs, or let consent/monetization interrupt attract mode or
-core play. Keep graceful local fallback where applicable, and obtain user approval before enabling
-monetization. Use `paean-publish` only after the game passes this skill's release checks and the user
+fit the work: cloud save, shared leaderboards, shared app data, paid apps / durable products
+(`access.*`), in-app purchases and tips, rewarded ads, online rooms, AI, and share are all
+documented in the current SDK (1.10). Do not add platform features as checkboxes, invent APIs, or
+let consent/monetization interrupt attract mode or core play. Keep graceful local fallback where
+applicable, and obtain user approval before enabling monetization.
+
+Every game ships the paid-app gate whether or not it is sold: the first intentional tap that
+would start a real run calls `PaeanSDK.access.require()` (or the reference module's
+`platform.requireAccess()`) and only starts the run when it resolves `unlocked: true`. Free
+apps resolve instantly with no UI; a paid listing (declared later with `paean-publish
+--price`) then works without touching the code. On `unlocked: false` the game stays in its
+demo with the entry point visible and, when `status.shellUrl` is set and `hosted` is false,
+offers "Open on 8x.gg" via `access.openShell()`. Never call the gate at boot or during the
+attract loop. Prove it with the mock host (`paean-sdk/reference/mock-bridge.js`,
+`{ access: { model: 'paid' } }` and `{ …, decline: true }`).
+
+Use `paean-publish` only after the game passes this skill's release checks and the user
 authorizes the public destination.
 
 ## Implement through complete playable slices

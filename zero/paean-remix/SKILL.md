@@ -1,6 +1,6 @@
 ---
 name: paean-remix
-description: Remix one or more published Paean Apps Square games into a brand-new game. Downloads each source game's project files by hash and scaffolds a new project with a multi-parent remix graph. Use when the user asks to remix, fork, combine, or mash up published clide.app / Paean Apps Square games (e.g. "remix hash1 hash2", "用 hash1 的玩法 + hash2 的美术做个新游戏"). Runs from Zero CLI. Pairs with the 8x.gg MCP server (find_app / read_app_file) for finding and studying apps before cloning anything.
+description: Remix one or more published Paean Apps Square games into a brand-new game. Downloads each source game's project files by hash and scaffolds a new project with a multi-parent remix graph. Use when the user asks to remix, fork, combine, or mash up published clide.app / Paean Apps Square games (e.g. "remix hash1 hash2", "用 hash1 的玩法 + hash2 的美术做个新游戏"). Pairs with the 8x.gg MCP server (find_app / read_app_file) for finding and studying apps before cloning anything. Runs from Zero CLI.
 ---
 
 # Paean Remix (Zero CLI)
@@ -8,26 +8,46 @@ description: Remix one or more published Paean Apps Square games into a brand-ne
 Download the source of one or more published `*.clide.app` games (by hash) and use them as
 the basis for a new game, recording the full remix lineage so upstream creators are credited.
 
-This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
-(global `fetch`) and the `unzip` command on PATH.
-
 > **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
 > `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
 > `mkdir -p ~/.zero/skills && cp -R <8x-skills>/zero/paean-remix ~/.zero/skills/`. The
 > skill is then auto-offered when a request matches its description.
 
+This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
+(global `fetch`) and the `unzip` command on PATH.
+
+## Source references
+
+Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare
+hashKey, `https://8x.gg/<hashKey>` (also `8x.gg/pub/<hashKey>` and
+`https://www.8x.gg/apps/<hashKey>`), `<hashKey>.8x.gg`, or `hashKey=role` to tag the aspect
+you want from it (e.g. `h1=gameplay h2=art h3=theme`). A `*.clide.app` play URL contains the
+deployed site handle, not necessarily the Square `hashKey`. If the user gives only a play URL,
+a title or a description, resolve it with the MCP `find_app` / `search_apps` tools first (they
+accept any 8x.gg / clide.app URL or a title); without the MCP server, ask for the hashKey from
+the publish result or Square app detail before running the script.
+
+## Paid sources
+
+A source that is a paid app (`remixable: false`, `remixDisabledReason: "not_owned"`) must be
+bought before it can be remixed — the purchase unlocks both the full app and remixing. The
+script says where to buy (`https://<handle>.8x.gg/`). Remixes of a paid app are published as
+paid apps: the script writes the inherited `access` (parent's price, `standalone: demo`) into
+the new `clide.json`; the publisher may raise the price with `paean-publish --price`, but
+`--free` is rejected by the server (`ACCESS_MODEL_INHERITED`). Tell the user this before
+remixing a paid source.
+
 ## Credentials
 
 Same as the publish skill: a Paean JWT from `PAEAN_AUTH_TOKEN`, or
-`~/.paean/credentials.json` / `~/.zero/credentials.json` as `{"token":"<jwt>"}`. Zero CLI's
-own `zero login` writes `~/.zero/credentials.json`, so after a Paean login the script works
-with no further setup. Never paste tokens into chat.
+`~/.paean/credentials.json` / `~/.zero/credentials.json` as `{"token":"<jwt>"}`. Set it via
+the environment, or use the **paean-zero-setup** skill to install Zero and run `zero login`.
+Never paste tokens into chat.
 
 ## Two tools, one flow: the 8x.gg MCP server and this script
 
-The `8xgg` MCP server (`https://api.paean.ai/8x/mcp`, registered by **paean-zero-setup**;
-automatic inside the Paean Mac app) and `scripts/remix.mjs` are complementary. Use both, in
-this order:
+The `8xgg` MCP server (`https://api.paean.ai/8x/mcp`, registered by **paean-zero-setup** via
+`claude mcp add`) and `scripts/remix.mjs` are complementary. Use both, in this order:
 
 | Step | Use | Creator credit |
 |---|---|---|
@@ -53,17 +73,6 @@ Rules:
   cloud, I will edit it there" — not for this local flow.
 - Without the MCP server, `remix.mjs` still works (it calls `/8x/mcp` itself with the same
   token). Only URL/title discovery is lost: ask the user for hashKeys.
-
-## Source references
-
-Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare
-hashKey, `https://8x.gg/<hashKey>` (also `8x.gg/pub/<hashKey>` and
-`https://www.8x.gg/apps/<hashKey>`), or `hashKey=role` to tag the aspect you want from it
-(e.g. `h1=gameplay h2=art h3=theme`). A `*.clide.app` play URL contains the deployed site
-handle, not necessarily the Square `hashKey`. If the user gives only a play URL, a title or a
-description, resolve it with the MCP `find_app` / `search_apps` tools first (they accept any
-8x.gg / clide.app URL or a title); without the MCP server, ask for the hashKey from the
-publish result or Square app detail before running the script.
 
 ## Run
 

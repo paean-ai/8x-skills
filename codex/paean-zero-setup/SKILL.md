@@ -5,10 +5,8 @@ description: Install Zero CLI, help the user sign in to Paean so Paean publish/r
 
 # Paean Zero Setup (Codex)
 
-Install Zero CLI and authenticate the local machine with Paean so the Paean publish/remix
-skills can read credentials. Use this when `zero` is missing, Paean credentials are missing,
-login is needed, or the user asks how to set up Zero / Paean auth / `~/.zero` credentials for
-`clide.app` publishing.
+Install Zero CLI and authenticate the local machine with Paean. Use this before
+`paean-publish` or `paean-remix` when credentials are missing.
 
 > **Using this skill in Codex.** Reference this file explicitly — add a pointer in your
 > project `AGENTS.md` ("To install Zero CLI or log in to Paean for publishing, follow
@@ -89,21 +87,22 @@ remix is worth doing) and `list_app_files` / `read_app_file` (study source witho
 anything). It authenticates with the same Paean token the scripts use. Add it once:
 
 ```bash
-codex mcp add 8xgg --url https://api.paean.ai/8x/mcp --bearer-token-env-var PAEAN_AUTH_TOKEN
-codex mcp list
+claude mcp add --transport http --scope user 8xgg https://api.paean.ai/8x/mcp \
+  --header 'Authorization: Bearer ${PAEAN_AUTH_TOKEN}'
+claude mcp list
 ```
 
-Codex stores only the variable *name* in `~/.codex/config.toml`
-(`[mcp_servers.8xgg]` with `url` and `bearer_token_env_var = "PAEAN_AUTH_TOKEN"`) and reads the
-value from the environment when it starts, so `PAEAN_AUTH_TOKEN` must be exported in the shell
-that runs `codex`. If the token only lives in `~/.paean/credentials.json` /
-`~/.zero/credentials.json`, export it from there in the shell profile. Prefer an `os_ak_…` API
-key (Paean dashboard → API keys) over the login JWT for a long-lived shell export; it can be
-revoked on its own without signing the machine out.
+Claude Code expands `${VAR}` in MCP server config when it connects, so the token never lands
+in `~/.claude.json` — `PAEAN_AUTH_TOKEN` must be exported in the shell that launches `claude`.
+If the token only lives in `~/.paean/credentials.json` / `~/.zero/credentials.json`, either
+export it from there in the shell profile, or register a literal `os_ak_…` API key (Paean
+dashboard → API keys) instead of the login JWT: a literal header is written to
+`~/.claude.json`, and an API key can be revoked on its own without signing the machine out.
+`--scope project` writes a shareable `.mcp.json` instead — never put a literal token there.
 
-`codex mcp list` must show `8xgg`; `codex mcp remove 8xgg` undoes it. Without the server
-`remix.mjs` still works (it calls `/8x/mcp` itself for secondary sources) — only URL/title
-discovery is lost, so ask the user for hashKeys instead.
+`claude mcp list` must show `8xgg` as connected; `claude mcp remove --scope user 8xgg` undoes
+it. Without the server `remix.mjs` still works (it calls `/8x/mcp` itself for secondary
+sources) — only URL/title discovery is lost, so ask the user for hashKeys instead.
 
 ## Verify for Paean skills
 

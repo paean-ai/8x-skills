@@ -17,6 +17,13 @@ const SAFETY_PATTERNS = [
   '.clide/',
   '.remix-sources/',
   'clide.json',
+  // Local-only SDK test tooling (paean-sdk skill): never part of a site.
+  'paean-mock.js',
+  'mock-bridge.js',
+  'test-example.mjs',
+  'test.mjs',
+  '*.test.mjs',
+  'tests/',
   '.env',
   '.env.*',
   '*.pem',
@@ -61,6 +68,8 @@ function usage() {
     '                          [--allow-static-only] [--dir <publish-dir>]',
     '                          [--title <title>] [--summary <text>] [--category <category>] [--tag <tag>]',
     '                          [--handle <subdomain>]',
+    '                          [--price <credits> | --free] [--standalone allow|demo|shell]',
+    '                          [--product <sku>=<title>:<credits>]...',
     '       publish-helper.mjs --delete [--handle <owned-handle>]',
     '',
     'Publishes a static frontend directory with top-level index.html to *.clide.app.',
@@ -75,13 +84,21 @@ function usage() {
     '  Claiming a subdomain requires a paid Paean subscription and costs more credits than an',
     '  auto-assigned one. Omit it to keep the app\'s current subdomain, or to get a random one',
     '  on first publish. Free accounts must omit it.',
+    '--price <credits> lists the app as PAID (Square mode only): players watch the demo for free',
+    '  and pay this once, in credits (server limits apply, 10..100000), to enter the full app.',
+    '  --free resets a paid listing to free. Omit both to keep what clide.json `access` declares.',
+    '--standalone allow|demo|shell decides what a bare https://<handle>.clide.app/ visit (no Paean',
+    '  host) does: allow = full app, demo = stay in demo and offer the 8x.gg shell, shell = redirect',
+    '  to https://<handle>.8x.gg/. Default: allow for free apps, demo for paid ones.',
+    '--product <sku>=<title>:<credits> (repeatable) declares a durable in-app product (DLC-style);',
+    '  the platform records ownership per player. sku: lowercase slug ≤64 chars, not "app".',
     '--delete removes an owned deployment. For saved Square projects it first unlists the',
     '  Square app, then deletes the Clide site; for hosting-only projects it deletes only the site.',
   ].join('\n')
 }
 
 function parseArgs(argv) {
-  const out = { delete: false, dryRun: false, hostingOnly: false, allowSecrets: false, allowStaticOnly: false, yes: false, help: false, dir: undefined, handle: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, tags: [] }
+  const out = { delete: false, dryRun: false, hostingOnly: false, allowSecrets: false, allowStaticOnly: false, yes: false, help: false, dir: undefined, handle: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, tags: [], price: undefined, free: false, standalone: undefined, products: [] }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') out.help = true
@@ -105,6 +122,13 @@ function parseArgs(argv) {
       const tag = argv[++i]
       if (tag) out.tags.push(tag)
     } else if (arg.startsWith('--tag=')) out.tags.push(arg.slice('--tag='.length))
+    else if (arg === '--price') out.price = argv[++i] ?? ''
+    else if (arg.startsWith('--price=')) out.price = arg.slice('--price='.length)
+    else if (arg === '--free') out.free = true
+    else if (arg === '--standalone') out.standalone = argv[++i] ?? ''
+    else if (arg.startsWith('--standalone=')) out.standalone = arg.slice('--standalone='.length)
+    else if (arg === '--product') out.products.push(argv[++i] ?? '')
+    else if (arg.startsWith('--product=')) out.products.push(arg.slice('--product='.length))
     // `?? ''` (not undefined) so a bare trailing `--handle` is a hard error in
     // normalizeHandle rather than silently publishing under a random subdomain.
     else if (arg === '--handle') out.handle = argv[++i] ?? ''
@@ -123,7 +147,40 @@ function parseArgs(argv) {
   if (out.delete && out.allowStaticOnly) throw new Error('--allow-static-only is only valid when publishing, not deleting.')
   if (out.delete && out.yes) throw new Error('--yes is only valid when publishing, not deleting.')
   if (out.delete && (out.title || out.summary || out.category || out.license || out.tags.length > 0)) throw new Error('metadata options are only valid when publishing, not deleting.')
+  const declaresAccess = out.price !== undefined || out.free || out.standalone !== undefined || out.products.length > 0
+  if (out.delete && declaresAccess) throw new Error('access options (--price/--free/--standalone/--product) are only valid when publishing, not deleting.')
+  if (out.hostingOnly && declaresAccess) throw new Error('access options (--price/--free/--standalone/--product) need a Square listing; they are not valid with --hosting-only.')
+  if (out.price !== undefined && out.free) throw new Error('--price and --free are mutually exclusive.')
+  if (out.price !== undefined) {
+    const n = Number(String(out.price).trim())
+    if (!Number.isInteger(n) || n < 1) throw new Error('--price must be a whole number of credits (e.g. --price 100).')
+    out.price = n
+  }
+  if (out.standalone !== undefined && !['allow', 'demo', 'shell'].includes(String(out.standalone).trim())) {
+    throw new Error("--standalone must be one of: allow, demo, shell.")
+  }
+  if (out.standalone !== undefined) out.standalone = String(out.standalone).trim()
+  out.products = out.products.map(parseProductFlag)
   return out
+}
+
+// `<sku>=<title>:<credits>` → { sku, title, amount, currency }. The title may
+// itself contain ':' — the price is whatever follows the LAST colon.
+function parseProductFlag(raw) {
+  const text = String(raw || '').trim()
+  const eq = text.indexOf('=')
+  const colon = text.lastIndexOf(':')
+  if (eq <= 0 || colon <= eq + 1 || colon === text.length - 1) {
+    throw new Error('--product expects <sku>=<title>:<credits>, e.g. --product season_pass="Season Pass":50 (got: ' + text + ')')
+  }
+  const sku = text.slice(0, eq).trim().toLowerCase()
+  const title = text.slice(eq + 1, colon).trim().replace(/^"(.*)"$/, '$1')
+  const amount = Number(text.slice(colon + 1).trim())
+  if (!/^[a-z0-9][a-z0-9_.-]{0,63}$/.test(sku)) throw new Error('--product sku must be a lowercase slug of at most 64 characters (got: ' + sku + ')')
+  if (sku === 'app') throw new Error('--product sku "app" is reserved for the app itself; use --price for that.')
+  if (!title) throw new Error('--product ' + sku + ' needs a title.')
+  if (!Number.isInteger(amount) || amount < 1) throw new Error('--product ' + sku + ' needs a whole-number credits price after the last colon.')
+  return { sku, title, amount, currency: 'credits' }
 }
 
 function normalizeApiBase(raw) {
@@ -484,6 +541,16 @@ function assetWarnings(publishDir, files, squareListing = true) {
       warnings.push('banner.jpg is ' + dims.width + 'x' + dims.height + '; expected 800x400.')
     }
   }
+  if (!files.includes('icon.jpg')) {
+    warnings.push('Missing top-level icon.jpg. Publishing is allowed, but Square listings expect a 512x512 icon.jpg for square tiles (library, shortcuts, native grids).')
+  } else {
+    const dims = readJpegDimensions(path.join(publishDir, 'icon.jpg'))
+    if (!dims) {
+      warnings.push('Could not verify icon.jpg dimensions. Expected 512x512.')
+    } else if (dims.width !== 512 || dims.height !== 512) {
+      warnings.push('icon.jpg is ' + dims.width + 'x' + dims.height + '; expected 512x512.')
+    }
+  }
   return warnings
 }
 
@@ -552,6 +619,7 @@ function saveState(projectRoot, input) {
     title: input.title,
     category: input.category,
     remix: input.remix,
+    access: input.access,
   }
   writeFileSync(path.join(dir, CLIDE_STATE_FILE), JSON.stringify(state, null, 2) + '\n', 'utf8')
 }
@@ -652,6 +720,46 @@ function resolveLicense(projectRoot, args) {
   return 'MIT'
 }
 
+// The clide.json `access` block: how the app is sold. Flags override the
+// manifest; with neither, `null` means "keep whatever the listing has" (the
+// server treats an omitted `access` as no change, and a first publish as free).
+function resolveAccess(projectRoot, args) {
+  const manifest = readManifest(projectRoot)
+  const fromManifest = manifest && manifest.access && typeof manifest.access === 'object' ? manifest.access : null
+  const flagged = args.price !== undefined || args.free || args.standalone !== undefined || args.products.length > 0
+  if (!flagged) return fromManifest ? normalizeAccess(fromManifest) : null
+  const base = fromManifest ? normalizeAccess(fromManifest) : { model: 'free', price: null, standalone: undefined, products: [] }
+  const model = args.free ? 'free' : args.price !== undefined ? 'paid' : base.model
+  const price = model === 'paid'
+    ? { amount: args.price !== undefined ? args.price : (base.price && base.price.amount), currency: 'credits' }
+    : null
+  if (model === 'paid' && !(price.amount >= 1)) throw new Error('A paid app needs a price: pass --price <credits>.')
+  const standalone = args.standalone !== undefined ? args.standalone : base.standalone
+  const products = args.products.length ? args.products : base.products
+  const out = { model }
+  if (price) out.price = price
+  if (standalone) out.standalone = standalone
+  if (products && products.length) out.products = products
+  return out
+}
+
+function normalizeAccess(raw) {
+  const model = raw.model === 'paid' ? 'paid' : 'free'
+  let price = null
+  if (model === 'paid') {
+    const p = raw.price
+    const amount = typeof p === 'number' ? p : p && typeof p === 'object' ? Number(p.amount) : Number(p)
+    price = { amount: Number.isFinite(amount) ? amount : NaN, currency: 'credits' }
+  }
+  const standalone = ['allow', 'demo', 'shell'].includes(raw.standalone) ? raw.standalone : undefined
+  const products = Array.isArray(raw.products)
+    ? raw.products.filter(x => x && typeof x === 'object' && typeof x.sku === 'string').map(x => ({
+        sku: String(x.sku).trim().toLowerCase(), title: String(x.title || x.sku), amount: Number(x.amount), currency: 'credits',
+      }))
+    : []
+  return { model, price, standalone, products }
+}
+
 // Resolve the remix lineage recorded by /remix into the shape the API consumes
 // (remixOfHashKey = primary parent) plus the full graph for forward-compat.
 function resolveRemix(projectRoot) {
@@ -698,7 +806,7 @@ function licenseBody(spdx, year, holder) {
 
 // Ensure clide.json + LICENSE exist so every published project carries complete
 // metadata. .clideignore is ensured separately via getClideIgnorePatterns.
-function ensureProjectFiles(projectRoot, metadata, license, remix) {
+function ensureProjectFiles(projectRoot, metadata, license, remix, access) {
   const written = []
   const manifestPath = path.join(projectRoot, MANIFEST_FILE)
   const existing = readManifest(projectRoot) || {}
@@ -712,6 +820,10 @@ function ensureProjectFiles(projectRoot, metadata, license, remix) {
   }
   if (existing.remix) merged.remix = existing.remix
   else if (remix && remix.info) merged.remix = remix.info
+  // `access` is the resolved declaration (flags win over the manifest), so a
+  // --price run updates clide.json and the next flag-less publish keeps it.
+  if (access) merged.access = access
+  else if (existing.access) merged.access = existing.access
   const nextText = JSON.stringify(merged, null, 2) + '\n'
   let prevText = ''
   try { prevText = readFileSync(manifestPath, 'utf8') } catch {}
@@ -836,7 +948,7 @@ async function importZip(token, workspaceHashKey, zipData) {
   return await importZipDirect(token, workspaceHashKey, zipData)
 }
 
-async function publishSquare(token, workspaceHashKey, metadata, remix, handle) {
+async function publishSquare(token, workspaceHashKey, metadata, remix, handle, access) {
   const body = {
     workspaceHashKey,
     title: metadata.title,
@@ -850,6 +962,9 @@ async function publishSquare(token, workspaceHashKey, metadata, remix, handle) {
   // Omitted entirely when not requested, so the server keeps the app's current
   // subdomain (or assigns a random one on first publish).
   if (handle) body.handle = handle
+  // Omitted when nothing is declared: the server keeps the listing's current
+  // access model (free on a first publish). Never sent for hosting-only.
+  if (access) body.access = access
   if (remix && remix.parent) {
     // Primary upstream for legacy columns/provenance.
     body.remixOfHashKey = remix.parent
@@ -952,7 +1067,7 @@ async function unpublishHandle(handle, token, allowMissing = false) {
   return await readJsonResponse(res, '/publish/:handle')
 }
 
-async function confirmPublicPublish(args, summary, publishDir, projectRoot, metadata, effectiveHandle) {
+async function confirmPublicPublish(args, summary, publishDir, projectRoot, metadata, effectiveHandle, access) {
   if (args.yes) return
   if (!process.stdin.isTTY) {
     throw new Error('Public hosting requires confirmation. Re-run with --yes after confirming the public *.clide.app site' + (args.hostingOnly ? ' (no Square listing).' : ' and Apps Square listing.'))
@@ -971,6 +1086,13 @@ async function confirmPublicPublish(args, summary, publishDir, projectRoot, meta
     console.log('The app will be listed publicly in Paean Apps Square and reachable at a *.clide.app URL.')
   }
   console.log('Title: ' + metadata.title)
+  if (access && access.model === 'paid') {
+    console.log('PAID app: players watch the demo for free and pay ' + access.price.amount + ' credits once to enter the full app (platform keeps 20%).')
+    console.log('Standalone https://<handle>.clide.app/ visits: ' + (access.standalone || 'demo') + '.')
+    if (access.products && access.products.length) console.log('Products: ' + access.products.map(p => p.sku + ' (' + p.amount + ' credits)').join(', '))
+  } else if (access && access.model === 'free' && (args.free || args.standalone !== undefined)) {
+    console.log('FREE app' + (access.standalone ? '; standalone policy: ' + access.standalone : '') + '.')
+  }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   const answer = await new Promise(resolve => rl.question('Type "publish" to continue: ', resolve))
   rl.close()
@@ -1087,6 +1209,7 @@ async function main() {
   }
   const license = resolveLicense(projectRoot, args)
   const remix = resolveRemix(projectRoot)
+  const access = args.hostingOnly ? null : resolveAccess(projectRoot, args)
   const titleWarning = resolvedTitle.source === 'directory-name'
     ? 'Title fell back to the directory name. Pass --title with a name that reflects the game theme/gameplay.'
     : undefined
@@ -1119,6 +1242,8 @@ async function main() {
       titleWarning,
       assetWarnings: mediaWarnings,
       remix: remix ? { parent: remix.parent, parents: remix.parents } : null,
+      // null = keep the listing's current model (free on a first publish).
+      access,
       secretScan: {
         status: secretFindings.length > 0 ? 'allowed-by-flag' : 'passed',
         findings: secretFindings,
@@ -1132,14 +1257,14 @@ async function main() {
     throw new Error('Publish blocked: ' + compatibility.reason + ' Detected ' + compatibility.detected.configFile + ' (' + compatibility.detected.features.join(', ') + '). Use the project\'s Worker deployment workflow, or pass --allow-static-only only after the user accepts that backend/API features will not work.')
   }
 
-  await confirmPublicPublish(args, summary, publishDir, projectRoot, metadata, effectiveHandle)
+  await confirmPublicPublish(args, summary, publishDir, projectRoot, metadata, effectiveHandle, access)
   if (mediaWarnings.length > 0) {
     console.warn('Asset warnings:')
     for (const warning of mediaWarnings) console.warn('  - ' + warning)
   }
   const token = getPaeanToken()
   if (!token) throw new Error('Paean credentials not found. Set the PAEAN_AUTH_TOKEN environment variable to your Paean JWT (or place it in ~/.paean/credentials.json as {"token":"..."}). See the skill README for how to obtain one.')
-  const ensuredFiles = args.hostingOnly ? [] : ensureProjectFiles(projectRoot, metadata, license, remix)
+  const ensuredFiles = args.hostingOnly ? [] : ensureProjectFiles(projectRoot, metadata, license, remix, access)
   if (ensuredFiles.length > 0) console.log('Wrote project metadata: ' + ensuredFiles.join(', '))
   const zip = await zipFiles(publishDir, files)
   try {
@@ -1198,7 +1323,7 @@ async function main() {
       if (pruned.truncated) console.log('Warning: workspace listing was truncated; some clone-only files may remain.')
     }
     console.log('Publishing public Square listing...')
-    const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle)
+    const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle, access)
     saveState(projectRoot, {
       mode: 'square',
       handle: app.publishedSiteHandle,
@@ -1211,6 +1336,7 @@ async function main() {
       title: metadata.title,
       category: metadata.category,
       remix: remix ? { parent: remix.parent, parents: remix.parents } : undefined,
+      access: app.access || access || undefined,
     })
     console.log(JSON.stringify({
       success: true,
@@ -1221,6 +1347,10 @@ async function main() {
       handle: app.publishedSiteHandle || null,
       requestedHandle: args.handle || null,
       status: app.status || 'listed',
+      // The server's view of how the app is sold (free / paid + price,
+      // standalone policy, products) — what the listing actually says.
+      access: app.access || null,
+      shellUrl: app.publishedSiteHandle ? 'https://' + app.publishedSiteHandle + '.8x.gg/' : null,
       title: metadata.title,
       titleSource: resolvedTitle.source,
       titleWarning,
