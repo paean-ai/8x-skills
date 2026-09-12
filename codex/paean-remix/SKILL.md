@@ -136,6 +136,9 @@ is how you pick the primary and assign roles honestly.
    enough finished-game references to preserve the remix's actual identity; otherwise compose it
    from the UI-free attract scene or a dedicated in-game promotional camera capture.
    Reassess platform features for the new loop rather than copying a parent's integration blindly.
+   Use `paean-sdk`'s capability router and selected IAP/IAA/Net/Rank/AI design guides. Record the
+   benefit, entry point, state/recovery, and tests for the new work; reassess inherited product SKUs,
+   score rules, room protocols, and AI prompts against its new identity and app namespace.
    Prefer the current `paean-sdk` when its documented storage, leaderboard, payment, advertising,
    multiplayer, or social capabilities suit the remix; never invent unavailable APIs, and preserve
    graceful local play for optional capabilities.

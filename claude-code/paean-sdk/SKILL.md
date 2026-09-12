@@ -1,6 +1,6 @@
 ---
 name: paean-sdk
-description: Add Paean platform capabilities to a static app/game published to Paean Apps Square (*.clide.app / 8x.gg) via the Paean Web SDK — cloud save, shared leaderboards, shared app data, paid apps and durable products (access.*), in-app purchases and tips (pay.*), rewarded ads, online rooms, AI, share — plus the offline mock library that proves the integration before publishing. Use when the user wants to add cloud save, sync progress across devices, a global/online leaderboard, "接入积分/存档/排行榜", make an app paid / sell it / add a paywall or season pass, add in-app purchases, tips, rewarded ads, multiplayer rooms, or test the SDK integration locally. Not for publishing (see paean-publish).
+description: Design and integrate Paean SDK capabilities for static apps/games — cloud save, leaderboards, paid access, IAP, rewarded ads (IAA), multiplayer rooms, AI, shared data, and sharing. Use for capability selection, feature design, implementation, and local SDK testing; also route requests phrased as paean iap, paean iaa, paean net, paean rank, or paean ai to the corresponding guide. Not for publishing (see paean-publish).
 ---
 
 # Paean SDK — platform capabilities for Square apps
@@ -16,6 +16,35 @@ app must stay fully usable (or, for a paid app, stay in its demo).
 This skill integrates platform services into an existing app. For creating or
 broadly polishing the game itself use `paean-game-create`; for publishing (and
 declaring a price) use `paean-publish`.
+
+## Choose capabilities from the work's design
+
+Use this single entry for combinations of platform features. Phrases such as `paean iap`,
+`paean iaa`, `paean net`, `paean rank`, and `paean ai` are intent aliases within this skill,
+not separate installed skills, CLI commands, or SDK namespaces. Read only the matching guides:
+
+| Intent | Design fit | Read before implementing |
+| --- | --- | --- |
+| `paean iap` / purchases | Paid entry, durable content, consumables, tips | [IAP guide](reference/design-iap.md) |
+| `paean iaa` / ads | Optional rewards at natural pauses | [IAA guide](reference/design-iaa.md) |
+| `paean net` / multiplayer | Cooperative or competitive shared sessions | [Net guide](reference/design-net.md) |
+| `paean rank` / leaderboard | Comparable scored runs; cloud continuity | [Rank guide](reference/design-rank.md) |
+| `paean ai` / AI | Runtime hints, dialogue, creation, voice | [AI guide](reference/design-ai.md) |
+
+For new games/remixes, record a compact capability plan in the production brief: selected feature,
+player benefit, entry point, API/scope, persistent state, failure behavior, and verification.
+Briefly explain omitted capabilities when their fit is uncertain. For a focused SDK request,
+design only the requested feature and its dependencies. For example, a score-chasing game may use
+save + rank + an optional ad revive; a story game may use save + durable chapters + AI dialogue.
+If combining features, resolve reward delivery, ownership, ranking eligibility, and room/AI
+lifecycle together. Do not require all capabilities in every work.
+
+This reference targets SDK 1.10.0. Before implementation, inspect the actual SDK file's
+`PaeanSDK.VERSION` and its matching canonical README (the SDK source repository's
+`docs/paean-sdk/README.md`). Resolve that source from the workspace or SDK provenance; do not
+invent a repository URL. If unavailable, use this documented baseline and report the verification
+limit. A newer helper does not guarantee every host implements every namespace. Keep common
+readiness, consent, paid-access, preview, and mock rules here; feature guides refine product design.
 
 ## Files (`reference/`)
 
@@ -144,11 +173,12 @@ Documented in full in the SDK's own README (`paean-sdk.js` header + the
 - **Ads**: request `ads.rewarded` on the user's tap, then `showRewarded()`;
   grant only when `result.rewarded === true`. Never use preload as a
   capability probe.
-- **Rooms**: request `net.room` on the user's tap; single-player must keep
-  working without it. Prefer `room.state` (server-authoritative) over
-  broadcasting the world.
-- **AI**: request the scope on first real use; default to `deepseek-v4-flash`
-  for text and `gemini-3.1-flash-lite` for vision; stream when the UI shows text.
+- **Rooms**: request `net.room` on the user's tap; preserve solo play when networking is
+  optional. Prefer `room.state` for shared state; server storage does not validate game rules
+  or prevent cheating. See the Net guide for ownership, concurrency, and resync design.
+- **AI**: request the scope on first real use; verify current model availability, account-tier
+  support, and cost in the matching SDK documentation. Keep model configuration centralized,
+  handle quota failures, and stream displayed text where supported. See the AI guide.
 
 ## Integration recipe
 

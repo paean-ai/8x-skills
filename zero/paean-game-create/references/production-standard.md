@@ -170,6 +170,9 @@ PLAYING → RESULT → restart → PLAYING
 - During the brief, inspect the current `paean-sdk` skill and documented host capabilities. Prefer
   Paean SDK implementations when cloud storage, shared ranking, payments, ads, multiplayer, or
   social interaction genuinely strengthens this game's loop or continuity.
+- Use the SDK skill's IAP/IAA/Net/Rank/AI router to read only selected feature guides. Record the
+  player benefit, interaction point, API/scope, persistent state, failure recovery, and test evidence.
+  Resolve cross-feature rules such as ad revives or paid boosts on ranked runs and AI in multiplayer.
 - Treat the current documentation as authoritative. Cloud save, leaderboards, shared data, paid
   apps / durable products (`access.*`), in-app purchases, tips, rewarded ads, rooms, AI and share
   are documented in SDK 1.10; use only what the installed SDK/host documentation exposes. Never

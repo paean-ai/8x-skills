@@ -9,9 +9,16 @@ Portable agent skills for **building**, **publishing**, and **remixing** games o
 | **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Zero CLI, Claude Code, or Codex projects. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
-| **paean-sdk** | Add Paean platform capabilities — cross-device **cloud save** and a **shared global leaderboard** — to a static app/game via the Paean Web SDK. Ships a verified, framework-agnostic integration module + a mock host bridge for offline testing. Handles the cross-host edge cases (per-scope grants, return-shape differences, late bridge injection, offline queue) and degrades cleanly to `localStorage` in a plain browser. |
+| **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
 | **paean-remix** | Remix one or more published games into a new one. Clones the primary source (full assets) into the user's workspace, reads secondary sources through the 8x.gg MCP server, and scaffolds a project with a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so every upstream creator is credited exactly once. |
+
+For capability design, say `paean iap`, `paean iaa`, `paean net`, `paean rank`, or `paean ai`,
+or combine them (for example, “use paean rank with an optional paean iaa revive”). These are
+natural-language intents routed by [paean-sdk](claude-code/paean-sdk/SKILL.md), not CLI commands
+or separately installed skills. Create and Remix select the same guides during their production
+brief. Shared SDK contracts remain in one place; detailed design and acceptance live in
+`paean-sdk/reference/design-*.md` and are loaded only when relevant.
 
 The publish/remix skills ship as self-contained Node scripts — no npm install, no external
 dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-game-create** skill

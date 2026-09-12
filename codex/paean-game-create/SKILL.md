@@ -75,8 +75,10 @@ external location.
   expansion, wrapping, suitable fonts, and future RTL direction. Additional translations are not
   required unless requested. Minimize copy through clear, authored icons and spatial feedback.
 
-During the production brief, inspect the current `paean-sdk` skill and make a deliberate platform
-feature plan. Prefer documented Paean SDK capabilities over bespoke third-party services when they
+During the production brief, inspect the current `paean-sdk` skill's capability router and read
+only the IAP, IAA, Net, Rank, or AI design guides that fit the game. Record player benefit, entry
+point, API/scope, state/recovery, and verification for selected features. Prefer documented Paean
+SDK capabilities over bespoke third-party services when they
 fit the work: cloud save, shared leaderboards, shared app data, paid apps / durable products
 (`access.*`), in-app purchases and tips, rewarded ads, online rooms, AI, and share are all
 documented in the current SDK (1.10). Do not add platform features as checkboxes, invent APIs, or
