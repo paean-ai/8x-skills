@@ -14,6 +14,13 @@ const API_BASE = resolveApiBase()
 const DIRECT_ZIP_UPLOAD_MAX_BYTES = Number(process.env.PAEAN_WORKSPACE_DIRECT_UPLOAD_MAX_BYTES || 25 * 1024 * 1024)
 const PUBLISH_DIR_CANDIDATES = ['dist', 'build', 'out', '.output/public', 'public']
 const SAFETY_PATTERNS = [
+  '*.jsonl',
+  '*.jsonl.gz',
+  '.tide/',
+  '.deeptide/',
+  '.codex/',
+  '.claude/',
+  '.zero/',
   '.clide/',
   '.remix-sources/',
   'clide.json',
