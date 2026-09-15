@@ -17,10 +17,10 @@ prototype finished.
 ## Start with a production brief
 
 Before implementation, establish the game's fantasy, core loop, input model, session length,
-progression, fail/win states, target orientation, art pipeline, and performance budget. Make
-reasonable creative decisions when the user leaves these open. Prefer an original direction; when
-references are supplied, extract principles and produce a more resolved result rather than a close
-copy.
+progression, fail/win states, portrait and landscape adaptation, art pipeline, and performance
+budget. Make reasonable creative decisions when the user leaves these open. Prefer an original
+direction; when references are supplied, extract principles and produce a more resolved result
+rather than a close copy.
 
 Read [references/production-standard.md](references/production-standard.md) before building. It is
 the release bar and contains the attract-mode pattern, responsive layout rules, asset guidance, and
@@ -46,6 +46,9 @@ engine, or a real pixel-art pipeline. Technology is not a substitute for art dir
 
 Keep characters, monsters, abilities, effects, environment, typography, and UI in the same visual
 language. Avoid emoji as game art or interface icons; author or bundle real icons instead.
+Default to a bright, colorful, approachable casual style with clean, tactile surfaces and restrained
+depth. If the theme or an explicit art brief calls for a different palette or material treatment,
+record that direction in the production brief and keep the UI clear and readable within it.
 
 ## Required project shape
 
@@ -111,21 +114,38 @@ gameplay HUD, menus, controls, consent prompts, or platform UI. Let the scene re
 before any optional restrained `DEMO · TAP TO PLAY` cue fades in. The first intentional touch/click
 stops every demo process, reveals only essential play UI, and enters a deterministic fresh run.
 
+## Keep the UI compact and clear
+
+Give the playfield most of the screen and keep gameplay-critical action unobscured. Show only
+decision-relevant status and immediate controls during play; put occasional actions in a compact
+menu or contextual panel. Use a clear primary action, concise labels, and recognizable authored
+icons. Avoid oversized headers, stacked status cards, persistent tutorial paragraphs, and decorative
+panels that consume scarce screen space.
+
+Optimize the smallest supported screen first. Reduce panel chrome, spacing, and secondary detail
+before reducing text legibility or touch target size. Reflow by available width and height, including
+short landscape viewports; do not uniformly scale down a desktop UI. Follow the production standard's
+UI and responsive-composition checks for small-screen controls, text, overlays, and visual hierarchy.
+
 ## Mobile, desktop, and runtime behavior
 
-Design mobile/touch first with portrait as the primary composition. Unless the core mechanic
-intrinsically requires a fixed orientation, support both portrait and landscape by recomposing the
-camera, playfield, HUD, and controls rather than merely shrinking or rotating them. When one
-orientation is genuinely unsuitable, provide an intentional branded rotate treatment. Adapt across
-narrow and short phones, tablets in both orientations, and desktop resolutions. Prevent document
-scrolling, overscroll, accidental selection, and canvas drag. Respect safe areas and Paean host
+For every original work and remix, aim for a complete, comfortable experience in both portrait and
+landscape. Design mobile/touch first and recompose the camera, playfield, HUD, and controls for the
+available width and height rather than merely shrinking or rotating them. Do not make rotation a
+prerequisite for play or use an orientation lock or blocking "rotate device" screen as a substitute
+for adaptation. When a mechanic favors one aspect ratio, preserve its logical playfield with an
+adaptive camera or a fitted frame and reflow the surrounding UI. Adapt across narrow and short
+phones, tablets in both orientations, and desktop resolutions. Prevent document scrolling,
+overscroll, accidental selection, and canvas drag. Respect safe areas and Paean host
 chrome. On desktop, compose the playfield intentionally—usually a centered game frame with a
 suitable `max-width`, while backgrounds can extend to the viewport. Never stretch portrait
 gameplay into a loose full-width desktop layout.
 
 Pause or safely throttle when hidden. Handle resize, orientation change, pointer cancellation,
-audio unlock, and restart without corrupting game state. Keep startup and total transfer small;
-prefer compact MIDI/WebAudio sequencing and a restrained reusable sound bank when audio adds value.
+audio unlock, and restart without corrupting game state. Changing orientation during attract mode,
+play, pause, or results must preserve the current state and keep controls reachable and correctly
+mapped to the resized playfield. Keep startup and total transfer small; prefer compact MIDI/WebAudio
+sequencing and a restrained reusable sound bank when audio adds value.
 
 ## Validate before claiming completion
 
@@ -150,8 +170,15 @@ Completion requires all of the following:
   external/runtime paths, or viewport scrollbars;
 - loading → automatic UI-free attract highlight → play → result → restart works, and core
   interactions are verified rather than merely loaded;
-- portrait and landscape phone, portrait and landscape tablet, and desktop screenshots meet the
-  production standard (including an intentional rotate treatment where justified), with no
-  placeholder or half-finished state;
+- portrait and landscape phone, portrait and landscape tablet, and desktop screenshots and actual
+  play meet the production standard, with reachable controls, no forced rotation, and no placeholder
+  or half-finished state;
+- switching between portrait and landscape in attract mode, play, pause, and results preserves the
+  current state, reflows the UI, and keeps touch input aligned;
+- compact portrait and short landscape screens preserve a readable, unobscured playfield, concise
+  UI, and comfortable touch targets; menus and results also fit, and intermediate resolutions do
+  not introduce clipping or overlap;
+- color and surface treatment follow the approachable casual default or the recorded theme-specific
+  direction, with clear text, controls, and action hierarchy over the actual scene;
 - the game remains playable after reload and after background/foreground transitions;
 - final project size and largest assets are reviewed, with obvious waste removed.

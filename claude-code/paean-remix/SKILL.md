@@ -121,6 +121,14 @@ is how you pick the primary and assign roles honestly.
    license explicitly allows it and attribution is recorded. Keep `.remix-sources/` for
    reference only; it is not published. Include top-level `favicon.svg` and `banner.jpg`;
    `banner.jpg` should be exactly 800x400.
+   Adapt the new work to both portrait and landscape using the production standard's responsive
+   composition rules. Replace inherited orientation locks or blocking rotate prompts with adaptive
+   camera, playfield, HUD, and control layouts that keep both orientations playable.
+   Simplify inherited UI for small screens: retain essential status and play controls, move
+   occasional actions into contextual panels, and remove oversized headers or redundant cards.
+   Apply the production standard's bright, approachable casual palette and tactile surface
+   treatment unless the remix's theme or explicit art brief calls for another direction; preserve
+   legibility and comfortable touch targets as the UI reflows across resolutions.
    If the remix uses vector/skeletal art, resolve it into one coherent cartoon family and explicit
    head-to-body proportion system for the new game. Rebuild crude source rigs or linework as needed;
    do not inherit thick black contours, mixed anatomy, or rigid paper-doll animation.
@@ -146,8 +154,12 @@ is how you pick the primary and assign roles honestly.
 
 6. **Validate** with `paean-game-create/scripts/validate-game.mjs`, including Playwright runtime
    checks and full-size visual review at its phone, tablet, and desktop viewports in both mobile
-   orientations. Confirm every initial load automatically reaches the UI-free core-play highlight,
-   and inspect the banner at full 800x400 size and listing-thumbnail size.
+   orientations. Play in both orientations and rotate during attract mode, play, pause, and results
+   to verify preserved state, reachable controls, and accurate touch mapping without forced rotation.
+   Inspect active HUD, menus, pause, and results at 320x568 and 568x320 CSS pixels and through
+   intermediate sizes; check concise UI, unobscured action, text contrast, and usable touch targets.
+   Confirm every initial load automatically reaches the UI-free core-play highlight, and inspect
+   the banner at full 800x400 size and listing-thumbnail size.
 
 7. **Publish** with the **paean-publish** skill from the target directory. It reads
    `clide.json` for naming, metadata, and the remix lineage automatically, publishes into the

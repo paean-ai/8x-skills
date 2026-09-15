@@ -25,6 +25,13 @@ dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-gam
 ships a game-production standard plus a static/Playwright validator. The **paean-sdk** skill ships
 browser reference files (no server, no build) you copy into your app.
 
+Every original work and remix should adapt to both portrait and landscape instead of requiring
+players to rotate their device. Recompose the playfield and UI for the available screen, preserve
+state when orientation changes, and verify actual play in both orientations before release.
+Keep UI concise and compact so the playfield stays clear, with readable text and comfortable touch
+targets on small screens and layouts that adapt across resolutions. Default to bright, approachable
+casual colors and tactile surfaces unless the theme or explicit art direction calls for another style.
+
 ```
 8x-skills/
 ├── zero/
