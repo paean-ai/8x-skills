@@ -18,6 +18,12 @@ visual style. A game can be small; it cannot feel unfinished.
 
 - Establish a compact art bible: shape language, palette, contrast hierarchy, typography, camera,
   materials/texture, lighting, effect language, and motion timing.
+- Default to a bright, colorful, welcoming casual style suitable for a broad audience. Use a
+  coherent palette, friendly shapes, clean surfaces, and restrained highlights, shading, or soft
+  depth to make controls and rewards feel tactile. Reserve strong accents for key actions and
+  feedback; keep supporting surfaces calm enough that the scene and text remain easy to read.
+  A theme-specific direction or explicit user brief may call for dark, muted, realistic, or other
+  treatments; record that reason in the art bible and preserve the same clarity and polish.
 - Make the playfield readable in motion. Critical actors and threats need distinct silhouettes,
   depth separation, anticipation, contact feedback, and recovery—not only different colors.
 - Do not treat large flat color blocks, generic rounded rectangles, or raw engine primitives as
@@ -48,16 +54,32 @@ visual style. A game can be small; it cannot feel unfinished.
 
 ## 3. UI and feedback
 
-- Keep the active play HUD to information that changes decisions. Use hierarchy and spatial
-  grouping; do not cover the scene with panels or tutorial prose.
+- Keep the active play HUD to information that changes decisions, giving most of the usable
+  screen to gameplay. Place compact status groups and essential controls around the action without
+  obscuring actors, targets, paths, or important feedback. Avoid oversized headers, stacked cards,
+  repeated labels, and large decorative backplates during play.
+- Give each screen or panel a clear primary action and a simple reading order. Use concise labels,
+  consistent alignment, and modest spacing. Put settings, help, collection details, and other
+  occasional actions behind a compact menu or contextual panel; keep immediate play controls
+  visible and discoverable. Teach through brief contextual cues that dismiss after use.
 - Use authored pixel-art or SVG/vector icon shapes rather than emoji. Icons must share the game's
-  visual language, remain legible at their rendered size, and communicate without relying on text.
+  visual language and remain legible at their rendered size. Familiar actions can use icons alone;
+  give ambiguous actions short labels and give icon-only buttons accessible names. Do not make
+  essential instructions depend on hover or unexplained symbols.
 - Touch targets should normally be at least 44 CSS pixels, separated enough for thumbs, and placed
-  within comfortable reach without colliding with safe areas or host chrome.
+  within comfortable reach without colliding with safe areas or host chrome. A compact visual icon
+  can have a larger hit area, but neighboring hit areas must not overlap. Save space by reducing
+  decoration and secondary content before shrinking readable text or tappable controls.
+- Keep text and control states distinct from the actual scene behind them. Use calm local backing
+  or subtle outlines when needed; avoid noisy textures, competing saturated panels, and heavy glow
+  behind labels. Pair color-coded status with shape, icons, or text so color alone carries no
+  essential meaning.
 - Every action needs proportionate feedback: pressed/armed state, animation, sound where useful,
   impact, score/resource change, and clear unavailable/cooldown state.
-- Menus, pause, result, restart, settings, and orientation warnings use the same art direction as
-  the game. They are not browser-default overlays added at the end.
+- Menus, pause, result, restart, and settings use the same art direction as the game. Size panels
+  to their content and available viewport; keep close/back and primary actions reachable on short
+  screens. If secondary content needs scrolling, contain it inside the panel without causing the
+  play surface or document to scroll. They are not browser-default overlays added at the end.
 
 ### Language and localization
 
@@ -113,22 +135,40 @@ PLAYING → RESULT → restart → PLAYING
 
 ## 5. Responsive composition
 
-- Mobile/touch is the primary design surface and portrait is the default composition. Unless
-  horizontal space is intrinsic to the mechanic, make both orientations genuinely playable by
-  recomposing the camera, playfield, HUD, and controls rather than merely shrinking or rotating.
-  Test narrow and short phones, not only one flagship phone.
+- Every original work and remix should adapt to both portrait and landscape so players can use
+  their current screen orientation. Mobile/touch is the primary design surface; a preferred art
+  composition must not become a required device orientation. Recompose the camera, playfield, HUD,
+  and controls for the available width and height rather than merely shrinking or rotating.
+  Do not use orientation locks or blocking "rotate device" screens to replace adaptation. Test
+  narrow and short phones, not only one flagship phone.
+- Make layout respond to both available width and height. Use fluid sizing with sensible bounds
+  and content-driven breakpoints to regroup HUD items, relocate controls, and simplify secondary
+  content. Keep text readable at native size; never solve a small viewport by uniformly shrinking
+  the entire desktop interface. Cap panel widths on large displays so empty space does not inflate
+  the UI or separate related controls.
 - Use `100dvh` with a safe fallback, `viewport-fit=cover`, CSS safe-area/Paean chrome variables,
   pointer events, and resize/orientation handling. Prevent document scroll/overscroll, text
   selection, callouts, and unwanted gesture navigation on the play surface.
 - Scale a logical game coordinate system into the available play rectangle. Preserve aspect where
   distortion would damage gameplay or pixel art; use intentional crop, letterbox art, or adaptive
-  camera rather than stretching.
+  camera rather than stretching. Keep gameplay-critical content visible and touch targets usable
+  in both orientations, including when the mechanic favors a fixed logical aspect ratio.
 - Desktop needs a designed composition. Center portrait play inside an appropriate max-width frame
   and use the remaining area for restrained atmosphere, not duplicated controls or empty accidental
   whitespace. Ensure the primary scene and HUD remain visually centered relative to each other.
-- Verify phone and tablet sizes in both portrait and landscape, plus desktop. If one orientation is
-  genuinely incompatible with the mechanic, show a deliberate branded rotate treatment rather than
-  a broken or stretched game. No viewport may show a page scrollbar or drift under touch.
+- Reflow attract mode, play, pause, and result screens on resize or orientation change without
+  restarting the run or losing progress. Recalculate canvas dimensions and pointer coordinate
+  mapping together; release interrupted gestures so controls do not stick after rotation.
+- Verify phone and tablet sizes with actual play in both portrait and landscape, plus desktop.
+  Rotate in both directions during attract mode, play, pause, and results; confirm state is
+  preserved and the scene, text, and controls remain visible, legible, and reachable. A rotate
+  prompt is not evidence of orientation support. No viewport may show a page scrollbar or drift
+  under touch.
+- Include 320x568 and 568x320 CSS-pixel viewports as small-screen baselines alongside the validator's
+  phone, tablet, and desktop profiles. Capture and operate the active HUD, menus, pause, and results,
+  not only the UI-free preview. Resize through intermediate widths and heights and inspect both
+  sides of layout breakpoints with long labels and large score values; fix clipped text, overlapping
+  controls, unreachable actions, and panels that crowd out gameplay.
 
 ## 6. Code and asset architecture
 
@@ -203,9 +243,13 @@ Before completion, record evidence for each row:
 | Core loop | Multiple complete sessions including win/fail/restart and unusual input timing |
 | Preview | Load enters an automatic UI-free core highlight; demo is deterministic, non-persistent, and converts on first tap |
 | Mobile portrait | Full-size screenshot plus touch play; safe areas and all targets verified |
-| Mobile landscape | Full-size screenshot plus touch play, or a justified branded rotate treatment |
+| Mobile landscape | Full-size screenshot plus touch play; safe areas and all targets verified, with no forced rotation |
 | Tablet | Portrait and landscape screenshots/play with intentional composition and reachable controls |
+| Orientation changes | Rotate both ways in attract/play/pause/results; state and progress preserved, UI reflows, touch mapping stays accurate, no rotation gate |
 | Desktop | Full-size screenshot showing deliberate max-width/centering and no loose scene drift |
+| Compact UI | Active-play capture shows concise status, clear primary controls, and unobscured action; secondary panels open and close with reachable actions |
+| Small screens and resize | 320x568 and 568x320 touch play plus HUD/menu/pause/result captures; readable text, usable targets, and no clipping or overlap through intermediate sizes |
+| Color and surfaces | Bright, approachable casual treatment or recorded theme-specific direction; coherent materials, legible text and states, and restrained accents over the actual scene |
 | Platform fit | SDK capability plan recorded; chosen integrations verified with graceful fallback |
 | Localization | English default/fallback complete; centralized keys, locale configuration, and expanded-text layout verified |
 | Runtime | Playwright reports no page errors, console errors, failed assets, or scrollbars |
