@@ -23,9 +23,9 @@
 //
 // Then write clide.json (remix graph), LICENSE, and .clideignore so the new
 // game is ready to build + /publish.
-import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { extractZip as unzipTo } from './zip.mjs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 
@@ -391,32 +391,14 @@ function savePublishState(targetDir, workspaceHashKey, primaryHashKey) {
   return { file: path.join(CLIDE_STATE_DIR, CLIDE_STATE_FILE), workspaceHashKey, reused: false }
 }
 
-async function run(command, args, opts = {}) {
-  return await new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: opts.cwd, stdio: 'pipe' })
-    let stderr = ''
-    child.stderr.on('data', c => { stderr += c.toString() })
-    child.on('error', reject)
-    child.on('close', code => {
-      if (code === 0) resolve()
-      else reject(new Error(command + ' exited with code ' + code + (stderr ? ': ' + stderr.trim() : '')))
-    })
-  })
-}
-
+// Extracted in-process rather than through `unzip`: Windows ships no `unzip`,
+// nothing has to be staged on disk first, and entries that would escape the
+// destination are rejected instead of quietly written outside it.
 async function extractZip(zipBuffer, destDir) {
-  mkdirSync(destDir, { recursive: true })
-  const tmp = mkdtempSync(path.join(tmpdir(), 'remix-src-'))
-  const zipPath = path.join(tmp, 'source.zip')
   try {
-    writeFileSync(zipPath, zipBuffer)
-    try {
-      await run('unzip', ['-o', '-q', zipPath, '-d', destDir])
-    } catch (err) {
-      throw new Error('Failed to extract source archive (need the "unzip" command on PATH): ' + (err && err.message ? err.message : String(err)))
-    }
-  } finally {
-    rmSync(tmp, { recursive: true, force: true })
+    unzipTo(zipBuffer, destDir)
+  } catch (err) {
+    throw new Error('Failed to extract source archive: ' + (err && err.message ? err.message : String(err)))
   }
 }
 

@@ -1,0 +1,29 @@
+# Normalise to LF in the repository and in every checkout.
+#
+# The skills ship their scripts and reference files verbatim into a user's
+# project, and the converters pack them straight into a zip (a RedNote
+# mini-tool container, a Google Ads MEDIA_BUNDLE). A Windows checkout that
+# rewrote them to CRLF would change the bytes that get shipped, so the working
+# tree stays LF on every platform rather than only the blobs in git.
+* text=auto eol=lf
+
+# Binary assets git must never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.mp4 binary
+*.webm binary
+*.zip binary
+*.pdf binary
+*.wasm binary

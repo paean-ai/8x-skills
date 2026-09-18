@@ -23,7 +23,8 @@ brief. Shared SDK contracts remain in one place; detailed design and acceptance 
 `paean-sdk/reference/design-*.md` and are loaded only when relevant.
 
 The publish/remix skills ship as self-contained Node scripts — no npm install, no external
-dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-game-create** skill
+dependencies beyond the Node runtime. Archives are packed and unpacked in-process, so the
+scripts run the same on macOS, Linux and Windows. The **paean-game-create** skill
 ships a game-production standard plus a static/Playwright validator. The **paean-sdk** skill ships
 browser reference files (no server, no build) you copy into your app.
 
@@ -76,9 +77,11 @@ see `paean-sdk` and its offline mock host `reference/paean-mock.js`.
 ## Requirements
 
 - **Node.js 18+** (for global `fetch`).
-- `zip` on PATH for publishing; `unzip` on PATH for remixing (both ship with macOS and most
-  Linux distributions).
 - A **Paean JWT** (the token the Paean web app / Zero CLI uses).
+
+Nothing else: the scripts use only the Node standard library, and macOS, Linux and Windows are
+all supported. The `zip` / `unzip` commands are no longer needed — archives are built and read
+in-process by each skill's `scripts/zip.mjs`.
 
 ## Credentials
 

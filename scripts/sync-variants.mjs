@@ -18,8 +18,12 @@
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+// fileURLToPath, not `.pathname`: the raw pathname keeps percent-escapes (a repo
+// checked out under a path with spaces) and, on Windows, a leading slash before
+// the drive letter.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = path.join(root, 'claude-code')
 const check = process.argv.includes('--check')
 const VARIANTS = {
