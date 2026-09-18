@@ -11,6 +11,8 @@ Portable agent skills for **building**, **publishing**, and **remixing** games o
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
 | **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
+| **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
+| **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline (module bundling, CSS lowering, a Chrome 61 API shim, licence inlining, forbidden-capability self-check) and the two artifact audits. Requires `esbuild`. |
 | **paean-remix** | Remix one or more published games into a new one. Clones the primary source (full assets) into the user's workspace, reads secondary sources through the 8x.gg MCP server, and scaffolds a project with a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so every upstream creator is credited exactly once. |
 
 For capability design, say `paean iap`, `paean iaa`, `paean net`, `paean rank`, or `paean ai`,
@@ -21,7 +23,8 @@ brief. Shared SDK contracts remain in one place; detailed design and acceptance 
 `paean-sdk/reference/design-*.md` and are loaded only when relevant.
 
 The publish/remix skills ship as self-contained Node scripts — no npm install, no external
-dependencies beyond the Node runtime and a system `zip`/`unzip`. The **paean-game-create** skill
+dependencies beyond the Node runtime. Archives are packed and unpacked in-process, so the
+scripts run the same on macOS, Linux and Windows. The **paean-game-create** skill
 ships a game-production standard plus a static/Playwright validator. The **paean-sdk** skill ships
 browser reference files (no server, no build) you copy into your app.
 
@@ -74,9 +77,11 @@ see `paean-sdk` and its offline mock host `reference/paean-mock.js`.
 ## Requirements
 
 - **Node.js 18+** (for global `fetch`).
-- `zip` on PATH for publishing; `unzip` on PATH for remixing (both ship with macOS and most
-  Linux distributions).
 - A **Paean JWT** (the token the Paean web app / Zero CLI uses).
+
+Nothing else: the scripts use only the Node standard library, and macOS, Linux and Windows are
+all supported. The `zip` / `unzip` commands are no longer needed — archives are built and read
+in-process by each skill's `scripts/zip.mjs`.
 
 ## Credentials
 

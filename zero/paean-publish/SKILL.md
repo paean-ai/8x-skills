@@ -6,7 +6,8 @@ description: Publish a static frontend with a top-level index.html to Clide host
 # Paean Publish (Zero CLI)
 
 Publish a static frontend to a public `*.clide.app` URL using the bundled
-`scripts/publish.mjs`. The script needs Node 18+ and `zip` on PATH.
+`scripts/publish.mjs`. The script needs Node 18+ and nothing else — the upload archive is
+built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
 > **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
 > `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:

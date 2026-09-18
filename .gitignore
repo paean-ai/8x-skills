@@ -8,6 +8,10 @@ Thumbs.db
 .idea/
 *.swp
 
+# Python bytecode (audit-minitool.py leaves this behind when imported)
+__pycache__/
+*.py[cod]
+
 # Node (none committed, but guard against local experimentation)
 node_modules/
 npm-debug.log*

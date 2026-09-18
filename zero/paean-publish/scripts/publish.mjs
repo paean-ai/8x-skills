@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { createZipFromDir } from './zip.mjs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 
@@ -350,8 +351,12 @@ function hasBuildScript(projectRoot) {
 
 async function run(command, args, opts = {}) {
   return await new Promise((resolve, reject) => {
+    // npm/pnpm/yarn are `.cmd` shims on Windows, and Node's spawn only finds
+    // those through a shell. The arguments here are fixed literals, so there is
+    // nothing to quote; cwd is passed out-of-band either way.
     const child = spawn(command, args, {
       cwd: opts.cwd,
+      shell: process.platform === 'win32',
       stdio: opts.input == null ? 'inherit' : ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -575,20 +580,11 @@ function archiveSummary(publishDir, files) {
   }
 }
 
+// Built in-process rather than through the `zip` binary: Windows has no `zip`,
+// and the archive never needs to touch the disk on the way to the upload.
 async function zipFiles(publishDir, files) {
-  const tmp = mkdtempSync(path.join(tmpdir(), 'clide-publish-'))
-  const zipPath = path.join(tmp, 'site.zip')
-  try {
-    await run('zip', ['-q', '-X', '-9', zipPath, '-@'], {
-      cwd: publishDir,
-      input: files.join('\n') + '\n',
-    })
-    const data = readFileSync(zipPath)
-    return { data, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
-  } catch (err) {
-    rmSync(tmp, { recursive: true, force: true })
-    throw err
-  }
+  const data = createZipFromDir(publishDir, files)
+  return { data, cleanup: () => {} }
 }
 
 function loadState(projectRoot) {

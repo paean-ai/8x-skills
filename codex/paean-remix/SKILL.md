@@ -14,7 +14,8 @@ the basis for a new game, recording the full remix lineage so upstream creators 
 > self-contained Node script — `scripts/remix.mjs` — needing Node 18+ and `unzip` on PATH.
 
 This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
-(global `fetch`) and the `unzip` command on PATH.
+(global `fetch`) and nothing else; source archives are unpacked in-process by
+`scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
 ## Source references
 
@@ -215,4 +216,5 @@ Run with `--help`.
   `HTTP 429` → the MCP server allows 120 requests per minute per user; wait and re-run.
 - A secondary's `REMIX-FETCH.json` lists files you truly need as-is → recreate them, or re-run
   with `--clone-all` after telling the user that source will be credited twice.
-- `unzip` not found → install it (ships with macOS and most Linux distros).
+- `Failed to extract source archive` → the download was truncated or the workspace export is
+  not a plain zip; re-run, and report the message as-is if it repeats.

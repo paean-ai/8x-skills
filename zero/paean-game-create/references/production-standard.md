@@ -133,6 +133,89 @@ PLAYING → RESULT → restart → PLAYING
   a prompt at boot or mid-demo.
 - Returning from background preserves the current real run; it must not silently re-enter demo.
 
+### Ad-conversion readiness
+
+Finished works are reused as **playable ad creatives** (HTML5 media bundles for Google Ads and
+comparable networks). A conversion must be possible without editing gameplay code, so build these
+four affordances in from the start. They cost nothing and are good engineering regardless.
+
+- **Expose one programmatic entry point** that starts a real, playable session directly — skipping
+  title, story, hub, draft, shop, and tutorial gates. Any one of these is enough, in order of
+  preference: a command on the event bus (`emit('cmd', { type: 'start-run', ... })`), an exported
+  function or state object from the entry module, or a single namespaced global handle
+  (`window.__game = { startRound, game, state, ... }`). Document which one it is in the README.
+  Without a seam, a converter is reduced to clicking DOM buttons, which breaks whenever the UI moves.
+- **Take showcase parameters as arguments**, not constants baked into the start path: seed,
+  level/floor, character, weapon, difficulty. Export the tuned demo seed as a named constant
+  (`export const DEMO_SEED = ...`) so a conversion reproduces the exact showcase you tuned.
+- **Read the autopilot flag every frame**, not once at session creation
+  (`if (run.autopilot && run.pilot) input = run.pilot.input(dt)`). This is what lets an ad play
+  itself for a few seconds and then hand control to the viewer — the single highest-value pattern
+  in playable advertising. A flag latched at creation makes that impossible.
+- **Let an external caller pin the language.** Read the locale from one documented storage key (or
+  accept an explicit override) before falling back to the device, so an ad build can force English
+  without editing i18n code. Keep static markup — `<html lang>`, pre-i18n strings — on the default
+  locale so the first painted frame never flashes another language.
+- **Guard every host capability with `typeof`** and degrade to full local play, including when the
+  SDK script is absent entirely. Ad containers have no host, no network, and often no working
+  `localStorage`; wrap storage access in `try/catch`. A work that only runs inside the 8x shell
+  cannot become an ad.
+
+Front-load the core loop for the same reason a good attract mode does: a multi-page story, a hub
+screen, or a draft step before the first real interaction is fine in the app and fatal in an ad,
+where the whole value is letting someone play before they decide to install.
+
+
+### Offline-container readiness (RedNote mini-tool and similar)
+
+Finished works are also repackaged as **offline container builds** — a zip of static files with no
+network at all, running on an **Android 8.1 / Chrome 61** WebView (RedNote mini-tools are the current
+target). The conversion is mechanical *except* where the work makes it impossible. These affordances
+cost nothing while building and are the difference between a two-hour port and a rewrite. They
+overlap heavily with ad-conversion readiness above; where they differ, the container is stricter.
+
+- **Keep one source of truth for the default language.** Works routinely hard-code it in two or three
+  places — a module-level `let current = 'en'`, a `save.lang || 'en'` fallback, a new-save factory,
+  and a `register('en', ..., { default: true })` that also sets the *current* locale. A converter must
+  find all of them or the build silently ships English. Resolve the initial locale **once**, from a
+  documented override, and let everything else read that.
+- **Funnel every storage access through one wrapper that cannot throw.** Not just `setItem` quota:
+  under some WebView policies *reading `window.localStorage` itself throws*. One unguarded read on a
+  top-level boot path aborts the module, so no listener is ever attached and the page renders with
+  every control dead — no error the player can see. Wrap reads and writes, and keep the game fully
+  playable when storage is unavailable.
+- **Clamp the frame delta at both ends**: `Math.max(0, Math.min(cap, (now - last) / 1000))`. The first
+  rAF timestamp can precede the `performance.now()` captured at module load, and a negative delta runs
+  in-game time backwards — which surfaces far from the cause, as negative array indices or corrupted
+  animation state.
+- **Do not put player-visible text in a hand-rolled bitmap font.** A 3×5 glyph table cannot draw CJK,
+  and text drawn into a low-resolution buffer and scaled up is unreadable. Draw localisable canvas text
+  with `fillText` on the output layer, with a font stack that includes CJK faces.
+- **Do not assemble display strings ahead of render.** Logs, toasts and result lines built by
+  concatenation keep whatever language was active when they were created. Store the parameters (or a
+  closure) and resolve at render, so a language switch updates history too.
+- **Namespace the localisation helper.** A bare `t` or `T` collides with local variables in real
+  codebases; pick something unlikely (or export it under a distinct name) so a converter adding i18n
+  does not shadow, or get shadowed by, gameplay code.
+- **Stay inside the container's file types**: `html css js png jpg jpeg gif webp svg woff woff2 json`.
+  `ttf`/`otf` fonts, `mp3` audio, `.glb` models and `.txt` licence files are all rejected. Prefer
+  system font stacks and synthesised audio; if you ship a licence-bearing dependency, expect its notice
+  to have to travel inside HTML rather than as a text file.
+- **Import third-party libraries by name, not as a namespace.** `import * as THREE from 'three'`
+  defeats tree-shaking, so loader code — and its `fetch` — lands in the bundle and fails an offline
+  audit outright. Named imports keep it out.
+- **Keep the modern-API surface small and guarded on the boot path.** Anything above the Chrome 61
+  baseline (`Object.fromEntries`, `Array.flat/flatMap/at`, `String.replaceAll`, `structuredClone`,
+  `AbortController`, `ResizeObserver`, `ctx.roundRect`) must be feature-detected if it runs during
+  boot; unguarded use there yields a blank page rather than a degraded feature.
+- **Compose for portrait at phone size and verify landscape by actually playing.** Container builds are
+  opened in a phone-shaped WebView. A panel that covers the only tappable area, or a HUD that squeezes
+  the playfield to nothing, produces no console error and no failed assertion — only a player who
+  cannot proceed.
+
+Also keep offline degradation honest: if a capability can never work without a host, the converted
+build should be able to **remove** its entry rather than show a control that always fails.
+
 ## 5. Responsive composition
 
 - Every original work and remix should adapt to both portrait and landscape so players can use
@@ -257,6 +340,8 @@ Before completion, record evidence for each row:
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |
 | Assets | Original/licensed, coherent, optimized; `favicon.svg`, 800×400 `banner.jpg`, 512×512 `icon.jpg` present |
 | Paid gate | `access.require()` on the first intentional tap only; mock-host cases (free, paid, declined, preview) pass |
+| Ad-conversion | Programmatic session entry documented; showcase params are arguments; autopilot flag read per frame; locale pinnable from one storage key; runs with the SDK script absent |
+| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs |
 | Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |
