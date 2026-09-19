@@ -371,6 +371,16 @@ export function selfCheck(dist) {
     if (['.js', '.css', '.html'].includes(ext)) {
       const t = fs.readFileSync(f, 'utf8');
       for (const [name, re] of FORBIDDEN) if (re.test(t)) problems.push(`${name} in ${rel}`);
+      /* A bundler cannot resolve `import(variable)` / `require(variable)`; esbuild lowers it to
+         `__require(x)`, which throws in the browser. Upstream usually wraps such probes in a
+         try/catch or `.catch(() => null)` as an "optional dependency", so the throw is swallowed
+         and the work degrades **silently** to its built-in placeholders — no error, no blank
+         screen, and it passes every other check. `__require(` is the only trace left in the
+         artifact, so fail the build on it. Fix by making the specifier a literal, or by building
+         a static registry module. */
+      if (ext === '.js' && /__require\s*\(/.test(t)) {
+        problems.push(`unbundled dynamic import in ${rel} — specifier must be a literal, or the work degrades silently at runtime`);
+      }
     }
   }
   if (!fs.existsSync(path.join(dist, 'index.html'))) problems.push('index.html missing at dist root');

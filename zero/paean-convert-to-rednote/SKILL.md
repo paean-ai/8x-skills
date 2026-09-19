@@ -137,6 +137,49 @@ touch and pen alike, so a virtual stick drags correctly with a mouse and one bin
 device. A stick bound only to `touchstart` is visible and dead under a mouse — same symptom, different
 cause.
 
+### The host draws its own chrome over your top edge
+
+RedNote floats its own controls on top of the page: a back arrow at the top left, a
+person + share capsule at the top right, and the system status bar above both. Anything the
+work puts in those corners is **covered and untappable**. It reached the market once as
+"背包关闭按钮点不到" — the panel's close button sat exactly under the share capsule, so the
+player could not close the bag.
+
+Measured on a 393 CSS px device where `env(safe-area-inset-top)` is 41px:
+
+| Host element | Vertical band | Horizontal reach |
+|---|---|---|
+| Status bar | `0 – env` | full width |
+| Floating control row | `env+10 – env+42` | left ≈ 47px, right ≈ 93px |
+
+The trap is that **`--paean-chrome-inset-top` does not exist in the container.** Works read it
+as `var(--paean-chrome-inset-top, env(safe-area-inset-top))`, and it is injected by the host's
+`paean-platform.js` — the very script the container build strips. So it silently falls back to
+`env()`, which clears the status bar and nothing else. In one 61-work batch, **60 works read
+that variable and not one set it.**
+
+The pipeline now defines the whole family at the top of `assets/style.css`, so every work that
+already reads them gets correct values with no source change:
+
+```css
+:root{
+  --paean-chrome-inset-top: max(calc(env(safe-area-inset-top,0px) + 52px), 92px);
+  --paean-chrome-inset-right: calc(env(safe-area-inset-right,0px) + 104px);
+  --paean-chrome-inset-left:  calc(env(safe-area-inset-left,0px) + 56px);
+  /* …plus --paean-safe-top / -bottom / -left / -right */
+}
+```
+
+`env + 52` scales with the status bar (the capsule is positioned relative to it) and leaves
+10px under the control row; the 92px floor covers devices where `env()` reports 0.
+
+**What you still have to check by hand:** a work that hard-codes `top: 12px` instead of reading
+the variable is not fixed by this. Run the chrome check below, and when something lands in the
+zone, change it to read `var(--paean-chrome-inset-top)` rather than nudging the constant.
+
+Do not put a control in the top-right corner at all if you can avoid it — that is where the
+share capsule lives on every host, and the whole corner is a permanent hazard.
+
 ### The guard cannot see an async boot failure
 
 If the entry is `async function boot()` and the renderer is constructed **outside** its own
@@ -167,6 +210,65 @@ unexplained "功能缺陷" rejection into an honest, visible device-capability n
 
 **Do not defeat it:** if the work shows its own `[role="alert"]` message the guard stays quiet, so a
 work with a better-targeted message keeps it.
+
+### `import()` the bundler cannot read: the work degrades **silently**
+
+This one shipped. A player reported a converted work had "become the weakened version — the
+lavish combat effects are now placeholder dots". The page had no error, no blank screen, no
+failed boot, and it passed the boot guard, the Chrome 61 baseline audit, the pointer-parity
+check and the host-chrome check. Every check was green and the work was visibly gutted.
+
+The upstream source loaded its real render modules through an *optional-dependency* helper:
+
+```js
+async function tryImport(path) { try { return await import(path); } catch (e) { return null; } }
+...
+const [vfx, bullets, tmap] = await Promise.all([
+  tryImport('../gfx/vfx.js'), tryImport('./bullets.js'), tryImport('../gfx/tilemap.js'),
+]);
+```
+
+`path` is a **parameter, not a literal**, so esbuild cannot resolve it at build time. It emits a
+warning that is easy to miss in build output and compiles the call to:
+
+```js
+async function tryImport(path){ try{ return await Promise.resolve().then(()=>__toESM(__require(path))) }catch(e){ return null } }
+```
+
+`__require(path)` throws in the browser. The work's own `catch` swallows it. Every module comes
+back `null`, and the work falls through to the built-in fallbacks its author wrote for exactly
+this case — flat coloured circles instead of sprites, a solid rectangle instead of terrain. It
+runs, it is playable, and it is a completely different product.
+
+Two things made it invisible:
+
+- **The fallbacks are deliberate.** Upstream authors write them so a module can land later. They
+  are not error states, so nothing reports them.
+- **The "we are on fallbacks" warning was unreachable.** The loader set `deps.loaded = true`
+  unconditionally at the end, and the warning was gated on `if (loaded) return`. Check this: a
+  loader that marks itself successful regardless of what it loaded will never tell you.
+
+**The pipeline now fails the build on this.** `selfCheck()` rejects any `__require(` in the
+output — it is the only evidence left in the artifact. Do not wave it through.
+
+**Fixes, in order of preference:**
+
+1. Make the specifier a literal. Lazy semantics are preserved and esbuild inlines the module:
+   ```js
+   const safeImport = (p) => p.then((m) => m, () => null);
+   await Promise.all([safeImport(import('../gfx/vfx.js')), safeImport(import('./bullets.js'))]);
+   ```
+2. If the call site genuinely needs a name computed at runtime, build a **static registry**: one
+   module statically imports every candidate and registers them, and the lookup becomes a table
+   read. (`ui/modreg.js` in one converted work does this.)
+
+Never "fix" it by deleting the `try/catch` — that turns a silent downgrade into a dead page.
+
+**Generalise the lesson:** any upstream `catch` that substitutes a fallback is a place the
+conversion can quietly lose the product. Grep for `catch` around loading/feature-detection paths
+and ask what the work looks like when that branch is taken. Then **compare the converted build
+against the upstream original on the same screen** — that comparison is the only check that
+catches a work which degrades instead of breaking.
 
 ## Decide first: does it even fit?
 
@@ -398,11 +500,42 @@ Require **0 console errors, 0 pageerror, 0 failed requests** and no leftover Eng
   keyboard legend, so hiding the stick is correct. Only the phone-sized layouts are graded.
 - **Drive it on a desktop viewport with a real mouse** (1280×800) as well: click the actual start
   control and assert the screen advances.
+- **Run `scripts/check-host-chrome.mjs <dist>`** — nothing interactive may sit under the host's
+  floating controls:
+
+  ```
+  node <skill>/scripts/check-host-chrome.mjs dist
+  ```
+
+  It walks the attract screen, gameplay and every panel it can open, and fails when an
+  interactive element has `rect.top < 92` while reaching into the left 56px or right 104px.
+  A modal's close button is the usual casualty, because "top-right X" is the default place to
+  put one — and that is exactly where the share capsule sits. Pass `--start x,y` when the work
+  needs a specific tap to begin.
 
 Probe gotchas: `page.click()` never settles on a button with an infinite CSS animation — use
 `touchscreen.tap()`. `elementFromPoint` hitting the button is **not** proof it is clickable; assert a
 state change. And `deviceScaleFactor:2` + `isMobile:true` can return self-contradictory
 `getBoundingClientRect` values — prefer `hasTouch` alone.
+
+### Compare the build against the upstream original, side by side
+
+Every other check asks "is it broken?". This one asks "is it still the same product?" — the only
+question that catches a work which **degrades instead of failing** (see the `import()` section
+above). Serve the upstream sources on a local port, drive both to the same screen with the same
+inputs, and compare.
+
+Two signals, both cheap:
+
+- **A screenshot of each at the same point.** Look at it yourself. A placeholder-dot regression is
+  obvious to an eye and invisible to a DOM scan.
+- **A draw-call count.** Hook `CanvasRenderingContext2D.prototype.drawImage` from an init script,
+  reset the counter once in-game, and sample a fixed window. The measured regression read
+  **0 vs 27,004 calls in 2.5 s**; after the fix, 26,224 vs 27,441 — noise. Orders of magnitude are
+  what you are looking for, not exact parity.
+
+Do this once per conversion, on a screen that exercises the work's richest rendering. Console
+errors are not enough: the regression that shipped produced none.
 
 ## Compliance
 
