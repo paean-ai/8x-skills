@@ -85,6 +85,27 @@ let it run, then call the work's own "begin real session" entry when the beat la
 
 Budget **4–5 s** of auto-play. Less does not establish the loop; more and the viewer disengages.
 
+### Take over the work's own "tap to play" handler
+
+If the native attract screen shows a *TAP TO PLAY* prompt, **read where that handler actually goes
+before trusting it.** In four conversions so far it has gone to a hub or menu as often as to
+gameplay — Neon Dynasty's reads:
+
+```js
+G.firstTap = () => { if (G.state !== 'attract') return; Audio.unlock(); enterHome(); };
+```
+
+A viewer who follows the on-screen instruction lands in a main menu, which is exactly the screen a
+playable ad exists to skip. Override the handler to run your showcase entry instead:
+
+```js
+g.firstTap = () => { interacted = true; toBattle(true) }
+```
+
+This also buys the best case for free: an eager viewer who taps at second one gets control
+immediately instead of waiting out the auto-play budget. Hook it as soon as the handle exists,
+before the auto-play timer, and route every later re-entry through the same override.
+
 ## Exit: probe every network
 
 CTA APIs differ per network, so probe defensively **in this order**, and fire once only
@@ -155,6 +176,17 @@ viewer got six story cards instead, and the end card fired while they were still
   save module — `save.story.intro = true; commit()`. Do not merely hide the panel: it pauses the
   simulation while the ad's own timers keep running.
 - Grep the UI layer for `run-start` / `session-start` handlers to find what opens on a first session.
+- Grep the **session-entry function itself** for a save-flag guard, not just the UI layer. Two of
+  four works so far gated the story *inside* the entry point, so the seam call alone still plays it:
+
+  ```js
+  if (ch.storyBefore && STORY[ch.storyBefore] && !Save.data.seenStory[ch.storyBefore]) {
+    G.state = 'story'; await playStoryScene(ch, ch.storyBefore)        // ← blocks the whole run
+  }
+  ```
+
+  Set **every** such key the showcase can reach, including the post-session one (`storyAfter`),
+  which otherwise fires on the keep-alive restart.
 
 ## Keep the ad alive when nobody plays
 
@@ -171,6 +203,17 @@ if (r.state === 'dead' || r.state === 'won') startShowcase()
 
 Verified by leaving a build untouched for 40 s: without the guard the run ended at 27 s and showed
 a run report; with it the ad stayed on live gameplay the whole time.
+
+Where the work has a **native attract demo**, branch on whether the viewer ever touched the screen:
+
+```js
+if (!interacted && g.enterAttract) g.enterAttract()   // never touched → back to the author's demo
+else startShowcase()                                  // touched → restart, keep it playable
+```
+
+A viewer who is only watching gets competent scripted play rather than a character who dies on
+repeat. This is only safe once `firstTap` is overridden — otherwise returning to attract hands the
+next tap to the menu.
 
 ## Time the end card from real play, not page load
 

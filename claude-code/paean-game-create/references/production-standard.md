@@ -188,6 +188,15 @@ overlap heavily with ad-conversion readiness above; where they differ, the conta
   rAF timestamp can precede the `performance.now()` captured at module load, and a negative delta runs
   in-game time backwards — which surfaces far from the cause, as negative array indices or corrupted
   animation state.
+- **A `catch` that substitutes a fallback is a place the product can quietly disappear.** Optional
+  dependencies loaded through `import(someVariable)` cannot be bundled: a bundler lowers them to
+  `__require(x)`, which throws, the surrounding `catch` swallows it, and the game runs on the
+  placeholder implementations its author wrote for the module-not-landed-yet case — flat circles
+  instead of sprites, a plain rectangle instead of terrain. Nothing errors, nothing blanks, and
+  automated checks stay green. Keep dynamic-import specifiers **literal** (or resolve names through
+  a static registry module), do not set a loader's `loaded` flag unless something actually loaded,
+  and verify a build by comparing it against the original side by side — a draw-call count or a
+  screenshot at the same screen — not only by looking for errors.
 - **Never let the boot path be one long unguarded top-level sequence.** This is the single most
   expensive shape in practice. A typical entry module builds the renderer, compiles shaders, reads
   the save, and only at the end calls `addEventListener` to wire the UI. HTML and CSS have already
@@ -205,6 +214,16 @@ overlap heavily with ad-conversion readiness above; where they differ, the conta
   becomes an unhandled rejection the work swallows, and in the measured case no `error` or
   `unhandledrejection` reached `window` at all. Having a `try/catch` is not enough — check which
   line the `try` actually starts on, and keep every expensive constructor inside it.
+- **Keep the top corners clear — the host draws its own chrome there.** Every host floats
+  controls over the page's top edge: a back affordance at the top left, a share/profile capsule
+  at the top right, and the system status bar above both. A control the work places in those
+  corners is covered and untappable, and the usual casualty is a modal's top-right close button —
+  it shipped that way once and players could not close the panel. Reserve the band with
+  `--paean-chrome-inset-top` (never a hard-coded `top: 12px`), keep roughly 56px clear on the
+  left and 104px on the right within it, and prefer not to put anything in the top-right corner
+  at all. **Read the variable with a usable fallback** — offline container builds strip the host
+  script that injects it, so `var(--paean-chrome-inset-top, env(safe-area-inset-top))` silently
+  degrades to clearing only the status bar.
 - **Gate on-screen controls by layout, never by pointer type.** `@media (pointer: coarse)` and
   `navigator.maxTouchPoints` answer "is this a touch device", but the question you actually need
   answered is "is the phone layout in use". Those differ in the single most common review setup:
@@ -374,7 +393,7 @@ Before completion, record evidence for each row:
 | Assets | Original/licensed, coherent, optimized; `favicon.svg`, 800×400 `banner.jpg`, 512×512 `icon.jpg` present |
 | Paid gate | `access.require()` on the first intentional tap only; mock-host cases (free, paid, declined, preview) pass |
 | Ad-conversion | Programmatic session entry documented; showcase params are arguments; autopilot flag read per frame; locale pinnable from one storage key; runs with the SDK script absent |
-| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs; UI wired before expensive init (or the boot sequence wrapped so a throw renders a readable failure state); WebGL construction guarded and the no-WebGL case shown explicitly; on-screen controls gated by layout breakpoint (not pointer type) and bound with Pointer Events, so a desktop browser narrowed to phone size stays playable |
+| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs; no unbundled dynamic `import()` (specifiers literal), and the build compared against the original so a silent downgrade to fallback rendering is caught; UI wired before expensive init (or the boot sequence wrapped so a throw renders a readable failure state); WebGL construction guarded and the no-WebGL case shown explicitly; on-screen controls gated by layout breakpoint (not pointer type) and bound with Pointer Events, so a desktop browser narrowed to phone size stays playable ; nothing interactive inside the host chrome band (`--paean-chrome-inset-top`, plus ~56px left / ~104px right) |
 | Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |
