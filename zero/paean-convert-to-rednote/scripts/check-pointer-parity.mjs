@@ -81,6 +81,12 @@ const chromium = await loadChromium(DIST)
 /* Element names that plausibly denote an on-screen control. A whole-DOM diff is far too
    noisy: two runs routinely land on different screens and every panel shows as a
    difference. Restricting to control-ish names is what makes the signal usable. */
+/* RESPONSE 只对"可拖动的"控件有意义（摇杆/方向盘一类）。它必须和下面那个前置条件
+   用同一个正则：早先前置条件用的是宽口径的 CONTROL_RE，只要触摸档里有个菜单按钮就算
+   "有控件"，而拖拽目标又只认窄口径，于是探针到不了战斗界面的作品一律被误判为失败。
+   两边口径必须一致。 */
+const DRAGGABLE_RE = /stick|joy|dpad|d-pad|thumb|pad\b|steer|wheel|move/i
+
 const CONTROL_RE =
   /stick|joy|dpad|d-pad|thumb|pad\b|fire|shoot|btn|button|control|touch|steer|pedal|gas|brake|nitro|jump|action|move|aim|attack|dash/i
 
@@ -166,7 +172,7 @@ async function responds(controlSel) {
   const box = await page.evaluate((sel) => {
     let el = sel ? document.querySelector(sel) : null
     if (!el) {
-      const re = /stick|joy|dpad|thumb|pad\b|move/i
+      const re = /stick|joy|dpad|d-pad|thumb|pad\b|steer|wheel|move/i
       let best = null
       for (const c of document.querySelectorAll('*')) {
         const id = (c.id || '') + ' ' + (typeof c.className === 'string' ? c.className : '')
@@ -251,10 +257,13 @@ else out.checks.binding = 'ok'
 
 /* 3. RESPONSE */
 const r = await responds(CONTROL)
-const touchHadControls = samples['phone-touch'].items.some((i) => CONTROL_RE.test(i.key))
+const touchHadControls = samples['phone-touch'].items.some((i) => DRAGGABLE_RE.test(i.key))
 if (r.skipped && touchHadControls)
   fail('response', '手机尺寸下鼠标档找不到任何可拖动控件，而触摸档有 —— 控件被指针类型挡掉了')
-else if (r.skipped) out.checks.response = 'skipped (this work has no on-screen control at phone size)'
+else if (r.skipped)
+  out.checks.response =
+    'skipped (no draggable control on the screen the probe reached — if this work has a stick ' +
+    'behind a menu, pass --start x,y so the probe reaches gameplay)'
 else if (!r.changed) fail('response', 'dragging the control with the mouse changed nothing on screen')
 else out.checks.response = `ok (control at ${r.box.w.toFixed(0)}x${r.box.h.toFixed(0)})`
 
