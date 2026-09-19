@@ -400,6 +400,115 @@ export function selfCheck(dist) {
  * 三档 Playwright 跑的是现代 Chromium，永远照不出这一层。
  *
  * 全部按"原生存在就不动"写，只补缺的那几个；不改变现代内核上的行为。 */
+/* ---------------------------------------------------------------------------
+ * 启动兜底 (assets/boot-guard.js)
+ *
+ * 市场上反复收到同一条缺陷描述：「小工具功能缺陷，可能是页面按钮无法点击」。
+ * 实测复现出来的根因不是输入事件，而是**启动链上抛了未捕获异常**：
+ * 这些作品的入口都是一整段顶层代码 —— 建渲染器、编译着色器、读存档、
+ * 最后才 addEventListener 把 UI 接上。中间任何一步抛异常，模块就地中止，
+ * HTML 早已渲染完毕，于是审核员看到的是「界面完整但一个按钮都点不动」，
+ * 而且屏幕上没有任何提示，看起来就是功能缺失。
+ *
+ * 触发得最多的一步是 new THREE.WebGLRenderer()：审核机没有 GPU / GPU 在黑名单 /
+ * 关了硬件加速时，WebGL 上下文创建失败直接抛异常。全量实测 56 个作品里有 21 个
+ * 会因此变成死页面。
+ *
+ * 这里在**所有业务脚本之前**装一道兜底：启动窗口内出现未捕获异常，且页面确实
+ * 停摆（rAF 不再出帧）时，把静默死锁换成一条看得懂的提示。
+ * 只在「有异常」且「确实没在跑」时才显示，避免误伤正常作品。
+ * --------------------------------------------------------------------------- */
+/* 入口包跑到最后才会执行到这一行。顶层抛异常时模块就地中止，这行就永远不会跑，
+   于是 boot-guard 能"精确"判定启动链断了 —— 不必再靠 rAF 之类的启发式。 */
+const APP_DONE_MARK = '\n;try{window.__minitoolAppDone=true}catch(e){}\n';
+
+const bootGuardSource = (needsWebGL) => `(function(){
+  var NEEDS_WEBGL = ${needsWebGL ? 'true' : 'false'};
+  if (window.__minitoolBootGuard) return;
+  window.__minitoolBootGuard = true;
+
+  var BOOT_WINDOW = 20000;   /* 启动窗口：之后的异常算运行期问题，不接管画面 */
+  var SETTLE = 1800;         /* 出错后再观察这么久，确认是不是真的停摆 */
+  var t0 = Date.now(), shown = false, frames = 0, checking = false;
+
+  /* 活性信号：真正跑起来的作品会持续产出动画帧；启动就挂掉的不会。 */
+  var raf = window.requestAnimationFrame;
+  if (typeof raf === 'function') {
+    window.requestAnimationFrame = function(cb){
+      return raf.call(window, function(t){ frames++; return cb(t); });
+    };
+  }
+
+  var GENERIC = '\\u672c\\u4f5c\\u5728\\u8fd9\\u53f0\\u8bbe\\u5907\\u4e0a\\u6ca1\\u80fd\\u542f\\u52a8\\u5b8c\\u6210\\u3002'
+    + '\\u53ef\\u80fd\\u662f\\u6d4f\\u89c8\\u5668\\u5185\\u6838\\u7248\\u672c\\u8fc7\\u4f4e\\uff0c\\u6216\\u56fe\\u5f62\\u80fd\\u529b\\u53d7\\u9650\\u3002';
+  var NOGL = '\\u672c\\u4f5c\\u9700\\u8981 WebGL \\u624d\\u80fd\\u8fd0\\u884c\\uff0c\\u5f53\\u524d\\u8bbe\\u5907\\u6ca1\\u6709\\u53ef\\u7528\\u7684 WebGL \\u652f\\u6301\\u3002'
+    + '\\u8bf7\\u5728\\u7cfb\\u7edf\\u6216\\u6d4f\\u89c8\\u5668\\u8bbe\\u7f6e\\u91cc\\u5f00\\u542f\\u786c\\u4ef6\\u52a0\\u901f\\uff0c\\u6216\\u6362\\u4e00\\u53f0\\u8bbe\\u5907\\u518d\\u8bd5\\u3002';
+
+  function paint(msg){
+    if (shown) return;
+    /* 作品自己已经给出更具体的提示时，不要再盖一层 */
+    if (document.querySelector('[role="alert"]')) { shown = true; return; }
+    shown = true;
+    try {
+      var box = document.createElement('div');
+      box.setAttribute('role','alert');
+      box.setAttribute('data-boot-guard','1');
+      box.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147483647;'
+        + 'display:-webkit-box;display:-webkit-flex;display:flex;-webkit-box-align:center;'
+        + '-webkit-align-items:center;align-items:center;-webkit-box-pack:center;'
+        + '-webkit-justify-content:center;justify-content:center;'
+        + 'padding:28px;margin:0;text-align:center;line-height:1.8;font-size:15px;'
+        + 'color:#f2e6d2;background:#161311;'
+        + 'font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif';
+      box.textContent = msg;
+      var host = document.body || document.documentElement;
+      if (host) host.appendChild(box);
+      else document.addEventListener('DOMContentLoaded', function(){
+        (document.body||document.documentElement).appendChild(box);
+      });
+    } catch (e) {}
+  }
+
+  function noWebGL(){
+    try {
+      var c = document.createElement('canvas');
+      return !(c.getContext('webgl2') || c.getContext('webgl') || c.getContext('experimental-webgl'));
+    } catch (e) { return true; }
+  }
+
+  function onFail(text){
+    if (shown || checking) return;
+    if (Date.now() - t0 > BOOT_WINDOW) return;   /* 运行期异常不接管画面 */
+    /* 直接探一次 WebGL 比匹配异常文案可靠：异常可能来自被它带崩的下一行。 */
+    var msg = (noWebGL() || /webgl|graphics context|gpu/i.test(String(text||''))) ? NOGL : GENERIC;
+    checking = true;
+    var mark = frames;
+    setTimeout(function(){
+      checking = false;
+      /* 入口包跑完了，而且还在出帧 = 作品活着，那条异常无关紧要，别打扰玩家。
+         入口没跑完 = 顶层序列中止，UI 永远接不上，无论画面动不动都要提示
+         （PixiJS 这类库的 ticker 在渲染器创建失败后仍会继续出帧，只看 rAF 会漏判）。 */
+      if (window.__minitoolAppDone && frames - mark > 2) return;
+      paint(msg);
+    }, SETTLE);
+  }
+
+  /* 最常见、而且完全确定的一种失败：作品需要 WebGL，设备没有。
+     这里不等异常、不看 rAF —— 需要却没有就是跑不了，直接给一条准确的提示。
+     （PixiJS 这类库在渲染器创建失败后 ticker 仍会继续出帧，光靠活性判断会漏掉。） */
+  function checkWebGL(){ if (NEEDS_WEBGL && noWebGL()) paint(NOGL); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', checkWebGL);
+  else checkWebGL();
+
+  window.addEventListener('error', function(e){
+    onFail(e && (e.message || (e.error && e.error.message)));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason;
+    onFail(r && (r.message || r));
+  });
+})();`
+
 const BASELINE_SHIM = `(function(){
   if (typeof Object.fromEntries !== 'function') Object.fromEntries = function (it) {
     var o = {}, a = Array.isArray(it) ? it : Array.prototype.slice.call(it);
@@ -554,7 +663,7 @@ export async function buildMinitool(opts) {
       minifySyntax: true, minifyWhitespace: true, minifyIdentifiers: false, supported: { 'top-level-await': false },
     });
     for (const w of js.warnings) console.log('esbuild warning:', w.text, w.location ? `(line ${w.location.line}: ${w.location.lineText.trim().slice(0, 100)})` : '');
-    fs.writeFileSync(path.join(DIST, 'assets/app.js'), js.code);
+    fs.writeFileSync(path.join(DIST, 'assets/app.js'), js.code + APP_DONE_MARK);
   } else {
     const js = await esbuild.build({
       entryPoints: [path.join(SRC, opts.entry)],
@@ -569,7 +678,7 @@ export async function buildMinitool(opts) {
     });
     if (js.warnings.length) console.log('esbuild js warnings:', js.warnings.length);
     const out = path.join(DIST, 'assets/app.js');
-    void out;
+    fs.appendFileSync(out, APP_DONE_MARK);
   }
 
   // 2. CSS: bundle + lower to Chrome 61, in the order given
@@ -658,6 +767,19 @@ export async function buildMinitool(opts) {
      用 copy 带过去的第三方库有自己的 <script src>，执行更早，它们里面的 globalThis
      之类在老内核上会先一步 ReferenceError，页面全白。 */
   fs.writeFileSync(path.join(DIST, 'assets/baseline.js'), BASELINE_SHIM);
+  /* 作品到底需不需要 WebGL，构建期一眼就能看出来（产物 + copy 进来的第三方库）。
+     把结论烧进兜底脚本，运行期就不必猜了。 */
+  const needsWebGL = (() => {
+    const RE = /WebGLRenderer|WebGL2RenderingContext|getContext\s*\(\s*['"`](?:webgl2?|experimental-webgl)|pixi|THREE\.|babylon/i;
+    const files = [path.join(DIST, 'assets/app.js')];
+    for (const [, to] of opts.copy) { if (/\.js$/i.test(to)) files.push(path.join(DIST, to)); }
+    for (const f of files) {
+      try { if (RE.test(fs.readFileSync(f, 'utf8'))) return true; } catch (e) { /* 读不到就当不需要 */ }
+    }
+    return false;
+  })();
+  fs.writeFileSync(path.join(DIST, 'assets/boot-guard.js'), bootGuardSource(needsWebGL));
+  if (needsWebGL) console.log('boot-guard: 已标记本作需要 WebGL，缺 WebGL 时会给出明确提示');
   fs.writeFileSync(path.join(DIST, 'assets/config.js'), configScript(opts.config.global, opts.config.values));
 
   // 4. static assets
@@ -674,7 +796,8 @@ export async function buildMinitool(opts) {
      HTML 注释：`.html` 是允许的扩展名，注释不影响渲染，审计也不会拦。 */
   let indexHtml = opts.html;
   {
-    const tag = '<script src="./assets/baseline.js"></script>';
+    const tag = '<script src="./assets/baseline.js"></script>\n'
+      + '<script src="./assets/boot-guard.js"></script>';
     const firstScript = indexHtml.search(/<script\b/i);
     if (firstScript >= 0) indexHtml = indexHtml.slice(0, firstScript) + tag + '\n' + indexHtml.slice(firstScript);
     else if (/<\/head>/i.test(indexHtml)) indexHtml = indexHtml.replace(/<\/head>/i, tag + '\n</head>');

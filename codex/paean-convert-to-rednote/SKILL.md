@@ -32,7 +32,7 @@ lives in the pipeline; only genuine product decisions are left to you.**
 
 The two audit scripts here check the artifact for all of this. They are a gate, not a suggestion.
 
-## Measured facts, from converting 29 works
+## Measured facts, from converting 56 works
 
 These are the failure modes that actually happened, not a docs summary.
 
@@ -45,6 +45,128 @@ These are the failure modes that actually happened, not a docs summary.
 | Landscape genuinely unplayable (panel covers the board / HUD squeezes the field to nothing) while automated probes report zero errors | ~1 in 4 works |
 | `min()/max()/clamp()` inside a shorthand (`padding: 36px clamp(...)`) — Chrome 61 drops **the whole declaration**, silently | 20+ works |
 | Upstream bug only reachable offline or only after a real death/defeat | ~1 in 3 works |
+| **WebGL context creation fails** on a reviewer machine (no GPU / GPU blocklisted / hardware acceleration off) → uncaught throw on the top-level boot path → fully rendered page, zero listeners attached, no message | **21 of 56 artifacts** |
+
+## The defect the market actually reports
+
+The rejection reads **「小工具功能缺陷，可能是页面按钮无法点击，重点排查页面功能完整性」**.
+It is a template: it does not tell you which button, which screen, or which device, and it is easy
+to waste a day chasing input handling on the strength of the words "按钮无法点击".
+
+Across five reported works, **input handling was never the fault**. Every one of them accepted a real
+mouse click on a desktop viewport and advanced normally. Where a cause was reproduced at all, it was
+always the same thing: **an uncaught exception on the top-level boot path**. These works share an
+entry shape — one long top-level sequence that builds the renderer, compiles shaders, reads the save,
+and only at the very end calls `addEventListener` to wire the UI. HTML and CSS have already painted
+by then, so when step 3 throws, the player sees a complete, correct-looking screen where nothing
+responds, with no error anywhere on it. That is precisely "页面按钮无法点击".
+
+Be honest about coverage: of those five, a reproducible failure was found in **three**. For the other
+two nothing failed under WebGL removal, storage denial, a blocked canvas readback, a missing
+`AudioContext`, an iframe, or 6× CPU throttling. Treat "I could not reproduce it" as a real outcome —
+ship the guard so an unforeseen boot failure becomes visible, and say which works you could not
+explain rather than inventing a cause for them.
+
+Confirmed triggers, in order of how often they fired:
+
+1. **`new THREE.WebGLRenderer()` throws** because the device has no usable WebGL. Reviewers run
+   desktop machines that may have no GPU, a blocklisted GPU, or hardware acceleration disabled.
+   Measured: **21 of 56 artifacts** became dead pages with WebGL removed.
+2. **A bare `localStorage` read throws** under a restrictive WebView storage policy. Same shape,
+   same symptom. (2 shipped works — see *Wrap every storage access*.)
+3. **An unguarded modern API** (`Object.fromEntries`, `roundRect`, `AbortController`…) on the boot
+   path, on the Chrome 61 baseline. Same shape, same symptom.
+
+Note what these have in common: the *cause* varies and you will not enumerate all of them. So do not
+rely only on fixing causes one at a time.
+
+### The pipeline installs a boot guard for you
+
+`assets/boot-guard.js` is emitted and injected as the **second** script on the page, right after the
+baseline shim and before any application code. It listens for `error` and `unhandledrejection`, and
+when one fires inside the first 20 seconds it decides whether the work is really dead:
+
+- The pipeline scans the bundle and the copied vendor files for WebGL markers (`WebGLRenderer`,
+  `getContext('webgl')`, pixi, three, babylon) and burns the answer into the guard. If the work needs
+  WebGL, the device has none, **and** an exception actually fired, that is conclusive — it paints an
+  accurate "this device has no usable WebGL" message at once. The build log prints
+  `boot-guard: 已标记本作需要 WebGL` when this is on.
+- Otherwise it waits ~1.8 s and paints unless the work looks alive, where "alive" means the entry
+  bundle ran to completion **and** `requestAnimationFrame` is still producing frames. The pipeline
+  appends `window.__minitoolAppDone = true` to the end of the bundle, so a top-level throw — the
+  exact failure mode here — leaves it `false` and is caught precisely rather than inferred.
+
+Two things that cost real time to learn, both worth keeping:
+
+**Animation is not liveness.** PixiJS keeps its ticker running after renderer construction fails, so
+a completely dead page still produces frames. An rAF-only check calls it healthy.
+
+**Never paint pre-emptively just because WebGL is missing.** An earlier version probed WebGL on
+`DOMContentLoaded` and showed the message without waiting for an exception. It covered three works
+that degrade to canvas2d perfectly well and would have shipped a false error screen. The exception is
+the evidence that the work could not cope; without it, stay quiet.
+
+### Phone layout + mouse pointer: the combination that breaks works
+
+`@media (pointer: coarse)` and `navigator.maxTouchPoints` answer *"is this a touch device"*. What a
+work actually needs to know is *"is the phone layout in use"*. Those two agree on a real phone and on
+a wide desktop, and disagree in exactly the setup reviewers use: **a desktop browser narrowed to phone
+size.** There the phone layout applies — the one that assumes a virtual stick and leaves no room for a
+keyboard legend — while the pointer is a mouse, so the stick stays `display: none`. The screen ends up
+with no usable controls at all, and it is reported as "按钮无法点击".
+
+The fix is to split one predicate into two:
+
+```css
+/* 控件按布局显示 —— 不是按指针类型 */
+@media (pointer: coarse), (max-width: 820px), (max-height: 620px) { .stick { display: block } }
+```
+
+```js
+this.coarse   = matchMedia('(pointer:coarse)').matches;          // 真实指针：准星、hover 提示
+this.touchQuery = matchMedia('(pointer:coarse),(max-width:820px),(max-height:620px)');
+get touchUI() { return this.touchQuery.matches }                 // 布局：摇杆、触摸按钮、操作提示
+```
+
+Keep `touchUI` live (a getter over the `MediaQueryList`, not a boolean captured at construction) so
+rotating the device tracks it. Keep genuinely pointer-dependent affordances — a mouse crosshair, a
+hover tooltip — on `coarse`. Collapsing the two back into one predicate is how this bug returns.
+
+And bind the controls with **Pointer Events**. `pointerdown`/`pointermove`/`pointerup` fire for mouse,
+touch and pen alike, so a virtual stick drags correctly with a mouse and one binding serves every
+device. A stick bound only to `touchstart` is visible and dead under a mouse — same symptom, different
+cause.
+
+### The guard cannot see an async boot failure
+
+If the entry is `async function boot()` and the renderer is constructed **outside** its own
+`try`, the throw becomes an *unhandled rejection that the work itself swallows* — the page never
+fires `error`, and in the one measured case never fired `unhandledrejection` on `window` either. No
+generic guard can catch that. The fix belongs in the work:
+
+```js
+async function boot() {
+  try {
+    const renderer = new Renderer(canvas);   // ← inside the try, not before it
+    ...
+  } catch (e) {
+    const probe = document.createElement('canvas');
+    const noGL = !(probe.getContext('webgl2') || probe.getContext('webgl'));
+    ui.innerHTML = `<div role="alert">${t(noGL ? 'noWebGL' : 'loadError')}</div>`;
+  }
+}
+```
+
+So: **check that every expensive constructor on the boot path is inside the work's own `try`.** A
+work that already has a `try/catch` around loading is not automatically safe — look at where the
+`try` actually starts.
+
+The guard turns a silent dead page into a message a reviewer can act on. It is **not** a substitute
+for fixing the cause — a work that needs WebGL still cannot run without it — but it converts an
+unexplained "功能缺陷" rejection into an honest, visible device-capability notice.
+
+**Do not defeat it:** if the work shows its own `[role="alert"]` message the guard stays quiet, so a
+work with a better-targeted message keeps it.
 
 ## Decide first: does it even fit?
 
@@ -248,6 +370,34 @@ Require **0 console errors, 0 pageerror, 0 failed requests** and no leftover Eng
   from a bare one. (Do **not** also delete `Array.includes`, `IntersectionObserver` or `ImageBitmap` —
   those are inside the Chrome 61 baseline and deleting them manufactures false failures.)
 - **Make `localStorage` throw** and confirm the work still boots and plays.
+- **Take WebGL away and boot again** — stub `HTMLCanvasElement.prototype.getContext` to return
+  `null` for `webgl` / `webgl2` / `experimental-webgl`. The work must not end up as a silent dead
+  page: either it degrades on its own, or the boot guard's message is on screen. This single check
+  found 21 broken artifacts out of 56.
+- **Run `scripts/check-pointer-parity.mjs <dist>`** — this one is mechanical, so do not hand-roll it:
+
+  ```
+  node <skill>/scripts/check-pointer-parity.mjs dist
+  ```
+
+  It exits non-zero on failure and runs three independent checks, because they fail for different
+  reasons: **parity** (same viewport, mouse vs touch — which control-like elements vanish under the
+  mouse), **binding** (controls visible but registered only `touch*` listeners), and **response**
+  (actually drag the control with the mouse and require the screen to change). Visibility is not
+  usability; only the third check proves a mouse can play.
+
+  Two traps it was built to avoid, both of which produced false passes in practice:
+
+  - A joystick's outer ring is usually `pointer-events: none` — the inner knob takes the input. If
+    the probe treats that as "not visible", the stick drops out of *both* samples and parity sees no
+    difference. Do not fold `pointer-events` into the visibility test.
+  - "No control found" is **not** a pass. If the touch run has controls and the mouse run finds none
+    to drag, that *is* the bug.
+
+  Failures at desktop width are reported for information only: there a mouse user still has the
+  keyboard legend, so hiding the stick is correct. Only the phone-sized layouts are graded.
+- **Drive it on a desktop viewport with a real mouse** (1280×800) as well: click the actual start
+  control and assert the screen advances.
 
 Probe gotchas: `page.click()` never settles on a button with an infinite CSS animation — use
 `touchscreen.tap()`. `elementFromPoint` hitting the button is **not** proof it is clickable; assert a
