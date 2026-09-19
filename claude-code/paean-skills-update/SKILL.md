@@ -47,6 +47,15 @@ cp -R claude-code/paean-zero-setup ~/.claude/skills/
 cp -R claude-code/paean-game-create ~/.claude/skills/
 cp -R claude-code/paean-sdk ~/.claude/skills/
 cp -R claude-code/paean-skills-update ~/.claude/skills/
+cp -R claude-code/paean-convert-to-ad ~/.claude/skills/
+cp -R claude-code/paean-convert-to-rednote ~/.claude/skills/
+```
+
+On Windows (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
+Get-ChildItem claude-code -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.claude\skills\$($_.Name)" -Recurse -Force }
 ```
 
 If a project uses `.claude/skills/`, copy there instead or in addition.
@@ -63,6 +72,8 @@ Codex can use this repo in place. Ensure the project `AGENTS.md` points at the c
 - To add cloud save or a leaderboard, follow `8x-skills/codex/paean-sdk/SKILL.md`.
 - To publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
 - To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
+- To turn a finished work into a playable ad, follow `8x-skills/codex/paean-convert-to-ad/SKILL.md`.
+- To port a finished work to a RedNote mini-tool, follow `8x-skills/codex/paean-convert-to-rednote/SKILL.md`.
 ```
 
 If the project keeps a vendored copy of `8x-skills/`, update that copy from this checkout with
@@ -81,6 +92,15 @@ cp -R zero/paean-zero-setup ~/.zero/skills/
 cp -R zero/paean-game-create ~/.zero/skills/
 cp -R zero/paean-sdk ~/.zero/skills/
 cp -R zero/paean-skills-update ~/.zero/skills/
+cp -R zero/paean-convert-to-ad ~/.zero/skills/
+cp -R zero/paean-convert-to-rednote ~/.zero/skills/
+```
+
+On Windows (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.zero\skills" | Out-Null
+Get-ChildItem zero -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.zero\skills\$($_.Name)" -Recurse -Force }
 ```
 
 If a project uses `.zero/skills/`, copy there instead or in addition.

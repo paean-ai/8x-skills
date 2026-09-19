@@ -63,7 +63,10 @@ credentials file themselves:
 export PAEAN_AUTH_TOKEN="<your-paean-jwt>"
 ```
 
-or create `~/.paean/credentials.json`:
+(PowerShell on Windows: `$env:PAEAN_AUTH_TOKEN = "<your-paean-jwt>"` for the current session,
+or `setx PAEAN_AUTH_TOKEN "<your-paean-jwt>"` to persist it for new sessions.)
+
+or create `~/.paean/credentials.json` (`~` is the user profile directory on Windows):
 
 ```json
 {"token":"<your-paean-jwt>"}
