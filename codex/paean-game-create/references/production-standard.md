@@ -133,6 +133,60 @@ PLAYING → RESULT → restart → PLAYING
   a prompt at boot or mid-demo.
 - Returning from background preserves the current real run; it must not silently re-enter demo.
 
+### The demo is a composed 20–30 second arc
+
+Attract mode is not "the game, running, with the HUD off". It is a **composition with a length**,
+and the length is 20–30 seconds before it loops. Under ~20 s a stranger sees a mechanic but never a
+loop — no consequence, no second beat, nothing to want. Over ~30 s it stops fitting the places it
+has to go: store preview videos, muted social autoplay and video ad slots all sit in that band.
+
+Design the arc, then build it. A workable default:
+
+```text
+0:00  the hook          strongest readable moment, on the first frame
+0:06  the loop, named   the mechanic legible at a glance
+0:12  escalation        the same loop, harder / faster / denser
+0:19  the depth         what the player has not seen yet
+0:25  loop back         never to a death screen or a results panel
+```
+
+- **Open on the hook, not on level one.** First levels are deliberately sparse. Enter a tuned
+  showcase — the second level, the seed the author picked — and export that seed as a named
+  constant so every later reel and ad reproduces the same run.
+- **Show one loop twice** rather than two mechanics once each. Two things shown once reads as
+  noise; one thing shown twice reads as a game.
+- **The arc must not be able to end badly.** If the demo can lose, restart it. The last frame
+  before the loop point is the one a viewer decides on, and a death screen is the worst of them.
+- **Author it as a beat list**, in a form something outside the game can read — a timeline the
+  work exposes, or at minimum a documented constant. An arc that exists only as emergent behaviour
+  cannot be recorded, tuned, or reproduced after a balance change.
+
+### Recorded demo reels, and how much framing they may carry
+
+The same arc is also the source for a **recorded reel**: a 20–30 s video for the Square listing,
+the store, social, or an ad slot. Build the arc so it survives being recorded — deterministic,
+loop-safe, and legible at thumbnail size.
+
+A reel is a different artefact from in-app attract mode, and the rules differ on one point. The
+in-app attract state stays **UI-free**, because it is a screen the player is standing in front of
+and any chrome there is chrome between them and the game. A reel is watched with no page around
+it, often muted, by someone who does not yet know what the game is called — so **promotional
+framing is allowed and usually right**: a title card, timed captions naming the mechanic on screen,
+a mark, a CTA end card. A reel does not have to be unadorned gameplay.
+
+Match the framing to where it lands: a store page already carries the name and the button, so the
+video should mostly be the game; a muted social autoplay needs captions throughout and a strong
+first frame; a video ad slot is the entire pitch and takes the full treatment. Keep every claim
+verifiable from the 25 seconds actually on screen.
+
+The **paean-record-demo** skill records this reel without editing gameplay code, driving the work
+through the same seam *Ad-conversion readiness* below defines. Three affordances make that work at
+no cost, and all three are the same ones a playable ad needs:
+
+- a programmatic entry that starts a real session with showcase parameters as arguments,
+- an autopilot flag **read every frame**, so the arc can play itself,
+- a ready predicate an external caller can await, so a recording never opens on a loading screen.
+
 ### Ad-conversion readiness
 
 Finished works are reused as **playable ad creatives** (HTML5 media bundles for Google Ads and
@@ -377,6 +431,8 @@ Before completion, record evidence for each row:
 | --- | --- |
 | Core loop | Multiple complete sessions including win/fail/restart and unusual input timing |
 | Preview | Load enters an automatic UI-free core highlight; demo is deterministic, non-persistent, and converts on first tap |
+| Demo arc | A composed 20–30 s arc: hook on frame one, one loop shown twice, escalation, loop-back that can never land on a death or results screen; showcase seed exported as a named constant |
+| Demo reel | A 20–30 s recording exists and is legible muted and at thumbnail size; framing matched to its destination; ready predicate, programmatic entry and per-frame autopilot flag all present so it records without gameplay edits |
 | Mobile portrait | Full-size screenshot plus touch play; safe areas and all targets verified |
 | Mobile landscape | Full-size screenshot plus touch play; safe areas and all targets verified, with no forced rotation |
 | Tablet | Portrait and landscape screenshots/play with intentional composition and reachable controls |

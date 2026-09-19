@@ -13,6 +13,7 @@ Portable agent skills for **building**, **publishing**, and **remixing** games o
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
 | **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
 | **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline (module bundling, CSS lowering, a Chrome 61 API shim, licence inlining, forbidden-capability self-check) and the two artifact audits. Requires `esbuild`. |
+| **paean-record-demo** | Record a 20–30 s arcade attract demo reel from a finished work: drives the game into a real session through its own seam, draws an optional title card, timed captions and a CTA end card over it, and exports MP4/WebM/GIF plus a poster frame. Playwright required; ffmpeg optional. |
 | **paean-remix** | Remix one or more published games into a new one. Clones the primary source (full assets) into the user's workspace, reads secondary sources through the 8x.gg MCP server, and scaffolds a project with a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so every upstream creator is credited exactly once. |
 
 For capability design, say `paean iap`, `paean iaa`, `paean net`, `paean rank`, or `paean ai`,
@@ -26,7 +27,9 @@ The publish/remix skills ship as self-contained Node scripts — no npm install,
 dependencies beyond the Node runtime. Archives are packed and unpacked in-process, so the
 scripts run the same on macOS, Linux and Windows. The **paean-game-create** skill
 ships a game-production standard plus a static/Playwright validator. The **paean-sdk** skill ships
-browser reference files (no server, no build) you copy into your app.
+browser reference files (no server, no build) you copy into your app. **paean-record-demo** needs
+Playwright for the capture and uses `ffmpeg` when it is on PATH; **paean-convert-to-rednote** needs
+`esbuild`.
 
 Every original work and remix should adapt to both portrait and landscape instead of requiring
 players to rotate their device. Recompose the playfield and UI for the available screen, preserve
