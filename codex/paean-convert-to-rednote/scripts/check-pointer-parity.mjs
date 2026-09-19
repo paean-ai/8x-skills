@@ -26,7 +26,19 @@
  * Exit code 0 when every check passes, 1 otherwise.
  */
 import path from 'node:path'
+import fs from 'node:fs'
 import { existsSync } from 'node:fs'
+
+/** 递归列出 dist 下的文件（静态扫描用）。 */
+function walkFiles(dir) {
+  const out = []
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const f = path.join(dir, e.name)
+    if (e.isDirectory()) out.push(...walkFiles(f))
+    else out.push(f)
+  }
+  return out
+}
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
@@ -169,43 +181,64 @@ async function responds(controlSel) {
   const cfg = VIEWPORTS['phone-mouse']
   const { browser, page } = await open(cfg)
   await activate(page, cfg)
-  const box = await page.evaluate((sel) => {
-    let el = sel ? document.querySelector(sel) : null
-    if (!el) {
-      const re = /stick|joy|dpad|d-pad|thumb|pad\b|steer|wheel|move/i
-      let best = null
-      for (const c of document.querySelectorAll('*')) {
-        const id = (c.id || '') + ' ' + (typeof c.className === 'string' ? c.className : '')
-        if (!re.test(id)) continue
-        const cs = getComputedStyle(c), r = c.getBoundingClientRect()
-        if (cs.display === 'none' || cs.visibility === 'hidden' || r.width < 24 || r.height < 24) continue
-        if (!best || r.width * r.height > best.w * best.h)
-          best = { x: r.x, y: r.y, w: r.width, h: r.height }
-      }
-      return best
-    }
-    const r = el.getBoundingClientRect()
-    const cs = getComputedStyle(el)
-    if (cs.display === 'none' || r.width < 8) return null
-    return { x: r.x, y: r.y, w: r.width, h: r.height }
-  }, CONTROL)
 
-  if (!box) { await browser.close(); return { skipped: true } }
+  /* 找一个"可拖动控件"。注意很多作品的摇杆是**按下才浮现**的悬浮杆：静止时 hidden，
+     按在画布上才出现在指针处。只找静止可见的控件，会在鼠标档找不到、而触摸档
+     恰好抓到，报出一条假的"控件被指针类型挡掉了" —— roamforge 就是这样被误判的，
+     它五档全可用。所以先按玩家的做法来：找不到就先按住画布再找一次。 */
+  const findStick = () => page.evaluate((sel) => {
+    const ok = (c) => {
+      const cs = getComputedStyle(c), r = c.getBoundingClientRect()
+      if (c.hidden || cs.display === 'none' || cs.visibility === 'hidden') return null
+      if (r.width < 24 || r.height < 24) return null
+      return { x: r.x, y: r.y, w: r.width, h: r.height }
+    }
+    if (sel) { const el = document.querySelector(sel); return el ? ok(el) : null }
+    const re = /stick|joy|dpad|d-pad|thumb|pad\b|steer|wheel|move/i
+    let best = null
+    for (const c of document.querySelectorAll('*')) {
+      const id = (c.id || '') + ' ' + (typeof c.className === 'string' ? c.className : '')
+      if (!re.test(id)) continue
+      const r = ok(c)
+      if (r && (!best || r.w * r.h > best.w * best.h)) best = r
+    }
+    return best
+  }, controlSel)
 
   const before = (await page.screenshot()).toString('base64')
   await page.waitForTimeout(700)
   const idle = (await page.screenshot()).toString('base64')
-  const cx = box.x + box.w / 2, cy = box.y + box.h / 2
-  await page.mouse.move(cx, cy)
-  await page.mouse.down()
+
+  let box = await findStick()
+  let held = false
+  if (!box) {
+    /* 按住画布中下方召唤悬浮杆。按住不放，后面直接从这里拖，
+       松开会让它重新隐藏，再去 move+down 就又找不到了。 */
+    await page.mouse.move(cfg.viewport.width * 0.32, cfg.viewport.height * 0.62)
+    await page.mouse.down()
+    held = true
+    await page.waitForTimeout(280)
+    box = await findStick()
+    if (!box) { await page.mouse.up(); await browser.close(); return { skipped: true } }
+  }
+
+  let cx, cy
+  if (held) {
+    cx = cfg.viewport.width * 0.32
+    cy = cfg.viewport.height * 0.62
+  } else {
+    cx = box.x + box.w / 2
+    cy = box.y + box.h / 2
+    await page.mouse.move(cx, cy)
+    await page.mouse.down()
+  }
   for (let i = 1; i <= 8; i++) { await page.mouse.move(cx + i * 4, cy - i * 3); await page.waitForTimeout(40) }
   await page.waitForTimeout(500)
   const dragged = (await page.screenshot()).toString('base64')
   await page.mouse.up()
   await browser.close()
-  /* An animated attract loop changes on its own, so "changed" only counts when the drag
-     produced something the idle interval did not. */
-  return { skipped: false, animated: before !== idle, changed: dragged !== idle, box }
+  /* 演示动画自己会变，所以只有"拖动后的画面"与"静置画面"不同才算有反应。 */
+  return { skipped: false, animated: before !== idle, changed: dragged !== idle, box, summoned: held }
 }
 
 const out = { dist: DIST, checks: {}, ok: true }
@@ -219,6 +252,40 @@ const pairs = [['phone-mouse', 'phone-touch'], ['land-mouse', 'land-touch']]
 const infoPairs = [['desktop-mouse', 'hybrid-touch']]
 const samples = {}
 for (const name of Object.keys(VIEWPORTS)) samples[name] = await sample(name)
+
+/* 0. STATIC — pointer-type gating in the shipped JS.
+   This runs before anything that needs navigation, because the navigation is the
+   weak link: the probe can only sample screens it can reach, and a work whose
+   controls live three menus deep will sample a title screen, find no controls on
+   either side, and satisfy every dynamic check vacuously. That is exactly how one
+   work reached the market twice with `show('touch-controls', matchMedia('(pointer:
+   coarse)').matches)` — on any desktop browser the whole steering/brake/nitro
+   cluster simply never rendered, and the checker said ok.
+
+   So: any matchMedia on `pointer:` / `hover:` in the bundle is reported. Most are
+   fine (text hints, layout nudges), but each one has to be looked at, because the
+   failure mode is a work that looks perfect and cannot be played. */
+const POINTER_MQ = /matchMedia\s*\(\s*["'`][^"'`]*\((?:any-)?(?:pointer|hover)\s*:[^"'`]*["'`]\s*\)/g
+/* 产物里按指针类型分支的地方，逐条列出来供人看 —— 不作判定。
+   压缩之后没法可靠地判断某个分支是"控件显隐"还是"画质/文案"：
+   真正出事的写法是 `function isTouch(){return matchMedia(...).matches}`，
+   而 `show('touch-controls', isTouch())` 在几百行之外。试过静态污点追踪，
+   要么漏掉真缺陷、要么把一堆只调 dpr 的作品判失败 —— 噪音大的检查等于没有检查。
+   判定交给下面的 VERDICT：能走到玩法就用动态对比，走不到就明说"未验证"。 */
+const gating = []
+for (const f of walkFiles(DIST)) {
+  if (!f.endsWith('.js')) continue
+  const text = fs.readFileSync(f, 'utf8')
+  POINTER_MQ.lastIndex = 0
+  let m
+  while ((m = POINTER_MQ.exec(text))) {
+    const snip = text.slice(m.index, m.index + 170).replace(/\s+/g, ' ')
+    gating.push(`${path.relative(DIST, f)}: …${snip}…`)
+  }
+}
+
+const pointerMedia = [...new Set(gating)].slice(0, 6)
+out.checks.pointerMedia = pointerMedia.length ? pointerMedia : 'ok'
 
 /* 1. PARITY */
 const parity = []
@@ -267,13 +334,38 @@ else if (r.skipped)
 else if (!r.changed) fail('response', 'dragging the control with the mouse changed nothing on screen')
 else out.checks.response = `ok (control at ${r.box.w.toFixed(0)}x${r.box.h.toFixed(0)})`
 
+/* 3b. VERDICT — 通过 / 失败 / 未验证，三态。
+   上一轮正是栽在只有两态上：探针走不到玩法画面，parity 比较了两个空集合，
+   工具打印 ✓，而那个作品在任何桌面浏览器上整组转向/刹车/氮气根本不渲染，
+   两次被市场退回。"没测到"不是"通过"，必须单独说出来。 */
+const reached = !r.skipped
+if (!reached) out.inconclusive = true
+
+/* 4. COVERAGE — 探针到底有没有看见过控件？
+   一档都没看见，说明它连玩法画面都没进，上面的 parity / binding 是在比较两个
+   空集合。这**不是"查出问题"，是"没测到"** —— 归入 inconclusive，和 3b 同一路，
+   否则同一种情形会因为 CONTROL_RE 有没有误匹配到菜单按钮而一会儿报 1、一会儿报 2。 */
+const sawControl = Object.values(samples).some((s2) => s2.items.some((i) => CONTROL_RE.test(i.key)))
+if (!sawControl) {
+  out.inconclusive = true
+  out.checks.coverage = '探针在所有档位都没看到任何控件 —— 没走到玩法画面，parity / binding 无效'
+} else {
+  out.checks.coverage = `ok (saw controls in ${Object.entries(samples).filter(([, s2]) => s2.items.some((i) => CONTROL_RE.test(i.key))).length} viewport(s))`
+}
+
 const errs = Object.entries(samples).flatMap(([n, s]) => s.errors.map((e) => `${n}: ${e}`))
 if (errs.length) out.checks.pageerror = [...new Set(errs)]
 
 if (JSON_OUT) {
   console.log(JSON.stringify(out, null, 2))
 } else {
-  console.log(`${out.ok ? '✓' : '✗'} pointer/touch parity — ${path.basename(path.dirname(DIST))}`)
+  console.log(`${!out.ok ? '✗' : out.inconclusive ? '?' : '✓'} pointer/touch parity — ${path.basename(path.dirname(DIST))}`)
+  if (out.ok && out.inconclusive) {
+    console.log('   ? 未验证 —— 探针没走到玩法画面，上面的对比是在两个空集合之间做的，不能当作通过。')
+    console.log('     用 --start x,y 把探针送进玩法后重跑；菜单层级深的作品必须手动逐档验证。')
+    console.log('     控件显隐只能按**布局**（max-width / max-height）决定，或者干脆常显 ——')
+    console.log('     控件本来就是 pointer 事件驱动的，鼠标能用，按 (pointer:coarse) 藏掉它没有任何收益。')
+  }
   if (out.checks.parity !== 'ok')
     for (const p of out.checks.parity) console.log(`   ✗ 门控：${p.pair} 下消失的控件 → ${p.lost.join(' ')}`)
   if (out.checks.binding !== 'ok')
@@ -286,6 +378,13 @@ if (JSON_OUT) {
   if (out.checks.desktopInfo)
     for (const p of out.checks.desktopInfo)
       console.log(`   · 参考：${p.pair} 下 ${p.lost.join(' ')} 不显示（桌面宽度有键盘位，通常是对的）`)
+  if (out.checks.coverage && !String(out.checks.coverage).startsWith('ok'))
+    console.log(`   · 覆盖不足：${out.checks.coverage}`)
+  if (Array.isArray(out.checks.pointerMedia)) {
+    console.log('   · 产物里按指针类型分支的地方（确认没有一处在决定控件显隐）：')
+    for (const g of out.checks.pointerMedia) console.log(`       ${g}`)
+  }
   if (out.checks.pageerror) for (const e of out.checks.pageerror) console.log(`   ! ${e}`)
 }
-process.exit(out.ok ? 0 : 1)
+/* 0 = 通过，1 = 查出问题，2 = 没测到（必须人工跟进，不能当通过） */
+process.exit(!out.ok ? 1 : out.inconclusive ? 2 : 0)
