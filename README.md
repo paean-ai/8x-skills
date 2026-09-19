@@ -42,22 +42,28 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-zero-setup/ SKILL.md
 │   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
 │   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
-│   ├── paean-publish/   SKILL.md + scripts/publish.mjs
-│   └── paean-remix/     SKILL.md + scripts/remix.mjs
+│   ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
+│   ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
+│   ├── paean-convert-to-ad/      SKILL.md + scripts/{build-ad,zip}.mjs + reference/ad-*.{js,css}
+│   └── paean-convert-to-rednote/ SKILL.md + scripts/{build-minitool,minitool-pipeline,audit-minitool,zip}.mjs + reference/platform-local.js
 ├── claude-code/
 │   ├── paean-skills-update/ SKILL.md
 │   ├── paean-zero-setup/ SKILL.md
 │   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
 │   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
-│   ├── paean-publish/   SKILL.md + scripts/publish.mjs
-│   └── paean-remix/     SKILL.md + scripts/remix.mjs
+│   ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
+│   ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
+│   ├── paean-convert-to-ad/      SKILL.md + scripts/{build-ad,zip}.mjs + reference/ad-*.{js,css}
+│   └── paean-convert-to-rednote/ SKILL.md + scripts/{build-minitool,minitool-pipeline,audit-minitool,zip}.mjs + reference/platform-local.js
 └── codex/
     ├── paean-skills-update/ SKILL.md
     ├── paean-zero-setup/ SKILL.md
     ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
     ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
-    ├── paean-publish/   SKILL.md + scripts/publish.mjs
-    └── paean-remix/     SKILL.md + scripts/remix.mjs
+    ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
+    ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
+    ├── paean-convert-to-ad/      SKILL.md + scripts/{build-ad,zip}.mjs + reference/ad-*.{js,css}
+    └── paean-convert-to-rednote/ SKILL.md + scripts/{build-minitool,minitool-pipeline,audit-minitool,zip}.mjs + reference/platform-local.js
 ```
 
 All three variants ship the **same** scripts and reference files; only the `SKILL.md`
@@ -102,6 +108,9 @@ export PAEAN_AUTH_TOKEN="<your-paean-jwt>"
 # or: ~/.paean/credentials.json  →  {"token":"<your-paean-jwt>"}
 ```
 
+On Windows (PowerShell), `$env:PAEAN_AUTH_TOKEN = "<your-paean-jwt>"` sets it for the current
+session; `~` in the credentials paths above means the user profile directory (`$env:USERPROFILE`).
+
 The scripts also read `~/.zero/credentials.json` if present. **Never paste the token into the
 chat** — keep it in the environment or the credentials file. Optional: `PAEAN_API_BASE`
 overrides the API endpoint (default `https://api.paean.ai`). `ZERO_API_BASE` /
@@ -124,6 +133,15 @@ cp -r 8x-skills/zero/paean-zero-setup ~/.zero/skills/
 cp -r 8x-skills/zero/paean-game-create ~/.zero/skills/
 cp -r 8x-skills/zero/paean-sdk ~/.zero/skills/
 cp -r 8x-skills/zero/paean-skills-update ~/.zero/skills/
+cp -r 8x-skills/zero/paean-convert-to-ad ~/.zero/skills/
+cp -r 8x-skills/zero/paean-convert-to-rednote ~/.zero/skills/
+```
+
+On Windows (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.zero\skills" | Out-Null
+Get-ChildItem 8x-skills\zero -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.zero\skills\$($_.Name)" -Recurse -Force }
 ```
 
 Zero auto-offers a skill when a request matches its `description`; you can also invoke it
@@ -141,6 +159,15 @@ cp -r 8x-skills/claude-code/paean-zero-setup ~/.claude/skills/
 cp -r 8x-skills/claude-code/paean-game-create ~/.claude/skills/
 cp -r 8x-skills/claude-code/paean-sdk ~/.claude/skills/
 cp -r 8x-skills/claude-code/paean-skills-update ~/.claude/skills/
+cp -r 8x-skills/claude-code/paean-convert-to-ad ~/.claude/skills/
+cp -r 8x-skills/claude-code/paean-convert-to-rednote ~/.claude/skills/
+```
+
+On Windows (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
+Get-ChildItem 8x-skills\claude-code -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.claude\skills\$($_.Name)" -Recurse -Force }
 ```
 
 Claude Code auto-discovers the `SKILL.md` and offers the skill when relevant. You can also
@@ -159,6 +186,8 @@ repo in your project and add a pointer to your `AGENTS.md`:
 - To add cloud save or a global leaderboard, follow `8x-skills/codex/paean-sdk/SKILL.md`.
 - To host on Clide or publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
 - To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
+- To turn a finished work into a playable ad, follow `8x-skills/codex/paean-convert-to-ad/SKILL.md`.
+- To port a finished work to a RedNote mini-tool, follow `8x-skills/codex/paean-convert-to-rednote/SKILL.md`.
 ```
 
 …or point Codex at the file directly in your prompt.
