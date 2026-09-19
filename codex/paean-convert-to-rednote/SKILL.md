@@ -106,6 +106,37 @@ a completely dead page still produces frames. An rAF-only check calls it healthy
 that degrade to canvas2d perfectly well and would have shipped a false error screen. The exception is
 the evidence that the work could not cope; without it, stay quiet.
 
+### Phone layout + mouse pointer: the combination that breaks works
+
+`@media (pointer: coarse)` and `navigator.maxTouchPoints` answer *"is this a touch device"*. What a
+work actually needs to know is *"is the phone layout in use"*. Those two agree on a real phone and on
+a wide desktop, and disagree in exactly the setup reviewers use: **a desktop browser narrowed to phone
+size.** There the phone layout applies — the one that assumes a virtual stick and leaves no room for a
+keyboard legend — while the pointer is a mouse, so the stick stays `display: none`. The screen ends up
+with no usable controls at all, and it is reported as "按钮无法点击".
+
+The fix is to split one predicate into two:
+
+```css
+/* 控件按布局显示 —— 不是按指针类型 */
+@media (pointer: coarse), (max-width: 820px), (max-height: 620px) { .stick { display: block } }
+```
+
+```js
+this.coarse   = matchMedia('(pointer:coarse)').matches;          // 真实指针：准星、hover 提示
+this.touchQuery = matchMedia('(pointer:coarse),(max-width:820px),(max-height:620px)');
+get touchUI() { return this.touchQuery.matches }                 // 布局：摇杆、触摸按钮、操作提示
+```
+
+Keep `touchUI` live (a getter over the `MediaQueryList`, not a boolean captured at construction) so
+rotating the device tracks it. Keep genuinely pointer-dependent affordances — a mouse crosshair, a
+hover tooltip — on `coarse`. Collapsing the two back into one predicate is how this bug returns.
+
+And bind the controls with **Pointer Events**. `pointerdown`/`pointermove`/`pointerup` fire for mouse,
+touch and pen alike, so a virtual stick drags correctly with a mouse and one binding serves every
+device. A stick bound only to `touchstart` is visible and dead under a mouse — same symptom, different
+cause.
+
 ### The guard cannot see an async boot failure
 
 If the entry is `async function boot()` and the renderer is constructed **outside** its own
@@ -343,11 +374,30 @@ Require **0 console errors, 0 pageerror, 0 failed requests** and no leftover Eng
   `null` for `webgl` / `webgl2` / `experimental-webgl`. The work must not end up as a silent dead
   page: either it degrades on its own, or the boot guard's message is on screen. This single check
   found 21 broken artifacts out of 56.
-- **Drive it on a desktop viewport with a real mouse** (`hasTouch:false, isMobile:false`,
-  1280×800): reviewers are not on phones. Click the actual start control and assert the screen
-  advances. Pointer Events fire for mouse, so a work built on `pointerdown` is usually fine — but
-  verify rather than assume, and check nothing is gated behind `@media (pointer: coarse)` that a
-  mouse user needs.
+- **Run `scripts/check-pointer-parity.mjs <dist>`** — this one is mechanical, so do not hand-roll it:
+
+  ```
+  node <skill>/scripts/check-pointer-parity.mjs dist
+  ```
+
+  It exits non-zero on failure and runs three independent checks, because they fail for different
+  reasons: **parity** (same viewport, mouse vs touch — which control-like elements vanish under the
+  mouse), **binding** (controls visible but registered only `touch*` listeners), and **response**
+  (actually drag the control with the mouse and require the screen to change). Visibility is not
+  usability; only the third check proves a mouse can play.
+
+  Two traps it was built to avoid, both of which produced false passes in practice:
+
+  - A joystick's outer ring is usually `pointer-events: none` — the inner knob takes the input. If
+    the probe treats that as "not visible", the stick drops out of *both* samples and parity sees no
+    difference. Do not fold `pointer-events` into the visibility test.
+  - "No control found" is **not** a pass. If the touch run has controls and the mouse run finds none
+    to drag, that *is* the bug.
+
+  Failures at desktop width are reported for information only: there a mouse user still has the
+  keyboard legend, so hiding the stick is correct. Only the phone-sized layouts are graded.
+- **Drive it on a desktop viewport with a real mouse** (1280×800) as well: click the actual start
+  control and assert the screen advances.
 
 Probe gotchas: `page.click()` never settles on a button with an infinite CSS animation — use
 `touchscreen.tap()`. `elementFromPoint` hitting the button is **not** proof it is clickable; assert a

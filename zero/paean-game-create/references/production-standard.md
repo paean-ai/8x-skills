@@ -205,10 +205,22 @@ overlap heavily with ad-conversion readiness above; where they differ, the conta
   becomes an unhandled rejection the work swallows, and in the measured case no `error` or
   `unhandledrejection` reached `window` at all. Having a `try/catch` is not enough — check which
   line the `try` actually starts on, and keep every expensive constructor inside it.
-- **Do not gate anything a mouse user needs behind `@media (pointer: coarse)`.** Container builds are
-  reviewed on desktop with a mouse, where `pointer: coarse` is false. Prefer Pointer Events, which
-  fire for both mouse and touch, over `touch*`-only listeners, and make sure that whatever the
-  touch-only branch provides has a keyboard or mouse equivalent.
+- **Gate on-screen controls by layout, never by pointer type.** `@media (pointer: coarse)` and
+  `navigator.maxTouchPoints` answer "is this a touch device", but the question you actually need
+  answered is "is the phone layout in use". Those differ in the single most common review setup:
+  a desktop browser narrowed to phone size. There the phone layout applies — the one that assumes a
+  virtual stick and leaves no room for a keyboard legend — while the pointer is a mouse, so the
+  stick stays `display: none`. The result is a screen with no controls at all: reviewers report it
+  as *"按钮无法点击"* and it genuinely cannot be played on the web. Use the layout breakpoint
+  instead, e.g. `@media (pointer: coarse), (max-width: 820px), (max-height: 620px)`, and keep one
+  live `matchMedia` as the single source of truth so orientation changes track it.
+- **Bind controls with Pointer Events, never `touch*` only.** `pointerdown`/`pointermove`/
+  `pointerup` fire for mouse, touch and pen alike, so one binding serves every device and a virtual
+  stick stays usable when it is dragged with a mouse. A control that is visible but bound only to
+  `touchstart` is dead under a mouse — the same symptom, a different cause.
+- **Keep genuinely pointer-dependent affordances on the pointer test.** A mouse crosshair or a hover
+  tooltip should still follow `pointer: fine`. Splitting the two predicates — one for layout, one for
+  the actual input device — is the whole fix; collapsing them back into one is how this bug returns.
 - **Do not put player-visible text in a hand-rolled bitmap font.** A 3×5 glyph table cannot draw CJK,
   and text drawn into a low-resolution buffer and scaled up is unreadable. Draw localisable canvas text
   with `fillText` on the output layer, with a font stack that includes CJK faces.
@@ -362,7 +374,7 @@ Before completion, record evidence for each row:
 | Assets | Original/licensed, coherent, optimized; `favicon.svg`, 800×400 `banner.jpg`, 512×512 `icon.jpg` present |
 | Paid gate | `access.require()` on the first intentional tap only; mock-host cases (free, paid, declined, preview) pass |
 | Ad-conversion | Programmatic session entry documented; showcase params are arguments; autopilot flag read per frame; locale pinnable from one storage key; runs with the SDK script absent |
-| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs; UI wired before expensive init (or the boot sequence wrapped so a throw renders a readable failure state); WebGL construction guarded and the no-WebGL case shown explicitly; nothing a mouse user needs gated behind `pointer: coarse` |
+| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs; UI wired before expensive init (or the boot sequence wrapped so a throw renders a readable failure state); WebGL construction guarded and the no-WebGL case shown explicitly; on-screen controls gated by layout breakpoint (not pointer type) and bound with Pointer Events, so a desktop browser narrowed to phone size stays playable |
 | Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |
