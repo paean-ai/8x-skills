@@ -606,7 +606,8 @@ function saveState(projectRoot, input) {
     workspaceHashKey: input.workspaceHashKey,
     squareAppHashKey: input.squareAppHashKey,
     url: input.url,
-    playUrl: input.url,
+    shareUrl: input.shareUrl,
+    playUrl: input.playUrl || input.url,
     archiveUrl: input.archiveUrl,
     publishedAt: new Date().toISOString(),
     publishDir: relativeUnix(projectRoot, input.publishDir) || '.',
@@ -637,6 +638,7 @@ function markStateUnpublished(projectRoot, { handle, squareAppHashKey, siteDelet
     if (typeof state.url === 'string' && state.url) state.lastDeletedUrl = state.url
     delete state.handle
     delete state.url
+    delete state.shareUrl
     delete state.playUrl
     delete state.archiveUrl
   }
@@ -1320,12 +1322,15 @@ async function main() {
     }
     console.log('Publishing public Square listing...')
     const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle, access)
+    const shareUrl = 'https://www.8x.gg/apps/' + encodeURIComponent(app.hashKey)
     saveState(projectRoot, {
       mode: 'square',
       handle: app.publishedSiteHandle,
       workspaceHashKey,
       squareAppHashKey: app.hashKey,
-      url: app.playUrl,
+      url: shareUrl,
+      shareUrl,
+      playUrl: app.playUrl,
       publishDir,
       fileCount: imported.fileCount || summary.fileCount,
       totalBytes: imported.totalBytes || summary.totalBytes,
@@ -1339,7 +1344,9 @@ async function main() {
       action: 'publish',
       workspaceHashKey,
       squareAppHashKey: app.hashKey,
-      url: app.playUrl,
+      url: shareUrl,
+      shareUrl,
+      playUrl: app.playUrl,
       handle: app.publishedSiteHandle || null,
       requestedHandle: args.handle || null,
       status: app.status || 'listed',

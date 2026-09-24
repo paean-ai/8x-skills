@@ -209,6 +209,11 @@ node <skill-dir>/scripts/publish.mjs --dry-run --hosting-only --dir dist --handl
 node <skill-dir>/scripts/publish.mjs --yes --hosting-only --dir dist --handle neon-drift
 ```
 
+Square publish results return `url` and `shareUrl` as `https://www.8x.gg/apps/{hashKey}`.
+Use this canonical link when sharing the work. `playUrl` preserves the runtime address;
+`shellUrl` is an optional diagnostic address. Hosting-only projects retain their actual
+Clide URL because they have no Square listing. Dry-runs do not produce a published link.
+
 Before publishing a newly created or remixed game, validate its self-contained project and browser
 runtime (Playwright must be installed in the working environment):
 

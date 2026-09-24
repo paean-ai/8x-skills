@@ -49,8 +49,19 @@ Review `publishDir`, file/byte summary, `secretScan`, `runtimeCompatibility`, de
 and requested/effective handle. If the dry-run is safe and the user confirms that exact
 public destination, run the same command without `--dry-run` and add `--yes`.
 
-Report the URL, handle, file count, mode, and `.clide/publish.json`. Report workspace/Square
-hashes only in Square mode.
+Report the returned `url`, handle, file count, mode, and `.clide/publish.json`. Report
+workspace/Square hashes only in Square mode.
+
+For Square publishes, `url` and `shareUrl` are the canonical public link
+`https://www.8x.gg/apps/{squareAppHashKey}`. Use this link in the final reply and anywhere a
+user will share or open the published work, including paid apps and remixes. `playUrl`
+remains the runtime address and `shellUrl` remains available for technical diagnostics;
+only show those alternative URLs when the user asks for them. The same distinction is
+saved in `.clide/publish.json` so later updates retain the public link and runtime address.
+
+Hosting-only results have no Square app ID: return their actual hosted `url`. Never invent
+an `/apps/` link from a site handle or workspace ID. A dry-run has not published anything;
+its `requestedUrl` describes the requested hosting address, not a completed share link.
 
 ## Full-stack and Worker projects
 
@@ -96,7 +107,7 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --dir dist --price 100 [--standa
   see `paean-sdk`) or paying players never leave the demo. Confirm it exists before a paid
   publish.
 
-Report `access` and `shellUrl` from the publish output. Access options are not valid with
+Report `access` alongside the canonical `url` from the publish output. Access options are not valid with
 `--hosting-only`.
 
 ## Custom subdomains

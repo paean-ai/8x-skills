@@ -32,7 +32,7 @@ the publish result or Square app detail before running the script.
 
 A source that is a paid app (`remixable: false`, `remixDisabledReason: "not_owned"`) must be
 bought before it can be remixed — the purchase unlocks both the full app and remixing. The
-script says where to buy (`https://<handle>.8x.gg/`). Remixes of a paid app are published as
+script says where to buy (`https://www.8x.gg/apps/{hashKey}`). Remixes of a paid app are published as
 paid apps: the script writes the inherited `access` (parent's price, `standalone: demo`) into
 the new `clide.json`; the publisher may raise the price with `paean-publish --price`, but
 `--free` is rejected by the server (`ACCESS_MODEL_INHERITED`). Tell the user this before
@@ -218,3 +218,7 @@ Run with `--help`.
   with `--clone-all` after telling the user that source will be credited twice.
 - `Failed to extract source archive` → the download was truncated or the workspace export is
   not a plain zip; re-run, and report the message as-is if it repeats.
+
+When reporting source works, use their returned `url` / `shareUrl` canonical 8x link.
+Keep `playUrl` for runtime/source inspection. The local remix has no public link until it
+is published; after publishing, return the new work's canonical URL from paean-publish.
