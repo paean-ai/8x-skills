@@ -8,6 +8,7 @@ import test from 'node:test'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
 const script = path.join(repoRoot, 'codex/paean-publish/scripts/publish.mjs')
+const remixScript = path.join(repoRoot, 'codex/paean-remix/scripts/remix.mjs')
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'paean-publish-test-'))
@@ -17,9 +18,9 @@ async function fixture() {
   return root
 }
 
-async function runPublish(cwd, args, env = {}) {
+async function runPublish(cwd, args, env = {}, command = script) {
   return await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script, ...args], {
+    const child = spawn(process.execPath, [command, ...args], {
       cwd,
       env: { ...process.env, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -96,6 +97,12 @@ test('hosting-only real publish calls only /publish/clide and saves its handle',
     assert.match(result.stdout, /"listedInSquare": false/)
     const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
     assert.equal(state.mode, 'hosting-only')
+    assert.equal(state.url, 'https://paeaninsight.clide.app/')
+    assert.equal(state.playUrl, state.url)
+    assert.equal(state.shareUrl, undefined)
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.url, state.url)
+    assert.equal(output.shareUrl, undefined)
     assert.equal(state.handle, 'paeaninsight')
     assert.equal(state.squareAppHashKey, undefined)
     await assert.rejects(readFile(path.join(root, 'clide.json'), 'utf8'))
@@ -519,7 +526,7 @@ test('default mode remains the workspace and Apps Square pipeline', async () => 
       assert.equal(body.visibility, 'public')
       assert.equal(body.workspaceHashKey, 'workspace-1')
       res.end(JSON.stringify({ success: true, data: {
-        hashKey: 'square-1',
+        hashKey: 'c-4QMQlOB0rkbBUa',
         playUrl: 'https://assigned123.clide.app/',
         publishedSiteHandle: 'assigned123',
         status: 'listed',
@@ -542,8 +549,31 @@ test('default mode remains the workspace and Apps Square pipeline', async () => 
     ])
     const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
     assert.equal(state.mode, 'square')
-    assert.equal(state.squareAppHashKey, 'square-1')
+    assert.equal(state.squareAppHashKey, 'c-4QMQlOB0rkbBUa')
     assert.equal(state.handle, 'assigned123')
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.url, 'https://www.8x.gg/apps/c-4QMQlOB0rkbBUa')
+    assert.equal(output.shareUrl, output.url)
+    assert.equal(output.playUrl, 'https://assigned123.clide.app/')
+    assert.equal(state.url, output.url)
+    assert.equal(state.shareUrl, output.url)
+    assert.equal(state.playUrl, output.playUrl)
+
+    // Existing projects may have saved the runtime URL in both fields.
+    await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+      ...state, url: output.playUrl, shareUrl: undefined,
+    }))
+    const again = await runPublish(root, ['--yes', '--dir', 'dist'], {
+      PAEAN_API_BASE: api.baseUrl, PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(again.code, 0, again.stderr)
+    assert.deepEqual(api.requests.slice(3).map(request => request.url), [
+      '/v2/workspace/workspace-1/files/zip', '/square/publish',
+    ])
+    const updated = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(updated.url, output.url)
+    assert.equal(updated.shareUrl, output.url)
+    assert.equal(updated.playUrl, output.playUrl)
   } finally {
     await api.close()
     await rm(root, { recursive: true, force: true })
@@ -606,6 +636,9 @@ test('paid listing flags reach clide.json, the dry-run report and the Square pay
     const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
     assert.equal(state.access.model, 'paid')
     const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.url, 'https://www.8x.gg/apps/square-paid')
+    assert.equal(output.shareUrl, output.url)
+    assert.equal(output.playUrl, 'https://paidfixture1.clide.app/')
     assert.equal(output.shellUrl, 'https://paidfixture1.8x.gg/')
     assert.equal(output.access.model, 'paid')
 
@@ -638,3 +671,43 @@ test('access flags are rejected for hosting-only and malformed input', async () 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+for (const paid of [false, true]) {
+  test(`remix ${paid ? 'purchase guidance' : 'source output'} uses canonical share links`, async () => {
+    const root = await fixture()
+    const hashKey = 'm_jkVnoo3C_yOxDg'
+    const url = `https://www.8x.gg/apps/${hashKey}`
+    const api = await mockApi((request, res) => {
+      assert.equal(request.method, 'GET')
+      assert.equal(request.url, `/square/apps/${hashKey}`)
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ success: true, data: {
+        hashKey, title: 'Source', playUrl: 'https://source123.clide.app/',
+        publishedSiteHandle: 'source123', remixable: !paid,
+        remixDisabledReason: paid ? 'not_owned' : undefined,
+        access: paid ? { model: 'paid', price: { amount: 100 } } : undefined,
+      } }))
+    })
+    try {
+      const result = await runPublish(root, [url, '--dry-run'], {
+        PAEAN_API_BASE: api.baseUrl, PAEAN_AUTH_TOKEN: 'test-token',
+      }, remixScript)
+      assert.equal(api.requests.length, 1)
+      if (paid) {
+        assert.equal(result.code, 1)
+        assert.ok(result.stderr.includes(`Buy it first at ${url}`), result.stderr)
+        assert.ok(!result.stderr.includes('source123.8x.gg'))
+      } else {
+        assert.equal(result.code, 0, result.stderr)
+        const output = JSON.parse(result.stdout)
+        assert.equal(output.sources[0].url, url)
+        assert.equal(output.sources[0].shareUrl, url)
+        assert.equal(output.sources[0].playUrl, 'https://source123.clide.app/')
+        assert.equal(output.writesLocalFiles, false)
+      }
+    } finally {
+      await api.close()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+}
