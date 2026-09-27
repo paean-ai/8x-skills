@@ -122,6 +122,12 @@ Report `access` alongside the canonical `url` from the publish output. Access op
 
 ### Register and verify the product catalogue
 
+This section applies to platform-managed `access.require({ sku })` products.
+An app-managed `pay.spend` shop keeps its own prices and fulfillment logic and
+does not need `access.products`. Check which contract the app actually uses;
+an empty platform catalogue alone is not a failure of a direct-spend shop. See
+`paean-sdk`'s IAP guide for receipt persistence and restoration requirements.
+
 The tool reads `clide.json` in the command's working directory and sends its
 resolved `access` as JSON in `POST /square/publish`. Merely uploading changed
 HTML, models or `clide.json` leaves the listing's product catalogue unchanged.
