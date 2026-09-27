@@ -158,7 +158,9 @@ else stayInDemo();                                  // the user closed the sheet
   `access.owned(sku)` / `access.status()` — it is a **server record**, do not
   cache it in `localStorage` as truth.
 - A successful hosted status with no matching SKU means the product is not
-  listed; it is not a missing `pay.spend` permission. Read the
+  listed **for this platform-managed access contract**; it is not a missing
+  `pay.spend` permission. An app-managed `pay.spend` shop does not depend on
+  `access.products`. Read the
   [IAP catalogue checks](reference/design-iap.md#catalogue-registration-and-live-checks)
   before declaring a shop ready. Mock purchases prove integration, not listing activation.
 - Until the app is owned, every account-bound call (storage, leaderboards,
@@ -182,8 +184,12 @@ Documented in full in the SDK's own README (`paean-sdk.js` header + the
 - **`pay.spend`** is real money at an amount the app names, confirmed natively.
   Grant goods only when `granted === true`; pass a STABLE `idempotencyKey` per
   purchase intent; read `quote().limits`, never hardcode minimums; prefer
-  `credits` (iOS refuses the USD lane). For anything durable prefer
-  `access.products` — the server remembers it, `pay.spend` does not.
+  `credits` (iOS refuses the USD lane). It can sell app-defined cosmetics as
+  well as consumables; no platform product registration is required. For permanent
+  unlocks, choose either platform-managed `access.products` ownership or direct
+  spend with app-managed, account-bound receipt persistence and recovery. Only
+  the former automatically records a durable entitlement. See the
+  [IAP guide](reference/design-iap.md) before choosing or migrating the contract.
 - **`pay.tip()`** needs no scope; the host owns the sheet.
 - **Ads**: request `ads.rewarded` on the user's tap, then `showRewarded()`;
   grant only when `result.rewarded === true`. Never use preload as a
