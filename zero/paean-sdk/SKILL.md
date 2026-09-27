@@ -6,7 +6,7 @@ description: Design and integrate Paean SDK capabilities for static apps/games �
 # Paean SDK (Zero CLI) — platform capabilities for Square apps
 
 Give a published Paean app the platform's account-bound capabilities through
-the Paean Web SDK (`paean-sdk.js`, currently **1.10.0**). The app never sees a
+the Paean Web SDK (`paean-sdk.js`, **SDK 1.10+ baseline**). The app never sees a
 token or a backend URL: every call goes through a host bridge (`window.paean`,
 wrapped by the friendly `PaeanSDK` helper) that the Paean app / `8x.gg` web
 shell proxies for the signed-in user, isolated per **(app × user)**. In a plain
@@ -44,7 +44,8 @@ save + rank + an optional ad revive; a story game may use save + durable chapter
 If combining features, resolve reward delivery, ownership, ranking eligibility, and room/AI
 lifecycle together. Do not require all capabilities in every work.
 
-This reference targets SDK 1.10.0. Before implementation, inspect the actual SDK file's
+This reference documents the SDK 1.10.0 baseline, not the latest release.
+Before implementation, inspect the actual SDK file's
 `PaeanSDK.VERSION` and its matching canonical README (the SDK source repository's
 `docs/paean-sdk/README.md`). Resolve that source from the workspace or SDK provenance; do not
 invent a repository URL. If unavailable, use this documented baseline and report the verification
@@ -142,15 +143,23 @@ else if (r.status && r.status.shellUrl && !r.status.hosted) offerOpenOn8x(() => 
 else stayInDemo();                                  // the user closed the sheet — normal
 ```
 
-- **Free apps and the publisher resolve `unlocked: true` with no UI**, so gate
-  unconditionally and let the platform decide. Write the gate for every app.
-- **You never name a price and need no scope.** The host reads the price from
-  the listing and confirms it in its own UI (same trust model as `pay.tip`).
+- **Free base-game entry and publisher-owned access resolve `unlocked: true`
+  with no UI**, so gate unconditionally. A free game can still sell paid durable
+  products; the free-entry rule applies to `require()` / SKU `app`.
+- **Never pass an amount to `access.require`; it needs no scope.** The publisher
+  must declare product prices in the platform catalogue. At purchase time, the
+  host reads that server price and confirms it in its own UI.
 - `unlocked: false` is a normal outcome: keep the demo, keep the entry point.
 - Durable products (a season pass, an expansion) use the same call with a
-  `sku` declared in `clide.json` `access.products`; read ownership back with
+  `sku` registered in the Square listing's `access.products`. Local `clide.json`
+  is input to the publish tool, not an automatically discovered live catalogue.
+  Uploading that JSON/static assets alone does not register products. Read ownership with
   `access.owned(sku)` / `access.status()` — it is a **server record**, do not
   cache it in `localStorage` as truth.
+- A successful hosted status with no matching SKU means the product is not
+  listed; it is not a missing `pay.spend` permission. Read the
+  [IAP catalogue checks](reference/design-iap.md#catalogue-registration-and-live-checks)
+  before declaring a shop ready. Mock purchases prove integration, not listing activation.
 - Until the app is owned, every account-bound call (storage, leaderboards,
   shared, `app.stats`, `pay.spend`, rooms) rejects with `e.code === 'APP_NOT_OWNED'`.
   Treat it like a declined scope: local fallback, no crash.
