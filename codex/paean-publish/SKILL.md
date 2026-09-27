@@ -37,6 +37,13 @@ ask the user to paste a token into chat.
 Run from the project root. Select the final mode during dry-run so the report describes the
 same destination that will be used for the real publish.
 
+Here "project root" means the directory containing the intended `clide.json`
+and, when present, `.clide/publish.json`, not necessarily the Git root. `--dir` chooses uploaded
+assets; it does **not** change where the script reads `clide.json`. For a nested
+app with its own manifest, run from that app directory. Check the dry-run `access`
+and product list explicitly: `access: null` means "preserve server configuration",
+not "discover the manifest inside the uploaded assets".
+
 ```bash
 # Clide hosting only; never creates a Square listing
 node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist] [--handle paeaninsight]
@@ -98,6 +105,9 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --dir dist --price 100 [--standa
   `shell` = redirect to `https://<handle>.8x.gg/`. This is the publisher's choice.
 - `--product sku=Title:credits` (repeatable) declares durable in-app items; the platform records
   ownership per player and the app reads it via `PaeanSDK.access`.
+- A **free base game can sell paid durable products**. Use `model: "free"` with
+  `access.products`; an app-entry `--price` is not required for skin sales.
+  Product prices, as well as entry prices, need the publisher's explicit approval.
 - **Paid is one-way**: `--free` on an app that has sold as paid is rejected
   (`ACCESS_MODEL_LOCKED`). Say so before the first paid publish.
 - **Remixes of a paid app are paid**: `paean-remix` writes the inherited `access` into
@@ -109,6 +119,28 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --dir dist --price 100 [--standa
 
 Report `access` alongside the canonical `url` from the publish output. Access options are not valid with
 `--hosting-only`.
+
+### Register and verify the product catalogue
+
+The tool reads `clide.json` in the command's working directory and sends its
+resolved `access` as JSON in `POST /square/publish`. Merely uploading changed
+HTML, models or `clide.json` leaves the listing's product catalogue unchanged.
+`/paean-app.json` is generated from the platform listing; do not replace it to
+pretend that products have been registered.
+
+For an existing app needing only a catalogue update, the owner-authorized
+`PATCH /square/apps/:hashKey` accepts `{ "access": ... }`. Resolve the exact
+existing app and preserve its model, standalone policy and full intended product
+list: `access` is a replacement, not a per-SKU merge. Verify the deployed endpoint
+and ownership before use. A metadata-only administrator editor is not necessarily
+a product editor. Do not recreate the listing to evade an ownership failure.
+
+After an authorized update, verify `access.products` in the server response and
+a fresh hosted `(await PaeanSDK.access.status()).products` against the intended catalogue.
+The hosted `/paean-app.json` should also reflect it after its cache expires.
+If products are absent, report incomplete catalogue activation even if the page
+and local mock shop work. When the user defers publishing, provide the exact
+declaration and state that the products are not yet live; do not activate prices.
 
 ## Custom subdomains
 
