@@ -8,9 +8,11 @@ description: Install Zero CLI, help the user sign in to Paean so Paean publish/r
 Install Zero CLI and authenticate the local machine with Paean. Use this before
 `paean-publish` or `paean-remix` when credentials are missing.
 
-> **Using this skill in Codex.** Reference this file explicitly — add a pointer in your
-> project `AGENTS.md` ("To install Zero CLI or log in to Paean for publishing, follow
-> `8x-skills/codex/paean-zero-setup/SKILL.md`.") or name the skill in your prompt.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-zero-setup/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 ## What to check first
 

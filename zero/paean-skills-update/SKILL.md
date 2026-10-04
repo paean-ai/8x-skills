@@ -1,6 +1,6 @@
 ---
 name: paean-skills-update
-description: Update the local 8x-skills repository and reinstall Paean skills for Claude Code, Codex, or Zero CLI. Use when the user asks to update skills, refresh Paean skills, pull the latest skill instructions, or sync paean game-create / SDK / publish / remix / setup skill changes. Runs from Zero CLI.
+description: Update the local 8x-skills repository and install or refresh Paean skills for Claude Code, Codex, Zero CLI, Gemini CLI, Antigravity, or DeepSeek Harness. Use for skill updates, missing/stale local installations, or configuring supported client skill directories. Runs from Zero CLI.
 ---
 
 # Paean Skills Update (Zero CLI)
@@ -40,93 +40,66 @@ git pull --ff-only
 
 If `--ff-only` fails, stop and report the conflict/divergence; do not reset or overwrite.
 
-## Reinstall for Claude Code
+## Install into the client's actual discovery directory
 
-Copy each Claude Code skill directory into the global skills folder:
+A repository update does not update an installed copy. Inspect the existing skill directories and
+update the user's selected clients. Preserve other skills and local metadata; do not claim a
+running client has loaded new instructions merely because a copy succeeded.
 
-```bash
-mkdir -p ~/.claude/skills
-cp -R claude-code/paean-publish ~/.claude/skills/
-cp -R claude-code/paean-remix ~/.claude/skills/
-cp -R claude-code/paean-zero-setup ~/.claude/skills/
-cp -R claude-code/paean-game-create ~/.claude/skills/
-cp -R claude-code/paean-sdk ~/.claude/skills/
-cp -R claude-code/paean-skills-update ~/.claude/skills/
-cp -R claude-code/paean-convert-to-ad ~/.claude/skills/
-cp -R claude-code/paean-convert-to-rednote ~/.claude/skills/
-```
-
-On Windows (PowerShell):
-
-```powershell
-New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
-Get-ChildItem claude-code -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.claude\skills\$($_.Name)" -Recurse -Force }
-```
-
-If a project uses `.claude/skills/`, copy there instead or in addition.
-
-## Refresh Codex pointers
-
-Codex can use this repo in place. Ensure the project `AGENTS.md` points at the current files:
-
-```markdown
-## Skills
-- To update Paean skills, follow `8x-skills/codex/paean-skills-update/SKILL.md`.
-- To install Zero CLI or log in to Paean for publishing, follow `8x-skills/codex/paean-zero-setup/SKILL.md`.
-- To create or substantially polish a Paean game, follow `8x-skills/codex/paean-game-create/SKILL.md`.
-- To add cloud save or a leaderboard, follow `8x-skills/codex/paean-sdk/SKILL.md`.
-- To publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
-- To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
-- To turn a finished work into a playable ad, follow `8x-skills/codex/paean-convert-to-ad/SKILL.md`.
-- To port a finished work to a RedNote mini-tool, follow `8x-skills/codex/paean-convert-to-rednote/SKILL.md`.
-```
-
-If the project keeps a vendored copy of `8x-skills/`, update that copy from this checkout with
-the user's approval.
-
-## Reinstall for Zero CLI
-
-Zero CLI discovers skills from a `skills/` directory (project `.zero/skills/` or the global
-config dir). Copy each Zero skill directory in:
+Run the repository's `scripts/install-skills.mjs` from the checkout. It discovers all ten Paean
+skills, copies their resources, and backs up changed existing files outside the discovery root.
+It preserves extra local files and refuses symlinks inside skill destinations; inspect a refused
+link and its owner before deciding how to update that installation.
 
 ```bash
-mkdir -p ~/.zero/skills
-cp -R zero/paean-publish ~/.zero/skills/
-cp -R zero/paean-remix ~/.zero/skills/
-cp -R zero/paean-zero-setup ~/.zero/skills/
-cp -R zero/paean-game-create ~/.zero/skills/
-cp -R zero/paean-sdk ~/.zero/skills/
-cp -R zero/paean-skills-update ~/.zero/skills/
-cp -R zero/paean-convert-to-ad ~/.zero/skills/
-cp -R zero/paean-convert-to-rednote ~/.zero/skills/
+node scripts/install-skills.mjs --target claude-code,zero,gemini,antigravity,deepseek-harness --dry-run
+node scripts/install-skills.mjs --target claude-code,zero,gemini,antigravity,deepseek-harness
+node scripts/install-skills.mjs --target claude-code,zero,gemini,antigravity,deepseek-harness --check
 ```
 
-On Windows (PowerShell):
+Choose only requested clients; these commands also work in PowerShell. `--dry-run` and `--check`
+write nothing. `--check` exits 1 for differing/missing repository files; additional local files
+are preserved and are not part of that comparison. Backups live in `.8x-skills-backups/` beside
+the destination skills directory. Do not copy credentials or change the model, proxy, or VPN.
 
-```powershell
-New-Item -ItemType Directory -Force "$HOME\.zero\skills" | Out-Null
-Get-ChildItem zero -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.zero\skills\$($_.Name)" -Recurse -Force }
-```
+| Target | Global default | Project root / compatibility |
+|---|---|---|
+| `claude-code` | `~/.claude/skills/` | `.claude/skills/` |
+| `codex` | `~/.agents/skills/` | `.agents/skills/`; update an existing `$CODEX_HOME/skills/` or `~/.codex/skills/` installation with `--dest` when the client already discovers it |
+| `zero` | `~/.zero/skills/` | `.zero/skills/` |
+| `gemini` | `~/.gemini/skills/` | `.gemini/skills/`; `.agents/skills/` is also discovered and takes precedence within a scope |
+| `antigravity` | `~/.gemini/config/skills/` | `.agents/skills/`; desktop 2.0 / IDE; legacy IDE path is `~/.gemini/antigravity/skills/` |
+| `antigravity-cli` | `~/.gemini/antigravity-cli/skills/` | `.agents/skills/`; separate from the desktop/IDE default |
+| `deepseek-harness` | `$DSH_HOME/skills/`, otherwise `~/.dsh/skills/` | `.dsh/skills/`, `.agents/skills/`, shared `$DSH_AGENTS_HOME/skills/` (default `~/.agents/skills/`), or configured custom roots |
 
-If a project uses `.zero/skills/`, copy there instead or in addition.
-
-## Mirrors
-
-`claude-code/` is the canonical tree. After pulling, `node scripts/sync-variants.mjs --check`
-confirms `codex/` and `zero/` match it; drift means the checkout is mid-edit — run
-`node scripts/sync-variants.mjs` only when you are editing the skills yourself, never on a
-plain update.
-
-## Verify
+Use `--dest` with one target for a project or a verified custom home:
 
 ```bash
-find claude-code codex zero -maxdepth 2 -name SKILL.md | sort
-node --check codex/paean-publish/scripts/publish.mjs
-node --check codex/paean-remix/scripts/remix.mjs
-node --check codex/paean-game-create/scripts/validate-game.mjs
-node --check zero/paean-publish/scripts/publish.mjs
-node --check zero/paean-remix/scripts/remix.mjs
-node --check zero/paean-game-create/scripts/validate-game.mjs
+node scripts/install-skills.mjs --target codex --dest "$HOME/.codex/skills"
+node scripts/install-skills.mjs --target deepseek-harness --dest /path/to/harness-home/skills
 ```
 
-Report the current commit hash and any files that remain modified.
+Do not guess `.deepseek/skills/`, confuse Antigravity with Gemini CLI, or add a duplicate in a
+shared root. A Harness fork can override the official home; inspect that client's configuration.
+Each root must directly contain `paean-name/SKILL.md`, not an extra `8x-skills/` or `claude-code/`
+layer. Gemini, Antigravity, and Harness use the portable canonical source without new repo mirrors.
+
+Directory references checked 2026-10-05:
+[Codex](https://learn.chatgpt.com/docs/build-skills#where-to-save-skills),
+[Gemini CLI](https://geminicli.com/docs/cli/skills/),
+[Antigravity](https://antigravity.google/docs/skills/#skills-by-surface),
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/README.md).
+
+## Mirrors and verification
+
+`claude-code/` is canonical. After pulling, `node scripts/sync-variants.mjs --check` confirms
+`codex/` and `zero/` match it. Regenerate mirrors only while editing the skills, not during a plain
+installation. The installer does not pull, regenerate mirrors, install dependencies, or log in.
+
+After installation, run `--check` with the same target and destination. Verify the relevant
+client catalog where available: Gemini `gemini skills list` / `/skills list` and `/skills reload`;
+Antigravity IDE Customizations; Harness skill catalog; Codex's skill selector (restart if changes
+have not appeared). Do not start a paid model or synthesis request merely to verify installation.
+
+Report the repository commit, modified files, actual destination paths, backup locations, and
+whether verification covered only files or also live client discovery.

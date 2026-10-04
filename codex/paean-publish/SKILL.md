@@ -9,10 +9,11 @@ Publish a static frontend to a public `*.clide.app` URL using the bundled
 `scripts/publish.mjs`. The script needs Node 18+ and nothing else — the upload archive is
 built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
-> **Using this skill in Codex.** Codex has no frontmatter skill loader, so
-> reference this file explicitly: add a line to your project `AGENTS.md` such as
-> *"For this task, follow `8x-skills/codex/paean-publish/SKILL.md`."*, or point Codex at
-> this file in your prompt. Any scripts and reference files live next to this SKILL.md.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-publish/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 ## Choose the mode from the user's intent
 

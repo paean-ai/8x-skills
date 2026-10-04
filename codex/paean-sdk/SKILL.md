@@ -1,6 +1,6 @@
 ---
 name: paean-sdk
-description: Design and integrate Paean SDK capabilities for static apps/games — cloud save, leaderboards, paid access, IAP, rewarded ads (IAA), multiplayer rooms, AI, shared data, and sharing. Use for capability selection, feature design, implementation, and local SDK testing; also route requests phrased as paean iap, paean iaa, paean net, paean rank, or paean ai to the corresponding guide. Not for publishing (see paean-publish).
+description: Design and integrate Paean SDK capabilities for static apps/games — cloud save, leaderboards, paid access, IAP, rewarded ads (IAA), multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. Use for capability selection, implementation, and local SDK testing; route paean iap, paean iaa, paean net, paean rank, or paean ai to the corresponding guide. For speech assets during creation use paean-tts; for publishing use paean-publish.
 ---
 
 # Paean SDK (Codex) — platform capabilities for Square apps
@@ -13,11 +13,11 @@ shell proxies for the signed-in user, isolated per **(app × user)**. In a plain
 browser there is no host, so everything must degrade to `localStorage` and the
 app must stay fully usable (or, for a paid app, stay in its demo).
 
-> **Using this skill in Codex.** Codex has no frontmatter skill loader, so
-> reference this file explicitly: add a line to your project `AGENTS.md` such as
-> *"To add cloud save / a leaderboard to a Paean app, follow
-> `8x-skills/codex/paean-sdk/SKILL.md`."*, or point Codex at this file in your
-> prompt. The reference files live in `reference/` next to this SKILL.md.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-sdk/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 This skill integrates platform services into an existing app. For creating or
 broadly polishing the game itself use `paean-game-create`; for publishing (and
@@ -36,6 +36,11 @@ not separate installed skills, CLI commands, or SDK namespaces. Read only the ma
 | `paean net` / multiplayer | Cooperative or competitive shared sessions | [Net guide](reference/design-net.md) |
 | `paean rank` / leaderboard | Comparable scored runs; cloud continuity | [Rank guide](reference/design-rank.md) |
 | `paean ai` / AI | Runtime hints, dialogue, creation, voice | [AI guide](reference/design-ai.md) |
+| Runtime TTS / read-aloud / spoken NPC dialogue | Player-triggered speech through `ai.tts()` | [AI guide: speech](reference/design-ai.md#speech-with-paean-tts) |
+
+For `paean tts` requests to create fixed voice files or video narration, use the companion
+[paean-tts skill](../paean-tts/SKILL.md). That production workflow uses the creator's local login;
+runtime speech uses each player's host session and the `ai.tts` scope.
 
 For new games/remixes, record a compact capability plan in the production brief: selected feature,
 player benefit, entry point, API/scope, persistent state, failure behavior, and verification.

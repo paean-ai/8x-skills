@@ -8,10 +8,11 @@ description: Convert a published Paean / clide.app work into an HTML5 playable-a
 Turn a finished work into a **playable ad**: a self-contained HTML5 bundle an ad network serves in
 place of a video, where the viewer plays the real game before deciding to install.
 
-> **Using this skill in Codex.** Codex has no frontmatter skill loader, so
-> reference this file explicitly: add a line to your project `AGENTS.md` such as
-> *"For this task, follow `8x-skills/codex/paean-convert-to-ad/SKILL.md`."*, or point Codex at
-> this file in your prompt. Any scripts and reference files live next to this SKILL.md.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-convert-to-ad/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 Why it matters: an install driven by an accidental tap on a video ad opens at a fraction of the
 rate of one where the person already played. The playable is a self-selection filter, so expect

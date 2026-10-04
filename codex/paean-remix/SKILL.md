@@ -8,10 +8,11 @@ description: Remix one or more published Paean Apps Square games into a brand-ne
 Download the source of one or more published `*.clide.app` games (by hash) and use them as
 the basis for a new game, recording the full remix lineage so upstream creators are credited.
 
-> **Using this skill in Codex.** Reference this file explicitly — add a pointer in your project
-> `AGENTS.md` ("To remix Paean Apps Square games, follow
-> `8x-skills/codex/paean-remix/SKILL.md`.") or name the skill in your prompt. It is a
-> self-contained Node script — `scripts/remix.mjs` — needing Node 18+ and `unzip` on PATH.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-remix/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
 (global `fetch`) and nothing else; source archives are unpacked in-process by
@@ -151,6 +152,10 @@ is how you pick the primary and assign roles honestly.
    Prefer the current `paean-sdk` when its documented storage, leaderboard, payment, advertising,
    multiplayer, or social capabilities suit the remix; never invent unavailable APIs, and preserve
    graceful local play for optional capabilities.
+   If the remix needs new dialogue, spoken tutorials, or narration, use
+   [paean-tts](../paean-tts/SKILL.md) to generate and save fixed speech in the new work's language
+   and identity. For dynamic speech use the SDK AI guide. Preserve valid source credits; an
+   inherited character voice is not permission or an API facility to clone that voice.
 
 5. **Finalize `clide.json`.** Set a fitting `title`, `summary`, `category`, and `tags` for the
    new game, and set each `remix.parents[].role` to the aspect actually borrowed. Adjust

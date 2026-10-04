@@ -32,6 +32,18 @@ lives in the pipeline; only genuine product decisions are left to you.**
 
 The two audit scripts here check the artifact for all of this. They are a gate, not a suggestion.
 
+### TTS during creation and for demo videos
+
+Paean speech synthesis is available to the creator through [paean-tts](../paean-tts/SKILL.md).
+Use it when making narration for a separate demo video or speech assets for an accompanying 8x
+version. This does not permit runtime REST/SDK TTS in the offline mini-tool, and the current file
+whitelist excludes both WAV and MP3. Preserve visible text and remove unavailable speech controls
+from the offline version; do not disguise audio by changing its extension to pass the audit.
+
+## RedNote release presentation
+
+For a new game listing, read [the release presentation standard](reference/rednote-release-standard.md) **before editing the UI or recording media**. It covers verified copyright/source credits during automatic gameplay and in the entry UI, optional virtual landscape with working input mapping, 14-character listing copy, a game-specific icon and a 30-second HD demo captured from the final ZIP. Apply game-specific items only where they fit the work and the user's request.
+
 ## Measured facts, from converting 56 works
 
 These are the failure modes that actually happened, not a docs summary.
@@ -540,7 +552,9 @@ errors are not enough: the regression that shipped produced none.
 ## Compliance
 
 Rewrite every online/leaderboard/cloud-save/ads string as a **technical dependency**, with no
-platform promotion, no domain, no imperative ("open it in X"):
+platform promotion, external link, or imperative ("open it in X"). The only domain-shaped UI text
+is a non-interactive copyright notice when the original rights statement actually supports it;
+follow [the release presentation standard](reference/rednote-release-standard.md):
 
 > 云端排行依赖 Paean.AI SDK 的排行榜能力，本版本未接入；此处显示本机最佳成绩。
 

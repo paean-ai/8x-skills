@@ -8,8 +8,7 @@
  * derived from the claude-code one with the variant's packaging:
  *
  *   codex:  H1 gains " (Codex)"; a "Using this skill in Codex" blockquote is
- *           inserted after the first paragraph (kept from the existing codex
- *           file when present, so per-skill wording survives).
+ *           inserted after the first paragraph with current discovery guidance.
  *   zero:   description gains " Runs from Zero CLI."; H1 gains " (Zero CLI)";
  *           an "Installing in Zero CLI" blockquote is inserted the same way.
  *
@@ -29,12 +28,14 @@ const check = process.argv.includes('--check')
 const VARIANTS = {
   codex: {
     h1: ' (Codex)',
+    refreshQuote: true,
     marker: /^> \*\*Using this skill in Codex\.\*\*/,
     fallback: (skill) => [
-      '> **Using this skill in Codex.** Codex has no frontmatter skill loader, so',
-      '> reference this file explicitly: add a line to your project `AGENTS.md` such as',
-      `> *"For this task, follow \`8x-skills/codex/${skill}/SKILL.md\`."*, or point Codex at`,
-      '> this file in your prompt. Any scripts and reference files live next to this SKILL.md.',
+      '> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`',
+      '> or the project\'s `.agents/skills/` for discovery. Existing clients that already load',
+      '> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.',
+      `> You can also reference \`8x-skills/codex/${skill}/SKILL.md\` directly.`,
+      '> Keep the bundled scripts and references beside this file; avoid duplicate installations.',
     ].join('\n'),
     description: (d) => d,
   },
@@ -82,7 +83,7 @@ function transformSkill(md, variant, skill, prior) {
   let i = h1 + 1
   while (i < lines.length && lines[i].trim() === '') i++
   while (i < lines.length && lines[i].trim() !== '') i++
-  const quote = existingBlockquote(prior, v.marker) || v.fallback(skill)
+  const quote = (!v.refreshQuote && existingBlockquote(prior, v.marker)) || v.fallback(skill)
   lines.splice(i, 0, '', quote)
   return lines.join('\n')
 }
@@ -91,7 +92,7 @@ let changed = 0
 for (const skill of readdirSync(SRC).filter((d) => statSync(path.join(SRC, d)).isDirectory())) {
   for (const variant of Object.keys(VARIANTS)) {
     const dst = path.join(root, variant, skill)
-    mkdirSync(dst, { recursive: true })
+    if (!check) mkdirSync(dst, { recursive: true })
     for (const sub of ['scripts', 'reference', 'references']) {
       const from = path.join(SRC, skill, sub)
       if (!existsSync(from)) continue

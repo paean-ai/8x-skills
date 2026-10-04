@@ -146,6 +146,10 @@ is how you pick the primary and assign roles honestly.
    Prefer the current `paean-sdk` when its documented storage, leaderboard, payment, advertising,
    multiplayer, or social capabilities suit the remix; never invent unavailable APIs, and preserve
    graceful local play for optional capabilities.
+   If the remix needs new dialogue, spoken tutorials, or narration, use
+   [paean-tts](../paean-tts/SKILL.md) to generate and save fixed speech in the new work's language
+   and identity. For dynamic speech use the SDK AI guide. Preserve valid source credits; an
+   inherited character voice is not permission or an API facility to clone that voice.
 
 5. **Finalize `clide.json`.** Set a fitting `title`, `summary`, `category`, and `tags` for the
    new game, and set each `remix.parents[].role` to the aspect actually borrowed. Adjust

@@ -29,3 +29,6 @@ credentials.json
 .clide/
 .remix-sources/
 /clide.json
+
+# Reproducible skill release bundles
+/dist/

@@ -1,6 +1,6 @@
 ---
 name: paean-game-create
-description: Create or substantially upgrade a production-quality, self-contained Paean web game. Use for new games, game prototypes that must be finished to release quality, or broad gameplay/visual/UI polish. Produces a directly runnable pure-JavaScript index.html project; not for SDK-only integration or publishing. Runs from Zero CLI.
+description: Create or substantially upgrade a production-quality, self-contained Paean web game. Use for new games, game prototypes that must be finished to release quality, or broad gameplay/visual/UI/audio polish, including Paean TTS dialogue and narration when useful. Produces a directly runnable pure-JavaScript index.html project; not for SDK-only integration or publishing. Runs from Zero CLI.
 ---
 
 # Paean Game Create (Zero CLI)
@@ -24,6 +24,23 @@ rather than a close copy.
 Read [references/production-standard.md](references/production-standard.md) before building. It is
 the release bar and contains the attract-mode pattern, responsive layout rules, asset guidance, and
 acceptance matrix.
+
+## Speech and narration with Paean TTS
+
+When spoken dialogue, tutorials, pronunciation examples, or narration serve the game, include them
+in the audio plan and use [paean-tts](../paean-tts/SKILL.md) to generate fixed speech assets during
+creation. It uses the creator's Paean login without requiring an upstream TTS key. Save and reuse
+the generated audio locally; keep subtitles, a mute control, and user-gesture audio unlock.
+Use the language and voice chosen for the work, split long scripts by scene, and verify timing
+and pronunciation before shipping. Speech is optional; do not add it to every game by default.
+
+For player-generated text or live NPC dialogue, use `paean-sdk`'s
+[AI guide](../paean-sdk/reference/design-ai.md) and the host's `ai.tts()` capability instead.
+The creator's JWT is an account secret for the local helper only. Runtime speech uses the player's
+host-managed session; never embed credentials in code, frontend environment variables, browser
+storage, or the release ZIP. Follow the TTS skill's security requirements and inspect the final
+artifact before delivery. Do not use signed audio URLs as permanent assets. For RedNote targets,
+follow the TTS skill's offline restrictions; independent promo-video narration remains possible.
 
 ## Choose the rendering approach deliberately
 

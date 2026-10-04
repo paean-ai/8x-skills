@@ -1,0 +1,13 @@
+{
+  "name": "paean-rednote-create",
+  "version": "0.1.0",
+  "workflows": [
+    "paean-game-create",
+    "paean-convert-to-rednote",
+    "paean-record-demo",
+    "paean-tts",
+    "paean-sdk",
+    "paean-publish",
+    "paean-remix"
+  ]
+}

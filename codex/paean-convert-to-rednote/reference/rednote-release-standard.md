@@ -1,0 +1,25 @@
+# RedNote game release presentation
+
+Use this with `paean-convert-to-rednote` when adapting a **game for a new RedNote listing**. It supplements the offline/container checks in `SKILL.md`. Apply it to future conversions; update older works only when the user asks. Utility mini-tools should show their real input and result flow; do not force an automated game battle onto a non-game tool. User instructions and actual rights notices determine the final copy.
+
+## Copyright or source credit on the demo and entry screen
+
+- During the real, automatic gameplay demo, keep a subtle, **non-interactive** line near the bottom of the game stage. The normal HUD may disappear for an immersive recording, but the credit should remain. Once the player enters the UI, keep the same credit in an appropriate footer, settings or About area. Check that the recorded video actually shows it.
+- `©` asserts copyright ownership. Use a notice such as `© 2026 paean.ai` only if the upstream copyright/licence statement names `paean.ai`; use the year and all rights holders supported by that statement, and retain any required creator and upstream attribution. If it does not, use factual source text such as `来源 · Paean.AI 开放平台 · 原作者：…` instead of assigning copyright to Paean. Keep the original licence notices in the deliverable.
+- Render the text as real text, around 11–12 px, with enough contrast against moving scenery. Place it above the bottom safe area and away from cards, virtual sticks, action buttons and captions in both orientations. Set `pointer-events: none`. Do not turn it into a link, QR code, download prompt or external call to action. A verified lowercase `paean.ai` in the copyright line is a narrow exception to the normal UI copy rule that uses `Paean.AI` and omits domains.
+- Review screenshots of the auto demo and entry UI in portrait and virtual landscape, plus the beginning, middle and end of the final recording. This is a presentation rule, not a claim of platform approval.
+
+## Optional virtual landscape for games that benefit from it
+
+The host may remain portrait even when the game works better horizontally. Offer a small translucent toggle beside the **physical top-left back control**, not beneath the top-right capsule. It should rotate the **whole game stage** (canvas and game UI) inside the host viewport without requesting device rotation or fullscreen. Keep the toggle outside the rotated stage so it stays physically upright, and persist the player's choice in the mini-tool's safe local storage. The auto demo may hide the toggle; reveal it when the player enters the UI.
+
+On every switch, recompute the logical stage width and height, WebGL/canvas backing size, camera aspect/projection and panel positions. Map mouse, PointerEvent and touch coordinates from physical screen space back into stage space before aiming, dragging cards or moving a virtual stick. For a clockwise 90° rotation, a stage point relative to its transformed bounding box uses `x = clientY - rect.top`, `y = rect.right - clientX`, with logical `width = rect.height` and `height = rect.width`; counterclockwise needs the corresponding inverse. Media queries still see the physical viewport unless the implementation supplies logical landscape styles. Cancel or safely remap a gesture in progress when switching.
+
+Test portrait, virtual landscape and a physically landscape viewport. In a desktop browser narrowed to roughly 390×844, use a real mouse to start and play: touch controls must remain visible in the phone layout even with a mouse pointer. Repeat with touch, and check the host back button, top-right capsule, footer credit and gameplay controls for overlap. A screenshot alone does not prove the rotated controls work; require an actual state change from pointer input.
+
+## Listing and media package
+
+- Provide a Chinese listing name, **three** candidate short descriptions of **exactly 14 Unicode characters each** (punctuation and spaces count), and a longer operator-facing description that explains the game's visual style, real features, controls, progression and good moments to show. Preserve source and licence attribution separately from promotional copy.
+- Design a distinct **512×512** listing icon around the actual game content and art style, using ImageGen when available; verify legibility at thumbnail size. Keep it as a listing asset rather than pretending it is a gameplay screenshot.
+- Record a **30-second** high-quality gameplay demo and cover from the **final offline ZIP**, preferably headlessly. Default portrait export: **720×1280, 30 fps, H.264 MP4**; preserve aspect ratio for a landscape-only game. Skip loading, idle starts and dead time. A longer editing master is optional. Verify codec, dimensions, frame rate, duration and moving content, then inspect several frames for the credit and attractive gameplay.
+- Audit and operate the exact ZIP to be staged. Platform simulator, Android and iOS device checks must be reported separately from local browser tests; do not describe an untested package as platform approved.
