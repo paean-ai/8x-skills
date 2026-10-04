@@ -2,17 +2,25 @@
 
 Portable agent skills for **building**, **publishing**, and **remixing** games on
 [Paean Apps Square](https://clide.app) (`*.clide.app` / `8x.gg`) — usable from **Zero CLI**,
-**Claude Code**, and **Codex** (or any agent that can read a `SKILL.md` and run a Node script).
+**Claude Code**, **Codex**, **Gemini CLI**, **Antigravity**, and **DeepSeek Harness**
+(or any agent that can read a `SKILL.md` and run a Node script).
+
+For Xiaohongshu creators, the dedicated **[Red Skill edition](redskill/README.md)** combines
+a Chinese creation entry with the existing conversion, recording, SDK, publishing and remix
+workflows in one installable package. It produces an offline mini-tool by default and adds an
+8x platform version when requested. Build it with `node scripts/build-redskill.mjs`; upload the
+generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**.
 
 | Skill | What it does |
 |-------|--------------|
-| **paean-skills-update** | Pull or sync this `8x-skills` repo and reinstall/refresh the Paean skill files for Zero CLI, Claude Code, or Codex projects. |
+| **paean-skills-update** | Update this repository and reinstall Paean skills for Zero CLI, Claude Code, Codex, Gemini CLI, Antigravity, or DeepSeek Harness. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
-| **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
+| **paean-tts** | Generate game dialogue, spoken tutorials, pronunciation samples, and demo-video narration through Paean TTS using the creator's login. Includes a local CLI, resumable WAV output, and optional pitch-preserving speed adjustment. |
+| **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
 | **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
-| **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline (module bundling, CSS lowering, a Chrome 61 API shim, licence inlining, forbidden-capability self-check) and the two artifact audits. Requires `esbuild`. |
+| **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline, compatibility and artifact audits, plus a release standard for source credit in automatic demos and entry UI, optional virtual landscape with mapped controls, 14-character listing copy, a game-specific icon and a 30-second HD video from the final ZIP. Requires `esbuild`. |
 | **paean-record-demo** | Record a 20–30 s arcade attract demo reel from a finished work: drives the game into a real session through its own seam, draws an optional title card, timed captions and a CTA end card over it, and exports MP4/WebM/GIF plus a poster frame. Playwright required; ffmpeg optional. |
 | **paean-remix** | Remix one or more published games into a new one. Clones the primary source (full assets) into the user's workspace, reads secondary sources through the 8x.gg MCP server, and scaffolds a project with a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so every upstream creator is credited exactly once. |
 
@@ -29,7 +37,8 @@ scripts run the same on macOS, Linux and Windows. The **paean-game-create** skil
 ships a game-production standard plus a static/Playwright validator. The **paean-sdk** skill ships
 browser reference files (no server, no build) you copy into your app. **paean-record-demo** needs
 Playwright for the capture and uses `ffmpeg` when it is on PATH; **paean-convert-to-rednote** needs
-`esbuild`.
+`esbuild`. **paean-tts** needs Node.js 20+ and a Paean login; FFmpeg is only needed
+for local speed changes or video mixing.
 
 Every original work and remix should adapt to both portrait and landscape instead of requiring
 players to rotate their device. Recompose the playfield and UI for the available screen, preserve
@@ -44,6 +53,7 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-skills-update/ SKILL.md
 │   ├── paean-zero-setup/ SKILL.md
 │   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
+│   ├── paean-tts/       SKILL.md + scripts/paean_tts.mjs + references/api-and-production.md
 │   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
 │   ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
 │   ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
@@ -53,6 +63,7 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-skills-update/ SKILL.md
 │   ├── paean-zero-setup/ SKILL.md
 │   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
+│   ├── paean-tts/       SKILL.md + scripts/paean_tts.mjs + references/api-and-production.md
 │   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
 │   ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
 │   ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
@@ -62,6 +73,7 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
     ├── paean-skills-update/ SKILL.md
     ├── paean-zero-setup/ SKILL.md
     ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
+    ├── paean-tts/       SKILL.md + scripts/paean_tts.mjs + references/api-and-production.md
     ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
     ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
     ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
@@ -69,11 +81,10 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
     └── paean-convert-to-rednote/ SKILL.md + scripts/{build-minitool,minitool-pipeline,audit-minitool,zip}.mjs + reference/platform-local.js
 ```
 
-All three variants ship the **same** scripts and reference files; only the `SKILL.md`
-packaging differs. The **zero/** and **claude-code/** variants use YAML frontmatter
-(`name:` + `description:`) for auto-loading — Zero CLI discovers skills from
-`.zero/skills/` / `~/.zero/skills/`, Claude Code from `.claude/skills/` /
-`~/.claude/skills/`. Codex has no skill loader and references the files explicitly.
+All three source variants ship the **same** scripts and reference files; only the `SKILL.md`
+packaging differs. Every variant includes `name` and `description` YAML frontmatter for skill
+discovery. Gemini CLI, Antigravity, and DeepSeek Harness install the portable `claude-code/`
+source; they do not need additional maintained copies of the same resources in this repository.
 
 `claude-code/` is canonical: edit there, then run `node scripts/sync-variants.mjs` to regenerate
 `codex/` and `zero/` (`--check` fails when they drift). Tests: `node --test tests/*.test.mjs`.
@@ -85,12 +96,13 @@ see `paean-sdk` and its offline mock host `reference/paean-mock.js`.
 
 ## Requirements
 
-- **Node.js 18+** (for global `fetch`).
+- **Node.js 18+** (for global `fetch`); **20+ for paean-tts**.
 - A **Paean JWT** (the token the Paean web app / Zero CLI uses).
 
-Nothing else: the scripts use only the Node standard library, and macOS, Linux and Windows are
-all supported. The `zip` / `unzip` commands are no longer needed — archives are built and read
-in-process by each skill's `scripts/zip.mjs`.
+The publish/remix/TTS API helpers use only the Node standard library; macOS, Linux and Windows
+are supported. The optional capture, conversion, and audio-processing dependencies are listed above.
+The `zip` / `unzip` commands are no longer needed — publish/remix archives are built and read
+in-process by their bundled `scripts/zip.mjs`.
 
 ## Credentials
 
@@ -121,79 +133,96 @@ overrides the API endpoint (default `https://api.paean.ai`). `ZERO_API_BASE` /
 `ZERO_CLI_BASE_URL` is often set to the LLM gateway (an Anthropic-compatible provider URL),
 which is *not* a Paean API address and is ignored.
 
-## Install
+The TTS helper accepts `PAEAN_AUTH_TOKEN`, then the legacy `PAEAN_TOKEN`, then
+`~/.paean/credentials.json` (`paean_token` / `token`) or `~/.zero/credentials.json` (`token`).
+An explicit credentials file takes precedence. An empty or expired explicit environment token
+fails instead of silently changing identity. TTS uses the fixed official API origin; the API-base
+overrides above apply to publish/remix, not to the speech helper.
 
-### Zero CLI
+## Install and update local skills
 
-Zero discovers skills from a `skills/` directory — project `.zero/skills/` or global
-`~/.zero/skills/`. Copy each Zero skill directory in:
-
-```bash
-mkdir -p ~/.zero/skills
-cp -r 8x-skills/zero/paean-publish ~/.zero/skills/
-cp -r 8x-skills/zero/paean-remix   ~/.zero/skills/
-cp -r 8x-skills/zero/paean-zero-setup ~/.zero/skills/
-cp -r 8x-skills/zero/paean-game-create ~/.zero/skills/
-cp -r 8x-skills/zero/paean-sdk ~/.zero/skills/
-cp -r 8x-skills/zero/paean-skills-update ~/.zero/skills/
-cp -r 8x-skills/zero/paean-convert-to-ad ~/.zero/skills/
-cp -r 8x-skills/zero/paean-convert-to-rednote ~/.zero/skills/
-```
-
-On Windows (PowerShell):
-
-```powershell
-New-Item -ItemType Directory -Force "$HOME\.zero\skills" | Out-Null
-Get-ChildItem 8x-skills\zero -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.zero\skills\$($_.Name)" -Recurse -Force }
-```
-
-Zero auto-offers a skill when a request matches its `description`; you can also invoke it
-explicitly ("use the paean-publish skill").
-
-### Claude Code
-
-Copy a skill directory into your skills folder (project `.claude/skills/` or global
-`~/.claude/skills/`):
+Run the bundled installer from the checkout (Node.js 18+, no dependencies or network):
 
 ```bash
-cp -r 8x-skills/claude-code/paean-publish ~/.claude/skills/
-cp -r 8x-skills/claude-code/paean-remix   ~/.claude/skills/
-cp -r 8x-skills/claude-code/paean-zero-setup ~/.claude/skills/
-cp -r 8x-skills/claude-code/paean-game-create ~/.claude/skills/
-cp -r 8x-skills/claude-code/paean-sdk ~/.claude/skills/
-cp -r 8x-skills/claude-code/paean-skills-update ~/.claude/skills/
-cp -r 8x-skills/claude-code/paean-convert-to-ad ~/.claude/skills/
-cp -r 8x-skills/claude-code/paean-convert-to-rednote ~/.claude/skills/
+node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,antigravity,deepseek-harness --dry-run
+node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,antigravity,deepseek-harness
+node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,antigravity,deepseek-harness --check
 ```
 
-On Windows (PowerShell):
+Choose only the clients you want to install. The same commands work in PowerShell. Every skill
+is installed directly as `<skills-root>/paean-*/SKILL.md`, with its scripts and references beside
+it. The installer updates all repository skills, including TTS and the recorder. It backs up
+changed existing files under the destination's parent `.8x-skills-backups/`, preserves unrelated
+skills and extra local metadata, and refuses symlinks inside a skill destination. Review a backup
+before restoring custom edits; `--check` compares repository-owned files, not extra local files.
+Both `--check` and `--dry-run` write nothing; `--check` exits 1 when an update is needed.
+Installation neither logs in nor copies account credentials or changes model/proxy settings.
 
-```powershell
-New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
-Get-ChildItem 8x-skills\claude-code -Directory | ForEach-Object { Copy-Item $_.FullName "$HOME\.claude\skills\$($_.Name)" -Recurse -Force }
+### Client directories
+
+Paths checked against official documentation on **2026-10-05**. `~` is your user home on macOS,
+Linux, or Windows. Use `--dest` for one selected target to override the default or install into
+a project. Do not install a second copy in an alias root when the first is already discovered.
+
+| Installer target | Global destination | Project destination / notes |
+|---|---|---|
+| `claude-code` | `~/.claude/skills/` | `.claude/skills/` |
+| `codex` | `~/.agents/skills/` | `.agents/skills/`; existing clients using `$CODEX_HOME/skills/` / `~/.codex/skills/` can update in place with `--dest` |
+| `zero` | `~/.zero/skills/` | `.zero/skills/` |
+| `gemini` | `~/.gemini/skills/` | `.gemini/skills/`; `.agents/skills/` is also supported and takes precedence within a scope |
+| `antigravity` | `~/.gemini/config/skills/` | `.agents/skills/`; desktop 2.0 and standalone IDE; IDE also supports legacy `~/.gemini/antigravity/skills/` |
+| `antigravity-cli` | `~/.gemini/antigravity-cli/skills/` | `.agents/skills/`; select this separately if using the CLI |
+| `deepseek-harness` | `$DSH_HOME/skills/`, otherwise `~/.dsh/skills/` | `.dsh/skills/`; also supports `.agents/skills/`, `$DSH_AGENTS_HOME/skills/` (default `~/.agents/skills/`), and configured custom roots |
+
+Sources: [Codex local skills](https://learn.chatgpt.com/docs/build-skills#where-to-save-skills),
+[Gemini CLI skills](https://geminicli.com/docs/cli/skills/),
+[Antigravity skills by surface](https://antigravity.google/docs/skills/#skills-by-surface), and
+[DeepSeek Harness filesystem provider](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/README.md).
+Harness discovers direct skill directories, not arbitrarily nested copies of the repository.
+A Harness fork may choose a different home; inspect its configured home and use `--dest`.
+
+```bash
+# Update an existing Codex installation without adding a duplicate in ~/.agents/skills
+node scripts/install-skills.mjs --target codex --dest "$HOME/.codex/skills"
+# Install only in a Gemini project
+node scripts/install-skills.mjs --target gemini --dest /path/to/project/.gemini/skills
+# Explicit custom Harness home (no global environment change)
+node scripts/install-skills.mjs --target deepseek-harness --dest /path/to/harness-home/skills
 ```
 
-Claude Code auto-discovers the `SKILL.md` and offers the skill when relevant. You can also
-invoke it explicitly ("use the paean-publish skill").
+Gemini: inspect `gemini skills list` or `/skills list`, and use `/skills reload` after an update.
+Antigravity IDE: inspect the Customizations menu; for desktop, start a fresh chat if needed.
+Harness: the filesystem provider watches skills; verify the skill is in its catalog and can load.
+Codex detects changes automatically; restart if they do not appear. Copying files verifies an
+installation, not a running client's catalog or permission grants. You can also reference any
+`SKILL.md` directly from a prompt or a project instruction file.
 
-### Codex
+## Speech during creation
 
-Codex has no frontmatter skill loader, so reference the skill explicitly. Either keep this
-repo in your project and add a pointer to your `AGENTS.md`:
+Say “use Paean TTS for this game's tutorial”, “给演示视频加中文旁白”, or `paean tts`.
+Create, Remix, Record Demo, and the Red Skill edition route fixed speech assets to
+[paean-tts](claude-code/paean-tts/SKILL.md). Dynamic in-app read-aloud uses
+[paean-sdk's AI guide](claude-code/paean-sdk/reference/design-ai.md#speech-with-paean-tts)
+and the player's host session. No upstream DashScope key is required: the local helper authenticates
+with the creator's **Paean JWT**, while Paean manages upstream credentials. This is authenticated
+account access, not anonymous or unlimited service. **Never ship that JWT in frontend code,
+build-time environment variables, browser storage, Git, logs, or a ZIP.** Runtime apps use the
+player's SDK host session and must not request or store their JWT. Follow the TTS skill's security
+requirements and inspect the final artifact for credentials before sharing or publishing.
 
-```markdown
-## Skills
-- To update Paean skills, follow `8x-skills/codex/paean-skills-update/SKILL.md`.
-- To install Zero CLI or log in to Paean for publishing, follow `8x-skills/codex/paean-zero-setup/SKILL.md`.
-- To create or substantially polish a Paean game, follow `8x-skills/codex/paean-game-create/SKILL.md`.
-- To add cloud save or a global leaderboard, follow `8x-skills/codex/paean-sdk/SKILL.md`.
-- To host on Clide or publish to Paean Apps Square, follow `8x-skills/codex/paean-publish/SKILL.md`.
-- To remix Paean Apps Square games, follow `8x-skills/codex/paean-remix/SKILL.md`.
-- To turn a finished work into a playable ad, follow `8x-skills/codex/paean-convert-to-ad/SKILL.md`.
-- To port a finished work to a RedNote mini-tool, follow `8x-skills/codex/paean-convert-to-rednote/SKILL.md`.
+```bash
+# Public availability / voices; no synthesis
+node <skill-dir>/scripts/paean_tts.mjs status
+# Validate an authored UTF-8 script without credentials, network, or output writes
+node <skill-dir>/scripts/paean_tts.mjs synthesize --text-file narration.txt --voice Cherry --out audio/narration --dry-run
+# Generate when narration is part of the requested work; may consume platform usage
+node <skill-dir>/scripts/paean_tts.mjs synthesize --text-file narration.txt --voice Cherry --out audio/narration
 ```
 
-…or point Codex at the file directly in your prompt.
+Save returned audio locally and reuse it; temporary audio URLs are not permanent assets.
+RedNote offline mini-tools cannot call cloud TTS or directly bundle WAV/MP3 under their current
+whitelist. Their separate demo videos can use generated narration. The skill documents status,
+voices, segmentation, authentication, supported fields, and bounded recovery from errors.
 
 ## Usage
 

@@ -9,10 +9,11 @@ Turn a finished work into a **RedNote mini-tool**: a `.zip` of plain static file
 RedNote container loads with **no network at all**. Everything the work needs must be inside
 the zip, and it has to survive an **Android 8.1 / Chrome 61** WebView.
 
-> **Using this skill in Codex.** Codex has no frontmatter skill loader, so
-> reference this file explicitly: add a line to your project `AGENTS.md` such as
-> *"For this task, follow `8x-skills/codex/paean-convert-to-rednote/SKILL.md`."*, or point Codex at
-> this file in your prompt. Any scripts and reference files live next to this SKILL.md.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-convert-to-rednote/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 This is a heavier conversion than the playable ad. An ad only has to open, show 30 seconds and
 exit, so it never edits the source. A mini-tool is the whole product, in Chinese, on an eight-year-old
@@ -31,6 +32,18 @@ lives in the pipeline; only genuine product decisions are left to you.**
 | Engine | Chrome 61 baseline — see below |
 
 The two audit scripts here check the artifact for all of this. They are a gate, not a suggestion.
+
+### TTS during creation and for demo videos
+
+Paean speech synthesis is available to the creator through [paean-tts](../paean-tts/SKILL.md).
+Use it when making narration for a separate demo video or speech assets for an accompanying 8x
+version. This does not permit runtime REST/SDK TTS in the offline mini-tool, and the current file
+whitelist excludes both WAV and MP3. Preserve visible text and remove unavailable speech controls
+from the offline version; do not disguise audio by changing its extension to pass the audit.
+
+## RedNote release presentation
+
+For a new game listing, read [the release presentation standard](reference/rednote-release-standard.md) **before editing the UI or recording media**. It covers verified copyright/source credits during automatic gameplay and in the entry UI, optional virtual landscape with working input mapping, 14-character listing copy, a game-specific icon and a 30-second HD demo captured from the final ZIP. Apply game-specific items only where they fit the work and the user's request.
 
 ## Measured facts, from converting 56 works
 
@@ -540,7 +553,9 @@ errors are not enough: the regression that shipped produced none.
 ## Compliance
 
 Rewrite every online/leaderboard/cloud-save/ads string as a **technical dependency**, with no
-platform promotion, no domain, no imperative ("open it in X"):
+platform promotion, external link, or imperative ("open it in X"). The only domain-shaped UI text
+is a non-interactive copyright notice when the original rights statement actually supports it;
+follow [the release presentation standard](reference/rednote-release-standard.md):
 
 > 云端排行依赖 Paean.AI SDK 的排行榜能力，本版本未接入；此处显示本机最佳成绩。
 

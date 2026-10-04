@@ -416,6 +416,11 @@ build should be able to **remove** its entry rather than show a control that alw
 - Audio should share the game's identity. Prefer a small reusable WebAudio sound palette and compact
   MIDI/sequenced BGM when it provides the right result; do not add generic sounds merely to check a
   box.
+- For fixed dialogue, spoken tutorials, or narration that serves the design, use
+  [paean-tts](../../paean-tts/SKILL.md) during creation and bundle reusable audio where the target
+  permits it. Keep subtitles and verify pronunciation, timing, and file size. Dynamic speech uses
+  the SDK AI guide with host consent and a text fallback; never synthesize on every frame or
+  attract-loop iteration. RedNote's current file whitelist excludes WAV/MP3 and runtime networking.
 - Unlock audio on user interaction, expose a coherent mute setting, avoid clipping, and stop or
   reduce playback when hidden. Layer important events without turning every action into noise.
 - Keep first interaction fast on mobile. Load the minimum launch set, decode large media off the

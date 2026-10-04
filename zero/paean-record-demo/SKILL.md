@@ -1,6 +1,6 @@
 ---
 name: paean-record-demo
-description: Record a 20-30s arcade attract-mode demo video from a finished Paean / clide.app work — an auto-playing gameplay reel with an optional title card, timed captions and a CTA end card, exported as MP4/WebM/GIF plus a poster frame. Use when a work needs a store or Square preview video, a social or ad reel, a README/landing-page clip, or when an existing demo video opens on a menu, is the wrong length, or plays a static screen. Runs from Zero CLI.
+description: Record a 20-30s arcade attract-mode demo video from a finished Paean / clide.app work — gameplay with optional title cards, captions, CTA and Paean TTS narration, exported as MP4/WebM/GIF plus a poster frame. Use for store or Square previews, narrated social/ad reels, README clips, or fixing a demo that opens on a menu, has the wrong length, or shows a static screen. Runs from Zero CLI.
 ---
 
 # Paean Record Demo (Zero CLI)
@@ -205,6 +205,26 @@ Without it the script says so, reports the lead-in it measured, and leaves you a
 ```bash
 node <skill>/scripts/encode.mjs demo/orbit-demo.webm demo/orbit-demo --start 0.9 --duration 25
 ```
+
+## Optional Paean TTS narration
+
+When the requested reel includes voiceover, use [paean-tts](../paean-tts/SKILL.md) to synthesize
+the script by scene using the creator's Paean login. Save the original WAVs, measure actual
+durations, and align them with the same moments as the captions. Keep captions legible on mute.
+The recorder does not synthesize speech or capture game audio automatically.
+
+Prepare a separate audio bed with narration, any BGM ducked under it, and silence padded to the
+intended clip duration. Pass that file to the existing encoder:
+
+```bash
+node <skill>/scripts/encode.mjs demo/orbit-demo.webm demo/orbit-vo --start 0.9 --duration 25 --audio demo/voice-bed.wav
+```
+
+`--audio` starts at the trimmed video's zero point; it does not place segments on a timeline or
+mix multiple tracks. The encoder uses `-shortest` and fades the final second, so pad to the full
+duration and leave room after the final spoken word to avoid truncating the clip or fading speech.
+Verify the resulting MP4's duration and audible ending. GIFs remain silent. This workflow also
+works for a separate RedNote demo video; it does not add cloud speech to the offline mini-tool.
 
 ## Then verify — the clip, not the log
 
