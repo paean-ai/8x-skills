@@ -152,7 +152,12 @@ is how you pick the primary and assign roles honestly.
    inherited character voice is not permission or an API facility to clone that voice.
 
 5. **Finalize `clide.json`.** Set a fitting `title`, `summary`, `category`, and `tags` for the
-   new game, and set each `remix.parents[].role` to the aspect actually borrowed. Adjust
+   new game and update its player-facing README. Use English unless the user explicitly requests
+   another language, regardless of the parents' language. Follow
+   [the release-copy standard](../paean-publish/references/release-copy.md): use accurate keywords
+   and tags for the new gameplay, play style, art style, theme, setting, and design features; remove
+   inherited claims that no longer apply and keep technical details out of descriptions and README.
+   Set each `remix.parents[].role` to the aspect actually borrowed. Adjust
    `weight` if the user wants an uneven upstream split. If the remix keeps a parent gameplay
    loop, save keys, storage namespaces, and visible title/identity must be changed so it does
    not collide with or impersonate the parent.
@@ -194,8 +199,9 @@ directly used them as sources.
 - Keep a project `LICENSE`. Default to `MIT` only for original/local code. If upstream code or
   assets impose a stricter license, preserve that license and attribution.
 - Ship top-level `favicon.svg` and an 800x400 `banner.jpg` for Square presentation.
-- Add a short README or `clide.json.summary` provenance note when the remix materially keeps a
-  parent loop, art direction, asset, or system.
+- Add concise factual creator/source credits in the README when the remix materially keeps a
+  parent loop, art direction, asset, or system. Keep required notices intact and technical lineage
+  details in `clide.json.remix` or `DEVELOPING.md`; the listing summary remains player-facing.
 - Never publish `.remix-sources/`; `.clideignore` excludes it.
 
 ## Flags
