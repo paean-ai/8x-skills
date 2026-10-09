@@ -197,7 +197,8 @@ four affordances in from the start. They cost nothing and are good engineering r
   title, story, hub, draft, shop, and tutorial gates. Any one of these is enough, in order of
   preference: a command on the event bus (`emit('cmd', { type: 'start-run', ... })`), an exported
   function or state object from the entry module, or a single namespaced global handle
-  (`window.__game = { startRound, game, state, ... }`). Document which one it is in the README.
+  (`window.__game = { startRound, game, state, ... }`). Document which one it is in `DEVELOPING.md`;
+  keep the work's README player-facing and free of implementation details.
   Without a seam, a converter is reduced to clicking DOM buttons, which breaks whenever the UI moves.
 - **Take showcase parameters as arguments**, not constants baked into the start path: seed,
   level/floor, character, weapon, difficulty. Export the tuned demo seed as a named constant
@@ -448,6 +449,7 @@ Before completion, record evidence for each row:
 | Color and surfaces | Bright, approachable casual treatment or recorded theme-specific direction; coherent materials, legible text and states, and restrained accents over the actual scene |
 | Platform fit | SDK capability plan recorded; chosen integrations verified with graceful fallback |
 | Localization | English default/fallback complete; centralized keys, locale configuration, and expanded-text layout verified |
+| Release copy | Title, description, tags, and player-facing README use English unless explicitly requested otherwise; accurate gameplay, play style, art style, theme, setting, and design-feature tags follow [the release-copy standard](../../paean-publish/references/release-copy.md); no technical promotional copy |
 | Runtime | Playwright reports no page errors, console errors, failed assets, or scrollbars |
 | Lifecycle | Resize, rotate, pointer cancel, hide/show, reload, pause, and audio unlock verified |
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |

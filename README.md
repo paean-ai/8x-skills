@@ -226,12 +226,22 @@ voices, segmentation, authentication, supported fields, and bounded recovery fro
 
 ## Usage
 
+Published work titles, descriptions, discovery tags, and player-facing READMEs default to
+**English** unless the user explicitly requests another language. Use specific, accurate keywords
+for gameplay, play style, art style, theme, setting/background, and distinctive design features;
+keep technical implementation language in separate developer documentation. This applies to new
+works, remixes, and release updates. See the
+[release-copy standard](claude-code/paean-publish/references/release-copy.md).
+
+Before a Square publish, save the reviewed `title`, `summary`, `category`, and complete `tags` in
+the project's `clide.json`, and check the dry-run's resolved metadata against its README.
+
 From the project you want to publish:
 
 ```bash
-# Preview, then publish to Apps Square under a good name
+# Preview, then publish the reviewed clide.json metadata to Apps Square
 node <skill-dir>/scripts/publish.mjs --dry-run
-node <skill-dir>/scripts/publish.mjs --yes --title "Neon Drift Racer" --category racing
+node <skill-dir>/scripts/publish.mjs --yes
 
 # Preview, then deploy to Clide hosting without an Apps Square listing
 node <skill-dir>/scripts/publish.mjs --dry-run --hosting-only --dir dist --handle neon-drift
@@ -282,8 +292,9 @@ once:
 {
   "schemaVersion": 1,
   "title": "Neon Drift Racer",
+  "summary": "Chase high scores in a fast-paced drift racer through a neon-noir cyberpunk city. Chain slides around rain-slick corners, choose branching shortcuts, and keep your combo alive beneath glowing skylines.",
   "category": "racing",
-  "tags": ["neon", "racing"],
+  "tags": ["drift-racing", "score-attack", "fast-paced", "neon-noir", "cyberpunk", "city-at-night", "branching-shortcuts", "drift-combos"],
   "license": "MIT",
   "remix": {
     "parent": "h1",                                  // tree form: primary upstream

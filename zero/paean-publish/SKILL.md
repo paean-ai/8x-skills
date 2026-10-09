@@ -34,6 +34,28 @@ ask the user to paste a token into chat.
 
 ## Workflow
 
+### Prepare release copy before dry-run
+
+Use **English by default** for the published title, summary/description, tags, and the work's
+README. Use another language only when the user explicitly requests it; the conversation,
+source project's language, runtime locale, and target platform are not language overrides.
+This applies to new releases, updates, and remixes.
+
+Read [the release-copy standard](references/release-copy.md) before writing or reviewing these
+fields. Descriptions and README copy must convey gameplay, play style, art style, theme,
+setting/background, and distinctive design features through specific, accurate tags and natural
+player-facing language. Omit technical implementation terms and development claims.
+
+For Square, save the reviewed `title`, `summary`, `category`, and complete `tags` in `clide.json`
+in the command's project root. Flags can override values for one publish, but do not reliably
+replace existing manifest metadata for later runs. Review the dry-run's resolved `metadata`,
+`titleSource`, and `titleWarning`; replace inherited, package, HTML, or directory-name defaults
+that do not meet the standard. Keep the work's README consistent with the final metadata.
+Hosting-only releases follow the same copy rules for their public title, description, and README,
+without requiring a Square manifest or listing assets.
+
+### Run and review the selected mode
+
 Run from the project root. Select the final mode during dry-run so the report describes the
 same destination that will be used for the real publish.
 
@@ -52,7 +74,8 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist] [--h
 node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist] [--title "Good Name"] [--handle chosen-name]
 ```
 
-Review `publishDir`, file/byte summary, `secretScan`, `runtimeCompatibility`, destination,
+Review `metadata` against the release-copy standard, then `publishDir`, file/byte summary,
+`secretScan`, `runtimeCompatibility`, destination,
 and requested/effective handle. If the dry-run is safe and the user confirms that exact
 public destination, run the same command without `--dry-run` and add `--yes`.
 

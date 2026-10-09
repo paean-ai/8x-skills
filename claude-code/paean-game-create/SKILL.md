@@ -162,6 +162,18 @@ sequencing and a restrained reusable sound bank when audio adds value.
 
 ## Validate before claiming completion
 
+### Prepare the work's release copy
+
+Write the release title, description, tags, and player-facing README in English unless the user
+explicitly requests another language for them. Follow
+[the release-copy standard](../paean-publish/references/release-copy.md): cover the actual gameplay,
+play style, art style, theme, setting/background, and distinctive design features with accurate
+keywords and tags. Describe the experience without technical implementation language. Keep
+development commands, integration notes, and recording entry points in `DEVELOPING.md`.
+Prepare matching `clide.json` metadata for a requested Square release without publishing it early.
+
+### Verify play and presentation
+
 Let `$SKILL_DIR` be the directory containing this `SKILL.md`. Run the bundled validator from the
 game directory's parent:
 
@@ -194,4 +206,6 @@ Completion requires all of the following:
 - color and surface treatment follow the approachable casual default or the recorded theme-specific
   direction, with clear text, controls, and action hierarchy over the actual scene;
 - the game remains playable after reload and after background/foreground transitions;
+- release title, description, tags, and README meet the release-copy standard and describe only
+  features present in the finished work;
 - final project size and largest assets are reviewed, with obvious waste removed.
