@@ -50,7 +50,7 @@ export function analyzeRuntime(input, metadata = {}) {
       if (g.missingMetrics) blockers.push('Incomplete frame/elapsed metrics');
       if (g.longestContinuousSeconds < 900) blockers.push('Less than 15 continuous minutes in this content/FPS profile');
       const longFrameRatio = g.frames ? g.longFrames / g.frames : null;
-      if (g.maxWindowP95 > (g.targetFPS === 60 ? 20 : 38) || longFrameRatio === null || longFrameRatio >= .01) {
+      if (longFrameRatio !== null && (g.maxWindowP95 > (g.targetFPS === 60 ? 20 : 38) || longFrameRatio >= .01)) {
         blockers.push('Frame stability exceeds the selected profile budget');
         actions.push('Profile the real renderer: separate JS/physics/GC time from draw calls, shader and fill-rate cost; lower the relevant cost and repeat the same scene.');
       }

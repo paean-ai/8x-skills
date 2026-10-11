@@ -108,4 +108,8 @@ test('performance gate rejects short/interrupted evidence and separates FPS prof
   full.splice(200, 0, { event: 'paused' });
   assert.equal(analyzeRuntime(full, metadata).profiles[0].frameGate, 'not-passed');
   assert.equal(analyzeRuntime([event(0)]).profiles[0].frameGate, 'not-passed');
+  const incomplete = event(0); delete incomplete.values.elapsed;
+  const report = analyzeRuntime([incomplete], metadata).profiles[0];
+  assert.equal(report.frameGate, 'not-passed');
+  assert.ok(!report.blockers.some(reason => reason.startsWith('Frame stability')), 'Missing data is not evidence of a performance failure');
 });
