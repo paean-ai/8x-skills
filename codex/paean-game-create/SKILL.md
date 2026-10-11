@@ -153,3 +153,7 @@ Completion requires all of the following:
   placeholder or half-finished state;
 - the game remains playable after reload and after background/foreground transitions;
 - final project size and largest assets are reviewed, with obvious waste removed.
+
+## Mobile runtime quality (new games and substantial upgrades)
+
+Integrate the paean-sdk game runtime contract from `reference/game-runtime.md` and `reference/paean-runtime.js` in that skill. Declare `<meta name="paean-runtime" content="1">` after the copyright comment. Implement real ready, lifecycle/Worker pause, quality changes and checkpoint callbacks. Run `node scripts/package-runtime.mjs RELEASE` after final asset edits, then `node scripts/validate-game.mjs RELEASE --require-runtime`. Keep the renderer free; legacy games stay compatible. A successful package/static check is not a real-device performance pass.
