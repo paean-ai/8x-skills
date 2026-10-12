@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { createServer } from 'node:http';
-import { verifyRuntimePackage } from './package-runtime.mjs';
 import { readFile, readdir, stat, mkdir } from 'node:fs/promises';
 import { extname, join, relative, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
@@ -21,19 +20,18 @@ const mime = {
 
 function usage(message) {
   if (message) console.error(`Error: ${message}\n`);
-  console.error('Usage: node validate-game.mjs <game-directory> [--static-only] [--require-runtime] [--screenshots <directory>]');
+  console.error('Usage: node validate-game.mjs <game-directory> [--static-only] [--screenshots <directory>]');
   process.exit(2);
 }
 
 function parseArgs(argv) {
-  const result = { root: null, staticOnly: false, screenshots: null, requireRuntime: false };
+  const result = { root: null, staticOnly: false, screenshots: null };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node validate-game.mjs <game-directory> [--static-only] [--require-runtime] [--screenshots <directory>]');
+      console.log('Usage: node validate-game.mjs <game-directory> [--static-only] [--screenshots <directory>]');
       process.exit(0);
     } else if (arg === '--static-only') result.staticOnly = true;
-    else if (arg === '--require-runtime') result.requireRuntime = true;
     else if (arg === '--screenshots') {
       if (!argv[i + 1]) usage('--screenshots needs a directory');
       result.screenshots = resolve(argv[++i]);
@@ -273,7 +271,6 @@ async function runtimeChecks(root, screenshotDir) {
 
 const args = parseArgs(process.argv.slice(2));
 const result = await staticChecks(args.root);
-result.errors.push(...await verifyRuntimePackage(args.root, args.requireRuntime));
 let runtimeErrors = [];
 if (!args.staticOnly && result.errors.length === 0) {
   try { runtimeErrors = await runtimeChecks(args.root, args.screenshots); }

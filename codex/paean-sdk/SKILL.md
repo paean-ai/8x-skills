@@ -250,7 +250,3 @@ mock does not crash; no token, API key, or backend URL anywhere in the code.
 Use **paean-publish** (`--price` for a paid app). Publishing serves the app at
 `*.clide.app`, the platform swaps in the canonical `paean-sdk.js`, and the host
 bridge activates inside the Paean app / `8x.gg` shell.
-
-## Game runtime quality
-
-For game lifecycle, native-host quality budgets, checkpoints and verified offline resources, read [reference/game-runtime.md](reference/game-runtime.md) and use [reference/paean-runtime.js](reference/paean-runtime.js). This does not require account scopes or changing the renderer.
