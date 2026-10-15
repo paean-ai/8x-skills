@@ -18,7 +18,7 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
 | **paean-tts** | Generate game dialogue, spoken tutorials, pronunciation samples, and demo-video narration through Paean TTS using the creator's login. Includes a local CLI, resumable WAV output, and optional pitch-preserving speed adjustment. |
 | **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
-| **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, scans for secrets, and blocks accidental static-only upload of detected Worker/D1/R2 projects. |
+| **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, secret scanning, and Worker/D1/R2 compatibility checks. Also guides tips (including self-tips), Express Boost, and creator content Boost for existing Square works. |
 | **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
 | **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline, compatibility and artifact audits, plus a release standard for source credit in automatic demos and entry UI, optional virtual landscape with mapped controls, 14-character listing copy, a game-specific icon and a 30-second HD video from the final ZIP. Requires `esbuild`. |
 | **paean-record-demo** | Record a 20–30 s arcade attract demo reel from a finished work: drives the game into a real session through its own seam, draws an optional title card, timed captions and a CTA end card over it, and exports MP4/WebM/GIF plus a poster frame. Playwright required; ffmpeg optional. |
@@ -252,6 +252,27 @@ Square publish results return `url` and `shareUrl` as `https://www.8x.gg/apps/{h
 Use this canonical link when sharing the work. `playUrl` preserves the runtime address;
 `shellUrl` is an optional diagnostic address. Hosting-only projects retain their actual
 Clide URL because they have no Square listing. Dry-runs do not produce a published link.
+
+### Tip and Boost an existing work
+
+Use `paean-publish` for “给这个作品打赏 100 credits”, “给我自己的作品打赏 100 credits”,
+or “给这个作品做一次 500 credits 的极速 Boost”, together with the actual work link.
+These are example requests, not default spending amounts. You can also sign in and use
+**Tip** or **Boost** on `https://www.8x.gg/apps/{hashKey}`; no republish is needed.
+
+Self-tips are supported and still follow the platform/remix revenue split. The work-page
+Boost is Express Boost, available for your own or another creator's listed work; creator
+content Boost instead reserves a USD budget for feed delivery on your own listed work.
+See the [Tip and Boost guide](claude-code/paean-publish/references/tip-boost.md) for page steps,
+quotes, payment APIs, receipts, and duplicate-charge recovery. `publish.mjs` has no tip/boost
+flags, and publishing does not automatically buy either operation.
+
+Tip support and Boost can help a work attract players' attention; content Boost can increase
+opportunities for display and traffic. Results depend on the work, audience response, and
+platform distribution. Tips are not a fixed ranking multiplier, and Express Boost counters
+are not evidence of organic reach.
+
+### Validate and remix games
 
 Before publishing a newly created or remixed game, validate its self-contained project and browser
 runtime (Playwright must be installed in the working environment):
