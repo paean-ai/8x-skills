@@ -22,6 +22,11 @@ This skill integrates platform services into an existing app. For creating or
 broadly polishing the game itself use `paean-game-create`; for publishing (and
 declaring a price) use `paean-publish`.
 
+For a one-off tip/打赏 (including your own work) or Boost/加热 on an already published work,
+use [paean-publish's Tip and Boost guide](../paean-publish/references/tip-boost.md).
+That account operation needs no game-code change; this skill's `pay.tip()` guidance is for
+integrating a player-triggered tip sheet inside an app.
+
 ## Choose capabilities from the work's design
 
 Use this single entry for combinations of platform features. Phrases such as `paean iap`,

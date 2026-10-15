@@ -1,6 +1,6 @@
 ---
 name: paean-publish
-description: Publish a static frontend with a top-level index.html to Clide hosting, optionally without an Apps Square listing, or publish it publicly to Paean Apps Square. Use for clide.app hosting/deploy requests, Square listing requests, and custom *.clide.app subdomains. This skill does not deploy server-side Workers or provision D1/R2 bindings.
+description: Publish a static frontend to Clide hosting or Paean Apps Square, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings.
 ---
 
 # Paean Publish
@@ -15,6 +15,11 @@ built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and W
 |---|---|---|
 | Host/deploy on Clide, keep it out of the gallery | `--hosting-only` | Direct static hosting only; no workspace and no Apps Square row |
 | Publish/list/share in Apps Square | default | Workspace upload, public Square listing, and `*.clide.app` site |
+| Tip / 打赏 a published work, including your own; boost / 加热 a work | [Tip and Boost guide](references/tip-boost.md) | A separate, user-authorized payment against an existing Square app; no upload |
+
+For tip/boost requests, go directly to the linked guide. Resolve the existing work and use the
+page controls or documented API; `publish.mjs` has no tip/boost flags. The publishing workflow
+below is not needed for these operations.
 
 Do not turn a hosting request into a Square listing. If the user says “do not list in the
 Square”, `--hosting-only` is mandatory. Both modes create a publicly reachable site, so get
@@ -87,6 +92,17 @@ saved in `.clide/publish.json` so later updates retain the public link and runti
 Hosting-only results have no Square app ID: return their actual hosted `url`. Never invent
 an `/apps/` link from a site handle or workspace ID. A dry-run has not published anything;
 its `requestedUrl` describes the requested hosting address, not a completed share link.
+
+### Optional support and promotion after a Square publish
+
+After a successful Square publish, briefly mention that the creator can tip their own work or
+use Boost, and link the canonical work page. Tip support and Boost can help a work attract
+players' attention; content Boost can increase opportunities for feed exposure and traffic.
+Do not promise a ranking position, traffic multiplier, or organic audience. Offer this as an
+optional next step, without choosing a budget or spending as part of publishing. Read
+[Tip and Boost](references/tip-boost.md) when the user wants instructions or execution; it
+distinguishes the page's Express Boost from creator content Boost and explains self-tips.
+Hosting-only releases have no Square target for this follow-up.
 
 ## Full-stack and Worker projects
 
