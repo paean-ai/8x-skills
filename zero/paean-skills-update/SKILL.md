@@ -1,6 +1,6 @@
 ---
 name: paean-skills-update
-description: Update the local 8x-skills repository and install or refresh Paean skills for Claude Code, Codex, Zero CLI, Gemini CLI, Antigravity, or DeepSeek Harness. Use for skill updates, missing/stale local installations, or configuring supported client skill directories. Runs from Zero CLI.
+description: Update the local 8x-skills repository and install or refresh Paean skills for Claude Code, Codex, Zero CLI, Gemini CLI, Cursor, Antigravity, or DeepSeek Harness. Use for skill updates, missing/stale local installations, or configuring supported client skill directories. Runs from Zero CLI.
 ---
 
 # Paean Skills Update (Zero CLI)
@@ -52,9 +52,9 @@ It preserves extra local files and refuses symlinks inside skill destinations; i
 link and its owner before deciding how to update that installation.
 
 ```bash
-node scripts/install-skills.mjs --target claude-code,zero,gemini,antigravity,deepseek-harness --dry-run
-node scripts/install-skills.mjs --target claude-code,zero,gemini,antigravity,deepseek-harness
-node scripts/install-skills.mjs --target claude-code,zero,gemini,antigravity,deepseek-harness --check
+node scripts/install-skills.mjs --target claude-code,zero,gemini,cursor,antigravity,deepseek-harness --dry-run
+node scripts/install-skills.mjs --target claude-code,zero,gemini,cursor,antigravity,deepseek-harness
+node scripts/install-skills.mjs --target claude-code,zero,gemini,cursor,antigravity,deepseek-harness --check
 ```
 
 Choose only requested clients; these commands also work in PowerShell. `--dry-run` and `--check`
@@ -68,6 +68,7 @@ the destination skills directory. Do not copy credentials or change the model, p
 | `codex` | `~/.agents/skills/` | `.agents/skills/`; update an existing `$CODEX_HOME/skills/` or `~/.codex/skills/` installation with `--dest` when the client already discovers it |
 | `zero` | `~/.zero/skills/` | `.zero/skills/` |
 | `gemini` | `~/.gemini/skills/` | `.gemini/skills/`; `.agents/skills/` is also discovered and takes precedence within a scope |
+| `cursor` | `~/.cursor/skills/` | `.cursor/skills/`; also discovers `.agents/skills/` and compatible Claude/Codex roots, so inspect existing copies first |
 | `antigravity` | `~/.gemini/config/skills/` | `.agents/skills/`; desktop 2.0 / IDE; legacy IDE path is `~/.gemini/antigravity/skills/` |
 | `antigravity-cli` | `~/.gemini/antigravity-cli/skills/` | `.agents/skills/`; separate from the desktop/IDE default |
 | `deepseek-harness` | `$DSH_HOME/skills/`, otherwise `~/.dsh/skills/` | `.dsh/skills/`, `.agents/skills/`, shared `$DSH_AGENTS_HOME/skills/` (default `~/.agents/skills/`), or configured custom roots |
@@ -76,30 +77,43 @@ Use `--dest` with one target for a project or a verified custom home:
 
 ```bash
 node scripts/install-skills.mjs --target codex --dest "$HOME/.codex/skills"
+node scripts/install-skills.mjs --target gemini --dest /path/to/project/.gemini/skills
+node scripts/install-skills.mjs --target cursor --dest /path/to/project/.cursor/skills
 node scripts/install-skills.mjs --target deepseek-harness --dest /path/to/harness-home/skills
 ```
 
 Do not guess `.deepseek/skills/`, confuse Antigravity with Gemini CLI, or add a duplicate in a
 shared root. A Harness fork can override the official home; inspect that client's configuration.
 Each root must directly contain `paean-name/SKILL.md`, not an extra `8x-skills/` or `claude-code/`
-layer. Gemini, Antigravity, and Harness use the portable canonical source without new repo mirrors.
+layer. Gemini and Cursor use their generated `gemini/` and `cursor/` sources; Antigravity and
+Harness use the portable `claude-code/` source. Existing Gemini installations from the canonical
+source can be updated in place; the installer backs up changed entrypoints as usual.
 
-Directory references checked 2026-10-05:
+Gemini and Cursor directory references checked 2026-10-15; other clients checked 2026-10-05:
 [Codex](https://learn.chatgpt.com/docs/build-skills#where-to-save-skills),
 [Gemini CLI](https://geminicli.com/docs/cli/skills/),
+[Cursor](https://cursor.com/docs/skills),
 [Antigravity](https://antigravity.google/docs/skills/#skills-by-surface),
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/README.md).
 
 ## Mirrors and verification
 
 `claude-code/` is canonical. After pulling, `node scripts/sync-variants.mjs --check` confirms
-`codex/` and `zero/` match it. Regenerate mirrors only while editing the skills, not during a plain
-installation. The installer does not pull, regenerate mirrors, install dependencies, or log in.
+`codex/`, `zero/`, `gemini/`, and `cursor/` match it. Regenerate mirrors only while editing the
+skills, not during a plain installation. The installer does not pull, regenerate mirrors,
+install dependencies, or log in.
 
 After installation, run `--check` with the same target and destination. Verify the relevant
 client catalog where available: Gemini `gemini skills list` / `/skills list` and `/skills reload`;
+Cursor Customize → Skills or `/paean-publish` in Agent chat (start a new session if needed);
 Antigravity IDE Customizations; Harness skill catalog; Codex's skill selector (restart if changes
 have not appeared). Do not start a paid model or synthesis request merely to verify installation.
+
+Cursor global skills stay local unless the user configures Cloud Agent sync. For remote work,
+use project skills checked into the intended repository or the user's existing sync setup;
+do not claim that a local install has updated a remote agent. Skill installation does not
+register MCP servers; Gemini/Cursor discovery setup lives in `paean-zero-setup`'s
+[client MCP guide](../paean-zero-setup/references/gemini-cursor-mcp.md).
 
 Report the repository commit, modified files, actual destination paths, backup locations, and
 whether verification covered only files or also live client discovery.

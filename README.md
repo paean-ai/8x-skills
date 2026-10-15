@@ -2,7 +2,7 @@
 
 Portable agent skills for **building**, **publishing**, and **remixing** games on
 [Paean Apps Square](https://clide.app) (`*.clide.app` / `8x.gg`) — usable from **Zero CLI**,
-**Claude Code**, **Codex**, **Gemini CLI**, **Antigravity**, and **DeepSeek Harness**
+**Claude Code**, **Codex**, **Gemini CLI**, **Cursor**, **Antigravity**, and **DeepSeek Harness**
 (or any agent that can read a `SKILL.md` and run a Node script).
 
 For Xiaohongshu creators, the dedicated **[Red Skill edition](redskill/README.md)** combines
@@ -13,7 +13,7 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 
 | Skill | What it does |
 |-------|--------------|
-| **paean-skills-update** | Update this repository and reinstall Paean skills for Zero CLI, Claude Code, Codex, Gemini CLI, Antigravity, or DeepSeek Harness. |
+| **paean-skills-update** | Update this repository and reinstall Paean skills for Zero CLI, Claude Code, Codex, Gemini CLI, Cursor, Antigravity, or DeepSeek Harness. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
 | **paean-tts** | Generate game dialogue, spoken tutorials, pronunciation samples, and demo-video narration through Paean TTS using the creator's login. Includes a local CLI, resumable WAV output, and optional pitch-preserving speed adjustment. |
@@ -49,45 +49,32 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 
 ```
 8x-skills/
-├── zero/
-│   ├── paean-skills-update/ SKILL.md
-│   ├── paean-zero-setup/ SKILL.md
-│   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
-│   ├── paean-tts/       SKILL.md + scripts/paean_tts.mjs + references/api-and-production.md
-│   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
-│   ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
-│   ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
-│   ├── paean-convert-to-ad/      SKILL.md + scripts/{build-ad,zip}.mjs + reference/ad-*.{js,css}
-│   └── paean-convert-to-rednote/ SKILL.md + scripts/{build-minitool,minitool-pipeline,audit-minitool,zip}.mjs + reference/platform-local.js
-├── claude-code/
-│   ├── paean-skills-update/ SKILL.md
-│   ├── paean-zero-setup/ SKILL.md
-│   ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
-│   ├── paean-tts/       SKILL.md + scripts/paean_tts.mjs + references/api-and-production.md
-│   ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
-│   ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
-│   ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
-│   ├── paean-convert-to-ad/      SKILL.md + scripts/{build-ad,zip}.mjs + reference/ad-*.{js,css}
-│   └── paean-convert-to-rednote/ SKILL.md + scripts/{build-minitool,minitool-pipeline,audit-minitool,zip}.mjs + reference/platform-local.js
-└── codex/
-    ├── paean-skills-update/ SKILL.md
-    ├── paean-zero-setup/ SKILL.md
-    ├── paean-game-create/ SKILL.md + references/production-standard.md + scripts/validate-game.mjs
-    ├── paean-tts/       SKILL.md + scripts/paean_tts.mjs + references/api-and-production.md
-    ├── paean-sdk/       SKILL.md + reference/{paean-platform,mock-bridge}.js + test-example.mjs
-    ├── paean-publish/   SKILL.md + scripts/{publish,zip}.mjs
-    ├── paean-remix/     SKILL.md + scripts/{remix,zip}.mjs
-    ├── paean-convert-to-ad/      SKILL.md + scripts/{build-ad,zip}.mjs + reference/ad-*.{js,css}
-    └── paean-convert-to-rednote/ SKILL.md + scripts/{build-minitool,minitool-pipeline,audit-minitool,zip}.mjs + reference/platform-local.js
+├── claude-code/                    # canonical skill content
+│   ├── paean-skills-update/
+│   ├── paean-zero-setup/
+│   ├── paean-game-create/
+│   ├── paean-tts/
+│   ├── paean-sdk/
+│   ├── paean-publish/
+│   ├── paean-remix/
+│   ├── paean-record-demo/
+│   ├── paean-convert-to-ad/
+│   └── paean-convert-to-rednote/
+├── codex/                          # same ten skills + Codex guidance
+├── zero/                           # same ten skills + Zero CLI guidance
+├── gemini/                         # same ten skills + Gemini CLI guidance
+└── cursor/                         # same ten skills + Cursor guidance
 ```
 
-All three source variants ship the **same** scripts and reference files; only the `SKILL.md`
-packaging differs. Every variant includes `name` and `description` YAML frontmatter for skill
-discovery. Gemini CLI, Antigravity, and DeepSeek Harness install the portable `claude-code/`
-source; they do not need additional maintained copies of the same resources in this repository.
+All five source variants ship the **same** scripts and reference files; only the `SKILL.md`
+packaging differs. Each skill directory contains its entrypoint and any bundled `scripts/`,
+`reference/`, or `references/` resources. Every variant includes `name` and `description`
+YAML frontmatter for discovery. Gemini and Cursor have native discovery/invocation notes;
+Antigravity and DeepSeek Harness install the portable `claude-code/` source.
 
 `claude-code/` is canonical: edit there, then run `node scripts/sync-variants.mjs` to regenerate
-`codex/` and `zero/` (`--check` fails when they drift). Tests: `node --test tests/*.test.mjs`.
+`codex/`, `zero/`, `gemini/`, and `cursor/` (`--check` fails when they drift).
+Tests: `node --test tests/*.test.mjs`.
 
 Square apps ship three assets at the top level: `favicon.svg`, an 800×400 `banner.jpg` and a
 512×512 `icon.jpg`. Paid apps (Steam-style: watch the demo free, buy once to play) are declared
@@ -144,9 +131,9 @@ overrides above apply to publish/remix, not to the speech helper.
 Run the bundled installer from the checkout (Node.js 18+, no dependencies or network):
 
 ```bash
-node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,antigravity,deepseek-harness --dry-run
-node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,antigravity,deepseek-harness
-node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,antigravity,deepseek-harness --check
+node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,cursor,antigravity,deepseek-harness --dry-run
+node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,cursor,antigravity,deepseek-harness
+node scripts/install-skills.mjs --target claude-code,codex,zero,gemini,cursor,antigravity,deepseek-harness --check
 ```
 
 Choose only the clients you want to install. The same commands work in PowerShell. Every skill
@@ -160,9 +147,10 @@ Installation neither logs in nor copies account credentials or changes model/pro
 
 ### Client directories
 
-Paths checked against official documentation on **2026-10-05**. `~` is your user home on macOS,
-Linux, or Windows. Use `--dest` for one selected target to override the default or install into
-a project. Do not install a second copy in an alias root when the first is already discovered.
+Gemini and Cursor paths checked on **2026-10-15**; other clients on **2026-10-05**.
+`~` is your user home on macOS, Linux, or Windows. Use `--dest` for one selected target to
+override the default or install into a project. Do not install a second copy in an alias root
+when the first is already discovered.
 
 | Installer target | Global destination | Project destination / notes |
 |---|---|---|
@@ -170,12 +158,14 @@ a project. Do not install a second copy in an alias root when the first is alrea
 | `codex` | `~/.agents/skills/` | `.agents/skills/`; existing clients using `$CODEX_HOME/skills/` / `~/.codex/skills/` can update in place with `--dest` |
 | `zero` | `~/.zero/skills/` | `.zero/skills/` |
 | `gemini` | `~/.gemini/skills/` | `.gemini/skills/`; `.agents/skills/` is also supported and takes precedence within a scope |
+| `cursor` | `~/.cursor/skills/` | `.cursor/skills/`; also discovers `.agents/skills/` and compatible Claude/Codex roots; inspect existing copies first |
 | `antigravity` | `~/.gemini/config/skills/` | `.agents/skills/`; desktop 2.0 and standalone IDE; IDE also supports legacy `~/.gemini/antigravity/skills/` |
 | `antigravity-cli` | `~/.gemini/antigravity-cli/skills/` | `.agents/skills/`; select this separately if using the CLI |
 | `deepseek-harness` | `$DSH_HOME/skills/`, otherwise `~/.dsh/skills/` | `.dsh/skills/`; also supports `.agents/skills/`, `$DSH_AGENTS_HOME/skills/` (default `~/.agents/skills/`), and configured custom roots |
 
 Sources: [Codex local skills](https://learn.chatgpt.com/docs/build-skills#where-to-save-skills),
 [Gemini CLI skills](https://geminicli.com/docs/cli/skills/),
+[Cursor skills](https://cursor.com/docs/skills),
 [Antigravity skills by surface](https://antigravity.google/docs/skills/#skills-by-surface), and
 [DeepSeek Harness filesystem provider](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/skill/skill-filesystem/README.md).
 Harness discovers direct skill directories, not arbitrarily nested copies of the repository.
@@ -186,16 +176,52 @@ A Harness fork may choose a different home; inspect its configured home and use 
 node scripts/install-skills.mjs --target codex --dest "$HOME/.codex/skills"
 # Install only in a Gemini project
 node scripts/install-skills.mjs --target gemini --dest /path/to/project/.gemini/skills
+# Install only in a Cursor project
+node scripts/install-skills.mjs --target cursor --dest /path/to/project/.cursor/skills
 # Explicit custom Harness home (no global environment change)
 node scripts/install-skills.mjs --target deepseek-harness --dest /path/to/harness-home/skills
 ```
 
 Gemini: inspect `gemini skills list` or `/skills list`, and use `/skills reload` after an update.
+Cursor: inspect Customize → Skills, or type `/paean-publish` in Agent chat; start a new session
+if updated skills have not appeared.
 Antigravity IDE: inspect the Customizations menu; for desktop, start a fresh chat if needed.
 Harness: the filesystem provider watches skills; verify the skill is in its catalog and can load.
 Codex detects changes automatically; restart if they do not appear. Copying files verifies an
 installation, not a running client's catalog or permission grants. You can also reference any
 `SKILL.md` directly from a prompt or a project instruction file.
+
+### Gemini and Cursor quick start
+
+Install both native variants, or select just the client you use:
+
+```bash
+node scripts/install-skills.mjs --target gemini,cursor --dry-run
+node scripts/install-skills.mjs --target gemini,cursor
+node scripts/install-skills.mjs --target gemini,cursor --check
+```
+
+The default destinations are `~/.gemini/skills/paean-*/` and `~/.cursor/skills/paean-*/`.
+The installer updates older Gemini copies from the generic source in place and backs up changed
+files. If a shared `.agents/skills/` copy is already active, update that verified destination
+with `--dest` instead of adding an inactive duplicate. Gemini's alias takes precedence within
+the same scope; Cursor can also discover existing Claude/Codex skill copies.
+
+In Gemini, ask “Use paean-publish to preview this project's release” and check `/skills list`.
+In Cursor, invoke `/paean-publish` and request a dry-run, or describe the task normally for
+automatic skill selection. Keep all bundled resources beside `SKILL.md`; the repo's
+`gemini/` and `cursor/` folders are distribution sources, not discovery roots on their own.
+Skills load on demand; no extra `GEMINI.md` or `.cursorrules` is required.
+
+Cursor's global skills stay local until explicitly synced for Cloud Agents. For remote work,
+use project skills committed to that project's repository or your chosen Cursor sync setup.
+Installing this repository's skills does not configure that sync or transfer credentials.
+
+For 8x.gg discovery, the [Gemini/Cursor MCP guide](claude-code/paean-zero-setup/references/gemini-cursor-mcp.md)
+includes JSON templates for Gemini `settings.json` and Cursor `mcp.json`, using each client's
+own environment-variable syntax. MCP registration is separate from installing skills; preserve
+existing settings and use your Paean login. Node and optional workflow dependencies must be
+available in the environment where the agent actually runs.
 
 ## Speech during creation
 
@@ -298,7 +324,7 @@ node <skill-dir>/scripts/remix.mjs --yes h1=gameplay h2=art h3=theme --dir my-re
 `get_app` / `get_remix_lineage` / `get_app_growth` say whether it is worth remixing;
 `list_app_files` / `read_app_file` let the agent read source without cloning anything.
 The scripts are the delivery half (full assets, local scaffold, publish). `paean-zero-setup`
-registers the server per host (`zero mcp add` / `claude mcp add` / `codex mcp add`) using
+registers the server per host (including the Gemini/Cursor config templates) using
 the same Paean token; inside the Paean Mac app it is registered automatically as `8xgg`.
 
 Run any script with `--help` for full usage. See each skill's `SKILL.md` for the complete

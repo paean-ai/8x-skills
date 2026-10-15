@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -10,7 +10,7 @@ function fixture(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }))
   const repoRoot = path.join(root, 'repo with spaces')
   const home = path.join(root, 'home')
-  for (const variant of ['claude-code', 'codex', 'zero']) {
+  for (const variant of ['claude-code', 'codex', 'zero', 'gemini', 'cursor']) {
     const skill = path.join(repoRoot, variant, 'paean-example')
     mkdirSync(path.join(skill, 'scripts'), { recursive: true })
     writeFileSync(path.join(skill, 'SKILL.md'), `---\nname: paean-example\ndescription: Example\n---\n${variant}\n`)
@@ -19,10 +19,11 @@ function fixture(t) {
   return { repoRoot, home, env: {}, targets: ['gemini'] }
 }
 
-test('client destinations distinguish Gemini, Antigravity surfaces, Codex, and Harness overrides', () => {
+test('client destinations distinguish Gemini, Cursor, Antigravity surfaces, Codex, and Harness overrides', () => {
   const home = path.resolve('fixture-home')
   const options = { home, env: {} }
   assert.equal(resolveTarget('gemini', options).destination, path.join(home, '.gemini/skills'))
+  assert.equal(resolveTarget('cursor', options).destination, path.join(home, '.cursor/skills'))
   assert.equal(resolveTarget('antigravity', options).destination, path.join(home, '.gemini/config/skills'))
   assert.equal(resolveTarget('antigravity-cli', options).destination, path.join(home, '.gemini/antigravity-cli/skills'))
   assert.equal(resolveTarget('codex', options).destination, path.join(home, '.agents/skills'))
@@ -31,6 +32,20 @@ test('client destinations distinguish Gemini, Antigravity surfaces, Codex, and H
   assert.equal(resolveTarget('deepseek-harness', { home, env: { DSH_HOME: custom } }).destination, path.join(custom, 'skills'))
   assert.equal(resolveTarget('deepseek-harness', { home, env: { DSH_HOME: '  ' } }).destination, path.join(home, '.dsh/skills'))
   assert.equal(resolveTarget('codex', { ...options, dest: path.join(home, '.codex/skills') }).destination, path.join(home, '.codex/skills'))
+})
+
+test('Gemini and Cursor install their native variants globally and into custom project roots', t => {
+  const opts = fixture(t)
+  const results = installSkills({ ...opts, targets: ['gemini', 'cursor'] })
+  for (const result of results) {
+    const expected = readFileSync(path.join(opts.repoRoot, result.target, 'paean-example/SKILL.md'))
+    assert.deepEqual(readFileSync(path.join(result.destination, 'paean-example/SKILL.md')), expected)
+    const dest = path.join(opts.home, 'project with spaces', `.${result.target}`, 'skills')
+    const [installed] = installSkills({ ...opts, targets: [result.target], dest })
+    assert.equal(installed.destination, realpathSync(dest))
+    assert.deepEqual(readFileSync(path.join(dest, 'paean-example/SKILL.md')), expected)
+    assert.equal(installSkills({ ...opts, targets: [result.target], dest, check: true })[0].changedFiles, 0)
+  }
 })
 
 test('dry-run/check do not create roots; install copies the complete skill and is idempotent', t => {
@@ -85,5 +100,9 @@ test('invalid targets, ambiguous destinations, and repository overlap fail witho
   assert.throws(() => installSkills({ ...opts, targets: ['codex', 'zero'], dest: opts.home }), /exactly one/)
   assert.throws(() => installSkills({ ...opts, check: true, dryRun: true }), /Choose/)
   assert.throws(() => installSkills({ ...opts, dest: path.join(opts.repoRoot, 'codex') }), /overlaps/)
+  for (const source of ['gemini', 'cursor']) {
+    assert.throws(() => installSkills({ ...opts, dest: path.join(opts.repoRoot, source) }), /overlaps/)
+    assert.throws(() => installSkills({ ...opts, dest: path.join(opts.repoRoot, source, 'nested') }), /overlaps/)
+  }
   assert.equal(existsSync(opts.home), false)
 })

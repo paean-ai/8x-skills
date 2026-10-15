@@ -83,7 +83,13 @@ The **paean-remix** flow pairs with the 8x.gg MCP server at `https://api.paean.a
 It gives the agent `find_app` / `search_apps` (resolve any 8x.gg or clide.app URL, a title or a
 description to an app), `get_app` / `get_remix_lineage` / `get_app_growth` (decide whether a
 remix is worth doing) and `list_app_files` / `read_app_file` (study source without cloning
-anything). It authenticates with the same Paean token the scripts use. Add it once:
+anything). It authenticates with the same Paean token the scripts use.
+
+Choose the configuration for the user's actual agent. For **Gemini CLI or Cursor**, read
+[the client MCP guide](references/gemini-cursor-mcp.md) and use its bundled JSON template;
+merge only the `8xgg` entry into the existing config. Installing skills alone does not
+register MCP or share credentials with a running client. The following commands are for
+**Claude Code**, not Gemini or Cursor:
 
 ```bash
 claude mcp add --transport http --scope user 8xgg https://api.paean.ai/8x/mcp \

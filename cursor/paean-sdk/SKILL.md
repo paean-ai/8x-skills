@@ -1,0 +1,310 @@
+---
+name: paean-sdk
+description: Design and integrate Paean SDK capabilities for static apps/games — cloud save, leaderboards, paid access, IAP, rewarded ads (IAA), multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. Use for capability selection, implementation, and local SDK testing; route paean iap, paean iaa, paean net, paean rank, or paean ai to the corresponding guide. For speech assets during creation use paean-tts; for publishing use paean-publish.
+---
+
+# Paean SDK (Cursor) — platform capabilities for Square apps
+
+Give a published Paean app the platform's account-bound capabilities through
+the Paean Web SDK (`paean-sdk.js`, **SDK 1.10+ baseline**). The app never sees a
+token or a backend URL: every call goes through a host bridge (`window.paean`,
+wrapped by the friendly `PaeanSDK` helper) that the Paean app / `8x.gg` web
+shell proxies for the signed-in user, isolated per **(app × user)**. In a plain
+browser there is no host, so everything must degrade to `localStorage` and the
+app must stay fully usable (or, for a paid app, stay in its demo).
+
+> **Using this skill in Cursor.** Install this directory under `~/.cursor/skills/`
+> or the project's `.cursor/skills/`. Cursor also discovers `.agents/skills/` and
+> compatible Claude/Codex roots; avoid duplicate installations of the same skill.
+> Find it in Customize → Skills, or type `/paean-sdk` in Agent chat.
+> Keep scripts and references beside this file and resolve their paths from this directory.
+> Run commands in the project directory when the workflow requires project files.
+> Local global skills are not automatically available to Cloud Agents; use project skills
+> or the user's chosen Cursor sync setup for remote work.
+
+This skill integrates platform services into an existing app. For creating or
+broadly polishing the game itself use `paean-game-create`; for publishing (and
+declaring a price) use `paean-publish`.
+
+For a one-off tip/打赏 (including your own work) or Boost/加热 on an already published work,
+use [paean-publish's Tip and Boost guide](../paean-publish/references/tip-boost.md).
+That account operation needs no game-code change; this skill's `pay.tip()` guidance is for
+integrating a player-triggered tip sheet inside an app.
+
+## Choose capabilities from the work's design
+
+Use this single entry for combinations of platform features. Phrases such as `paean iap`,
+`paean iaa`, `paean net`, `paean rank`, and `paean ai` are intent aliases within this skill,
+not separate installed skills, CLI commands, or SDK namespaces. Read only the matching guides:
+
+| Intent | Design fit | Read before implementing |
+| --- | --- | --- |
+| `paean iap` / purchases | Paid entry, durable content, consumables, tips | [IAP guide](reference/design-iap.md) |
+| `paean iaa` / ads | Optional rewards at natural pauses | [IAA guide](reference/design-iaa.md) |
+| `paean net` / multiplayer | Cooperative or competitive shared sessions | [Net guide](reference/design-net.md) |
+| `paean rank` / leaderboard | Comparable scored runs; cloud continuity | [Rank guide](reference/design-rank.md) |
+| `paean ai` / AI | Runtime hints, dialogue, creation, voice | [AI guide](reference/design-ai.md) |
+| Runtime TTS / read-aloud / spoken NPC dialogue | Player-triggered speech through `ai.tts()` | [AI guide: speech](reference/design-ai.md#speech-with-paean-tts) |
+
+For `paean tts` requests to create fixed voice files or video narration, use the companion
+[paean-tts skill](../paean-tts/SKILL.md). That production workflow uses the creator's local login;
+runtime speech uses each player's host session and the `ai.tts` scope.
+
+For new games/remixes, record a compact capability plan in the production brief: selected feature,
+player benefit, entry point, API/scope, persistent state, failure behavior, and verification.
+Briefly explain omitted capabilities when their fit is uncertain. For a focused SDK request,
+design only the requested feature and its dependencies. For example, a score-chasing game may use
+save + rank + an optional ad revive; a story game may use save + durable chapters + AI dialogue.
+If combining features, resolve reward delivery, ownership, ranking eligibility, and room/AI
+lifecycle together. Do not require all capabilities in every work.
+
+This reference documents the SDK 1.10.0 baseline, not the latest release.
+Before implementation, inspect the actual SDK file's
+`PaeanSDK.VERSION` and its matching canonical README (the SDK source repository's
+`docs/paean-sdk/README.md`). Resolve that source from the workspace or SDK provenance; do not
+invent a repository URL. If unavailable, use this documented baseline and report the verification
+limit. A newer helper does not guarantee every host implements every namespace. Keep common
+readiness, consent, paid-access, preview, and mock rules here; feature guides refine product design.
+
+## Files (`reference/`)
+
+- **`paean-platform.js`** — framework-agnostic integration module: detection,
+  consent, throttled cloud save with cross-device merge, leaderboard
+  submit/query with an offline queue, paid-app gate (`requireAccess`), host
+  chrome helpers, full `localStorage` fallback. Copy next to `paean-sdk.js`.
+- **`paean-mock.js`** — the **offline mock host**: a complete fake
+  `window.paean` (every SDK 1.10 namespace) that reproduces the host-shape
+  variations only real devices show (partial grants, wholesale rejection, both
+  missing-save shapes, bare-value `storage.get`, feed preview, paid app /
+  declined purchase, host chrome, old hosts missing a namespace) and, in
+  `strict` mode, records consent-discipline violations (a scope asked with no
+  user gesture, a prompt during preview, a spend without an idempotency key).
+  Use it from Playwright (`mockBridgeSource(opts)`) or load it in a plain
+  `<script>` before `paean-sdk.js` and add `?mock=1&…` to the URL while
+  developing. `mock-bridge.js` is a shim that re-exports it.
+- **`test-example.mjs`** — a runnable Playwright test driving the mock through
+  each case. Adapt `APP_URL` and the asserts to your UI.
+
+## Prerequisite: ship `paean-sdk.js`
+
+```html
+<script src="paean-sdk.js"></script>
+```
+
+Bundle a copy as a top-level file (copy it from any published app:
+`https://<any-handle>.clide.app/paean-sdk.js`). Once published, the clide
+platform serves the canonical latest SDK for any request ending in
+`/paean-sdk.js`. The SDK exposes the global `PaeanSDK` and never overwrites
+`window.paean`; the raw bridge is `PaeanSDK.host`.
+
+## The surface (SDK 1.10.0)
+
+Everything below lives on the `PaeanSDK` helper; `PaeanSDK.host` is the raw
+bridge for power users. Scopes are in `PaeanSDK.SCOPES`.
+
+| Area | Calls | Scope |
+| --- | --- | --- |
+| Detection | `ready()`, `detect()`, `isAvailable()` | — |
+| Consent | `auth.ensure(scopes)`, `auth.has(scope)`, `auth.onChange(cb)` | — |
+| Cloud save | `storage.get/put/delete/list` (values normalized) | `storage.kv` |
+| Leaderboards | `leaderboard.submitScore/get/getMyRank/deleteMyEntry/stats` | `storage.leaderboard` (`stats`: `storage.stats`) |
+| Shared app data | `shared.get/put/delete/list` (versioned, CAS) | `storage.shared.read` / `.write` |
+| App stats | `app.stats()` | `storage.stats` |
+| Profile | `account.profile()` → `{ displayName, userKey }` | `account.profile` |
+| **Paid app / products** | `access.status()`, `access.require({ sku })`, `access.owned(sku)`, `access.onChange(cb)`, `access.openShell()` | **none** (host owns the sheet) |
+| In-app purchase | `pay.quote()`, `pay.spend()`, `pay.receipt()` | `pay.spend` |
+| Tip | `pay.tip()` | none |
+| Rewarded ads | `ads.preloadRewarded()`, `ads.isRewardedAvailable()`, `ads.showRewarded()` | `ads.rewarded` |
+| Online rooms | `room.join/send/leave/peek/list`, `room.state.set/get/onChange`, `room.onMessage/onMember/onClosed/onResync/onError` | `net.room` |
+| AI | `ai.chat()`, `ai.vision()`, `ai.image()`, `ai.tts()`, `ai.asr()` | `ai.chat` / `ai.image` / `ai.tts` / `ai.asr` |
+| Agent | `agent.run()`, `agent.ask()` | `agent.chat` |
+| Share | `share({ title, text, url })` | none |
+| Usage | `usage.current()`, `usage.onUpdate(cb)` | none |
+
+Feature-detect optional surfaces on `PaeanSDK.host` (`host.shared`,
+`host.pay`, `host.room`, `host.room.state`, `host.access`): hosts ship on
+different schedules. Calling a surface the host lacks rejects with
+`PaeanUnsupportedError` (`e.code === 'sdk-too-old'`), never a TypeError.
+
+```js
+// Readiness (handles the injection race). Rejects with PaeanUnsupportedError
+// in a plain browser; stays PENDING in a feed preview and resolves on tap-in.
+const p = await PaeanSDK.ready();
+
+// Consent (first time shows the host's consent UI; the web shell may sign in first)
+await p.auth.ensure(['storage.kv', 'storage.leaderboard', 'account.profile']);
+p.auth.has('storage.kv');
+
+// Cloud save + leaderboard
+await p.storage.put('save', { best: 240, level: 7 });
+const save = await p.storage.get('save');          // value or null
+await p.leaderboard.submitScore('main', score, { metadata: { level } });
+const { entries, me } = await p.leaderboard.get('main', { limit: 20 });
+```
+
+## Paid apps and durable products (`access.*`)
+
+A Square app can be sold like a Steam game: everybody watches the demo; entering
+the real thing needs a purchase. The publisher declares it at publish time
+(`paean-publish --price 100`, written to `clide.json` `access`). The app makes
+**one call, on the first intentional tap** — never at boot, never during the
+demo:
+
+```js
+const r = await PaeanSDK.access.require();          // { unlocked, reason, receipt, status }
+if (r.unlocked) startRun();
+else if (r.status && r.status.shellUrl && !r.status.hosted) offerOpenOn8x(() => PaeanSDK.access.openShell());
+else stayInDemo();                                  // the user closed the sheet — normal
+```
+
+- **Free base-game entry and publisher-owned access resolve `unlocked: true`
+  with no UI**, so gate unconditionally. A free game can still sell paid durable
+  products; the free-entry rule applies to `require()` / SKU `app`.
+- **Never pass an amount to `access.require`; it needs no scope.** The publisher
+  must declare product prices in the platform catalogue. At purchase time, the
+  host reads that server price and confirms it in its own UI.
+- `unlocked: false` is a normal outcome: keep the demo, keep the entry point.
+- Durable products (a season pass, an expansion) use the same call with a
+  `sku` registered in the Square listing's `access.products`. Local `clide.json`
+  is input to the publish tool, not an automatically discovered live catalogue.
+  Uploading that JSON/static assets alone does not register products. Read ownership with
+  `access.owned(sku)` / `access.status()` — it is a **server record**, do not
+  cache it in `localStorage` as truth.
+- A successful hosted status with no matching SKU means the product is not
+  listed **for this platform-managed access contract**; it is not a missing
+  `pay.spend` permission. An app-managed `pay.spend` shop does not depend on
+  `access.products`. Read the
+  [IAP catalogue checks](reference/design-iap.md#catalogue-registration-and-live-checks)
+  before declaring a shop ready. Mock purchases prove integration, not listing activation.
+- Until the app is owned, every account-bound call (storage, leaderboards,
+  shared, `app.stats`, `pay.spend`, rooms) rejects with `e.code === 'APP_NOT_OWNED'`.
+  Treat it like a declined scope: local fallback, no crash.
+- Standalone `*.clide.app` visits follow the publisher's `standalone` policy
+  (`allow` / `demo` / `shell`); the SDK reads it from `/paean-app.json` and
+  reports it in `access.status()` (`hosted: false`). `?__paean_raw=1` bypasses
+  a `shell` redirect while testing.
+- Remixes of a paid app are paid (the platform enforces it), and a paid app
+  cannot be switched back to free. Plan the price before publishing.
+
+The reference module wraps this as `platform.requireAccess(sku)`,
+`platform.openShell()` and `state().access`.
+
+## In-app purchases, tips, ads, rooms, AI
+
+Documented in full in the SDK's own README (`paean-sdk.js` header + the
+`README.md` next to it in the canonical repo). The rules that matter:
+
+- **`pay.spend`** is real money at an amount the app names, confirmed natively.
+  Grant goods only when `granted === true`; pass a STABLE `idempotencyKey` per
+  purchase intent; read `quote().limits`, never hardcode minimums; prefer
+  `credits` (iOS refuses the USD lane). It can sell app-defined cosmetics as
+  well as consumables; no platform product registration is required. For permanent
+  unlocks, choose either platform-managed `access.products` ownership or direct
+  spend with app-managed, account-bound receipt persistence and recovery. Only
+  the former automatically records a durable entitlement. See the
+  [IAP guide](reference/design-iap.md) before choosing or migrating the contract.
+- **`pay.tip()`** needs no scope; the host owns the sheet.
+- **Ads**: request `ads.rewarded` on the user's tap, then `showRewarded()`;
+  grant only when `result.rewarded === true`. Never use preload as a
+  capability probe.
+- **Rooms**: request `net.room` on the user's tap; preserve solo play when networking is
+  optional. Prefer `room.state` for shared state; server storage does not validate game rules
+  or prevent cheating. See the Net guide for ownership, concurrency, and resync design.
+- **AI**: request the scope on first real use; verify current model availability, account-tier
+  support, and cost in the matching SDK documentation. Keep model configuration centralized,
+  handle quota failures, and stream displayed text where supported. See the AI guide.
+
+## Integration recipe
+
+1. Copy `reference/paean-platform.js` next to `paean-sdk.js`, load both.
+2. Create the platform and wire four callbacks to your game state:
+   ```js
+   const platform = createPaeanPlatform({
+     storageNamespace: 'mygame', saveKey: 'save', board: 'main',
+     getLocalSave: () => ({ best, unlocks }),
+     applySave:   (s) => { best = Math.max(best, s.best||0); },
+     mergeSave:   (cloud, local) => ({ best: Math.max(cloud.best||0, local.best||0) }),
+     onState:     (st) => renderCloudUI(st),
+   });
+   platform.init();
+   ```
+3. On the first intentional tap: `platform.requireAccess().then(r => r.unlocked && startRun())`.
+4. On every change to savable state call `platform.markDirty()`.
+5. At game over call `platform.submitScore(score, meta, rank => showRank(rank))`
+   (the first call triggers consent). Render `platform.getLeaderboard(20, cb)`.
+6. Drive connect/retry from a visible **Sync** control with `platform.connect()`.
+
+## Graceful degradation (required)
+
+`state().mode` is `local` (plain browser), `preview` (feed preview: do NOT call
+authorized APIs or show consent UI — `ready()` stays pending), or `paean`. A
+denied grant degrades to `local` with a retry entry point; a failed submit
+queues the score. **Never block play** — except behind the paid-app gate, which
+keeps the demo running instead.
+
+## Feed preview and host chrome (every Square app)
+
+- In the immersive feed the page boots as a **preview**: `window.__paeanPreview
+  === true`, no touches, no `window.paean`. Run the attract/demo mode; the host
+  dispatches `paean:interactive` and injects the bridge on tap-in. `detect()`
+  reports `reason: 'preview'`.
+- Native hosts run the page full screen and float a capsule over the top-right
+  corner. Ship `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">`.
+  They publish `--paean-chrome-*` / `--paean-safe-*` CSS variables,
+  `window.paean.chromeRect()` / `safeArea()` and `paeanchromechange`. This is
+  a **host** contract (not in `paean-sdk.js`); always give the CSS variables a
+  `0px` fallback. `paeanChrome()` / `onPaeanChromeChange(fn)` in the reference
+  module read them.
+
+```css
+:root{
+  --hud-top-right: calc(var(--paean-chrome-inset-top, var(--paean-safe-top, 0px)) + 8px);
+  --hud-bottom:    calc(var(--paean-safe-bottom, 0px) + 8px);
+}
+```
+
+## Gotchas the reference module handles
+
+- Capabilities vary per host; grants are per-scope, not all-or-nothing; a host
+  may reject an unknown scope wholesale (retry with `['storage.kv']`).
+- `storage.get` may resolve the bare value or `{ value }` on old hosts; the
+  helper normalizes. "No save yet" may reject ("key not found") or resolve
+  `null`. Never push a save before the first read settles.
+- Some native hosts inject `window.paean` late: keep polling `isAvailable()`.
+- Quotas are enforced server-side; keep saves small.
+- `platform.dispose()` stops timers/listeners (hot reload, tests).
+
+## Testing with the mock host (required before publishing)
+
+`reference/paean-mock.js` is the offline host. Two ways to use it:
+
+1. **Playwright** (what `test-example.mjs` does): `page.addInitScript(mockBridgeSource(opts))`
+   before `goto`. Cases to keep: plain browser; pre-granted; iOS-like partial
+   grant; wholesale rejection; both missing-save shapes; bare-value shape;
+   `{ preview: true }` (no prompt until `window.__mock.enterInteractive()`);
+   `{ access: { model: 'paid', price: 100 } }` (boot stays in demo,
+   `access.require()` on the tap unlocks) and `{ …, decline: true }` (stays in
+   demo, no throw); `{ chrome: true }` at a phone viewport (screenshot it).
+2. **Plain `<script>` while developing**: put
+   `<script>eval(mockBridgeSource({ grant: ['storage.kv'] }))</script>` (or the
+   serialized string) before your scripts in a local-only HTML, and inspect
+   `window.__mock.requests` / `.accessRequests` / `.store` / `.rows` /
+   `.shares` in the console. Remove it before publishing.
+
+Acceptance: plain browser plays with no errors; no consent or purchase prompt
+at boot or in preview; the paid gate sits on the first intentional tap; a
+declined purchase keeps the demo; deleting `window.paean.leaderboard` in the
+mock does not crash; no token, API key, or backend URL anywhere in the code.
+
+## Security rules
+
+- Never ask the user for an account, password, or token.
+- Send nothing to any third-party server; the only I/O is `PaeanSDK` / `window.paean`.
+- Never modify or fake `window.paean`, `PaeanSDK.host`, or the SDK's
+  transport globals in shipped code (the mock is for local tests only).
+
+## Then publish
+
+Use **paean-publish** (`--price` for a paid app). Publishing serves the app at
+`*.clide.app`, the platform swaps in the canonical `paean-sdk.js`, and the host
+bridge activates inside the Paean app / `8x.gg` shell.

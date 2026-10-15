@@ -10,4 +10,3 @@ Use for replayable games with comparable outcomes. Decide what skill the score m
 - Document ranking trust: client score submission is not proof of fair play. Paid boosts, ad revives, and AI assistance need an explicit eligibility rule.
 
 Acceptance: empty/populated boards, self rank, local fallback, partial grants, failed submission/retry, reload, multiple device save conflicts, and ruleset separation. Verify ordering and tie semantics against the current host contract before promising them.
-
