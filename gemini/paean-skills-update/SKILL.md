@@ -49,7 +49,7 @@ A repository update does not update an installed copy. Inspect the existing skil
 update the user's selected clients. Preserve other skills and local metadata; do not claim a
 running client has loaded new instructions merely because a copy succeeded.
 
-Run the repository's `scripts/install-skills.mjs` from the checkout. It discovers all ten Paean
+Run the repository's `scripts/install-skills.mjs` from the checkout. It discovers all available Paean
 skills, copies their resources, and backs up changed existing files outside the discovery root.
 It preserves extra local files and refuses symlinks inside skill destinations; inspect a refused
 link and its owner before deciding how to update that installation.

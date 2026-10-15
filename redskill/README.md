@@ -16,7 +16,7 @@ node scripts/build-redskill.mjs --check
 - `dist/redskill/paean-rednote-create/`：可独立安装或上传的完整技能目录。
 - `dist/redskill/paean-rednote-create-0.1.0.zip`：ZIP 根直接包含 `SKILL.md`。
 
-本目录中的 `paean-rednote-create/` **是发行入口源文件，不是完整安装包**。构建器将 `release.json` 中的 7 个规范源工作流按原目录结构放进产物的 `workflows/`，包括用于演示配音和 8x 版语音素材的 `paean-tts`（运行需 Node.js 20+ 与自己的 Paean 登录），附上根 LICENSE 与逐文件 SHA-256 清单。构建本身不运行安装器，不接触用户凭证，也不访问网络。
+本目录中的 `paean-rednote-create/` **是发行入口源文件，不是完整安装包**。构建器将 `release.json` 中的 8 个规范源工作流按原目录结构放进产物的 `workflows/`，包括用于演示配音和 8x 版语音素材的 `paean-tts`（运行需 Node.js 20+ 与自己的 Paean 登录），附上根 LICENSE 与逐文件 SHA-256 清单。构建本身不运行安装器，不接触用户凭证，也不访问网络。
 
 `--out <directory>` 可用于临时构建；仓库内输出仅允许放在 `dist/`。`--check` 比较当前源码与已有目录/ZIP，不写文件。构建器拒绝覆盖未标记为本工具产物的目录。
 

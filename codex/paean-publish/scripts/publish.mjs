@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { createZipFromDir } from './zip.mjs'
+import { readSession, sessionSummary, submitSession } from './sessions.mjs'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -16,6 +17,15 @@ const DIRECT_ZIP_UPLOAD_MAX_BYTES = Number(process.env.PAEAN_WORKSPACE_DIRECT_UP
 const PUBLISH_DIR_CANDIDATES = ['dist', 'build', 'out', '.output/public', 'public']
 const SAFETY_PATTERNS = [
   '.clide/',
+  '*.jsonl',
+  '*.jsonl.gz',
+  '.tide/',
+  '.deeptide/',
+  '.codex/',
+  '.claude/',
+  '.zero/',
+  '.gemini/',
+  '.cursor/',
   '.remix-sources/',
   'clide.json',
   // Local-only SDK test tooling (paean-sdk skill): never part of a site.
@@ -69,12 +79,16 @@ function usage() {
     '                          [--allow-static-only] [--dir <publish-dir>]',
     '                          [--title <title>] [--summary <text>] [--category <category>] [--tag <tag>]',
     '                          [--handle <subdomain>]',
+    '                          [--session-jsonl <file.jsonl[.gz]> | --no-session]',
     '                          [--price <credits> | --free] [--standalone allow|demo|shell]',
     '                          [--product <sku>=<title>:<credits>]...',
     '       publish-helper.mjs --delete [--handle <owned-handle>]',
     '',
     'Publishes a static frontend directory with top-level index.html to *.clide.app.',
     'Default mode also creates a Paean workspace and public Apps Square listing.',
+    'After Square publish, privately backs up and links --session-jsonl, PAEAN_SESSION_JSONL,',
+    '  or project .clide/creation-session.jsonl (in that order). Missing records are reported pending.',
+    '--no-session explicitly skips creation-session backup/linking. No platform sharing is enabled.',
     '--hosting-only uploads directly to Clide hosting without creating a workspace or Square listing.',
     '--dry-run validates and prints the publish directory, archive summary, and safety scan without API calls or local state writes.',
     '--yes skips the interactive public-site confirmation.',
@@ -108,6 +122,9 @@ function parseArgs(argv) {
     else if (arg === '--allow-secrets') out.allowSecrets = true
     else if (arg === '--allow-static-only') out.allowStaticOnly = true
     else if (arg === '--yes' || arg === '-y') out.yes = true
+    else if (arg === '--no-session') out.noSession = true
+    else if (arg === '--session-jsonl') out.sessionJsonl = argv[++i] ?? ''
+    else if (arg.startsWith('--session-jsonl=')) out.sessionJsonl = arg.slice('--session-jsonl='.length)
     else if (arg === '--delete' || arg === '--unpublish') out.delete = true
     else if (arg === '--dir') out.dir = argv[++i]
     else if (arg.startsWith('--dir=')) out.dir = arg.slice('--dir='.length)
@@ -141,6 +158,9 @@ function parseArgs(argv) {
   // enforced server-side). On --delete it names the owned handle to remove, and
   // is passed through verbatim so older non-conforming handles stay deletable.
   if (!out.delete && out.handle !== undefined) out.handle = requireHandleValue(out.handle)
+  if (out.sessionJsonl !== undefined && (!out.sessionJsonl || out.sessionJsonl.startsWith('--'))) throw new Error('--session-jsonl needs a JSONL file path.')
+  if (out.noSession && out.sessionJsonl !== undefined) throw new Error('--session-jsonl and --no-session are mutually exclusive.')
+  if (out.delete && (out.noSession || out.sessionJsonl !== undefined)) throw new Error('session options are only valid when publishing.')
   if (out.delete && out.dir) throw new Error('--dir is only valid when publishing, not deleting.')
   if (out.delete && out.dryRun) throw new Error('--dry-run is only valid when publishing, not deleting.')
   if (out.delete && out.hostingOnly) throw new Error('--hosting-only is only valid when publishing, not deleting.')
@@ -446,6 +466,9 @@ function collectFiles(projectRoot, publishDir, patterns) {
       const st = statSync(full)
       const relPublish = relativeUnix(publishDir, full)
       const relProject = relativeUnix(projectRoot, full)
+      // Transcripts never belong in a public site or its downloadable ZIP,
+      // including with --allow-secrets or a user-supplied .clideignore.
+      if (/\.jsonl(?:\.gz)?$/i.test(relPublish) || relPublish.split('/').some(p => /^\.(?:clide|tide|deeptide|codex|claude|zero|gemini|cursor)$/i.test(p))) continue
       if (relPublish.includes('\n')) throw new Error('Cannot publish files with newline in path: ' + relPublish)
       if (isIgnored(relProject, relPublish, patterns)) continue
       if (st.isDirectory()) walk(full)
@@ -617,8 +640,15 @@ function saveState(projectRoot, input) {
     category: input.category,
     remix: input.remix,
     access: input.access,
+    creationSession: input.creationSession,
   }
   writeFileSync(path.join(dir, CLIDE_STATE_FILE), JSON.stringify(state, null, 2) + '\n', 'utf8')
+}
+
+function saveSessionResult(projectRoot, creationSession) {
+  const publishedState = loadState(projectRoot)
+  publishedState.creationSession = creationSession
+  writeFileSync(path.join(projectRoot, CLIDE_STATE_DIR, CLIDE_STATE_FILE), JSON.stringify(publishedState, null, 2) + '\n', 'utf8')
 }
 
 function markStateUnpublished(projectRoot, { handle, squareAppHashKey, siteDeleted }) {
@@ -1191,6 +1221,16 @@ async function main() {
     throw new Error('This project is already hosted at ' + previousHostingHandle + '.clide.app. Refusing to create a second site implicitly; rename or delete the existing deployment explicitly first.')
   }
   const effectiveHandle = args.hostingOnly ? (args.handle || previousHostingHandle) : args.handle
+  // Only use a caller-selected transcript or the project's reserved snapshot.
+  // Never guess from the newest conversation in a user's global history.
+  const sessionFile = args.noSession ? undefined : args.sessionJsonl ?? (!args.hostingOnly ? process.env.PAEAN_SESSION_JSONL || undefined : undefined)
+  const defaultSession = path.join(projectRoot, '.clide', 'creation-session.jsonl')
+  const sessionSource = sessionFile !== undefined ? path.resolve(projectRoot, sessionFile)
+    : !args.noSession && !args.hostingOnly && existsSync(defaultSession) ? defaultSession : undefined
+  const preparedSession = sessionSource ? readSession(sessionSource) : undefined
+  const sessionPlan = preparedSession ? { status: 'prepared', private: true, ...sessionSummary(preparedSession) }
+    : args.noSession || args.hostingOnly ? { status: 'skipped', reason: args.noSession ? 'user-opt-out' : 'hosting-only' }
+      : { status: 'pending', reason: 'missing-session-jsonl' }
   const serverRuntime = detectServerRuntime(projectRoot)
   const compatibility = runtimeCompatibility(serverRuntime, args.allowStaticOnly)
   const patterns = getClideIgnorePatterns(projectRoot, !args.dryRun)
@@ -1225,6 +1265,7 @@ async function main() {
       publishDir: relativeUnix(projectRoot, publishDir) || '.',
       mode: args.hostingOnly ? 'hosting-only' : 'square',
       destination: args.hostingOnly ? 'Clide hosting only (*.clide.app; no Apps Square listing)' : 'Paean Apps Square public listing + *.clide.app',
+      creationSession: sessionPlan,
       ignoredBy: CLIDE_IGNORE_FILE,
       writesLocalState: false,
       // null = let the server keep the current subdomain or assign a random
@@ -1271,6 +1312,7 @@ async function main() {
       const hosted = await publishHostingOnly(token, zip.data, effectiveHandle)
       saveState(projectRoot, {
         mode: 'hosting-only',
+        creationSession: preparedSession ? { status: 'pending', reason: 'session-submission-not-finished' } : sessionPlan,
         handle: hosted.handle,
         url: hosted.url,
         archiveUrl: hosted.archiveUrl,
@@ -1280,11 +1322,16 @@ async function main() {
         title: metadata.title,
         category: metadata.category,
       })
+      const creationSession = preparedSession
+        ? await submitSession({ apiBase: API_BASE, token, prepared: preparedSession }) : sessionPlan
+      saveSessionResult(projectRoot, creationSession)
       console.log(JSON.stringify({
         success: true,
         action: 'publish',
         mode: 'hosting-only',
         listedInSquare: false,
+        creationSession,
+        workflowComplete: creationSession.status !== 'pending',
         handle: hosted.handle,
         requestedHandle: args.handle || null,
         url: hosted.url,
@@ -1323,6 +1370,8 @@ async function main() {
     console.log('Publishing public Square listing...')
     const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle, access)
     const shareUrl = 'https://www.8x.gg/apps/' + encodeURIComponent(app.hashKey)
+    // Persist the successful public release before the optional network follow-up:
+    // an interrupted backup must never erase the handle/hash needed for recovery.
     saveState(projectRoot, {
       mode: 'square',
       handle: app.publishedSiteHandle,
@@ -1338,12 +1387,18 @@ async function main() {
       category: metadata.category,
       remix: remix ? { parent: remix.parent, parents: remix.parents } : undefined,
       access: app.access || access || undefined,
+      creationSession: preparedSession ? { status: 'pending', reason: 'session-submission-not-finished' } : sessionPlan,
     })
+    const creationSession = preparedSession
+      ? await submitSession({ apiBase: API_BASE, token, prepared: preparedSession, appHash: app.hashKey }) : sessionPlan
+    saveSessionResult(projectRoot, creationSession)
     console.log(JSON.stringify({
       success: true,
       action: 'publish',
       workspaceHashKey,
       squareAppHashKey: app.hashKey,
+      creationSession,
+      workflowComplete: creationSession.status !== 'pending',
       url: shareUrl,
       shareUrl,
       playUrl: app.playUrl,

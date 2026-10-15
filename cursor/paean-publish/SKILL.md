@@ -1,6 +1,6 @@
 ---
 name: paean-publish
-description: Publish a static frontend to Clide hosting or Paean Apps Square, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings.
+description: Publish a static frontend with a random handle, public Apps Square listing and private JSONL creation-session linking by default, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings.
 ---
 
 # Paean Publish (Cursor)
@@ -23,17 +23,19 @@ built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and W
 | User intent | Mode | Remote effect |
 |---|---|---|
 | Host/deploy on Clide, keep it out of the gallery | `--hosting-only` | Direct static hosting only; no workspace and no Apps Square row |
-| Publish/list/share in Apps Square | default | Workspace upload, public Square listing, and `*.clide.app` site |
+| Publish/deploy/share a work without special overrides | default | Server-assigned random handle, public Square listing, Clide site, private JSONL backup and current-release linking |
 | Tip / 打赏 a published work, including your own; boost / 加热 a work | [Tip and Boost guide](references/tip-boost.md) | A separate, user-authorized payment against an existing Square app; no upload |
 
 For tip/boost requests, go directly to the linked guide. Resolve the existing work and use the
 page controls or documented API; `publish.mjs` has no tip/boost flags. The publishing workflow
 below is not needed for these operations.
 
-Do not turn a hosting request into a Square listing. If the user says “do not list in the
-Square”, `--hosting-only` is mandatory. Both modes create a publicly reachable site, so get
-explicit confirmation immediately before the real upload. A prior confirmation for one mode
-does not authorize switching to the other.
+Default to the full public publishing flow unless the user specifies otherwise. If they say
+“hosting only” or “do not list in the Square”, `--hosting-only` is mandatory. Both modes create
+a public site. A request to publish authorizes the stated destination and the default private
+creation-record submission for this work; do not ask for the same authorization again. A request
+for preview/dry-run alone does not authorize upload. Honor explicit session opt-out, privacy and
+custom-handle choices, and never silently change an explicitly selected mode.
 
 ## Credentials
 
@@ -63,6 +65,14 @@ that do not meet the standard. Keep the work's README consistent with the final 
 Hosting-only releases follow the same copy rules for their public title, description, and README,
 without requiring a Square manifest or listing assets.
 
+### Prepare the creation record
+
+Read [the default creation-session workflow](references/creation-session.md). Select this task’s
+real JSONL export, prepare and review a private snapshot, and use `--session-jsonl <path>` or
+`.clide/creation-session.jsonl`. Never fabricate a transcript or collect unrelated chats.
+The default is private backup plus current-release linking, not research/training consent.
+Use `paean-sessions` for standalone submission, verification or repair.
+
 ### Run and review the selected mode
 
 Run from the project root. Select the final mode during dry-run so the report describes the
@@ -76,20 +86,25 @@ and product list explicitly: `access: null` means "preserve server configuration
 not "discover the manifest inside the uploaded assets".
 
 ```bash
-# Clide hosting only; never creates a Square listing
-node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist] [--handle paeaninsight]
+# Standard: public Square + Clide + private JSONL; omit --handle for a random first handle
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist] [--session-jsonl /private/path/session.jsonl]
 
-# Apps Square + Clide site
-node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist] [--title "Good Name"] [--handle chosen-name]
+# Only when requested: hosting without a Square listing
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist]
 ```
 
 Review `metadata` against the release-copy standard, then `publishDir`, file/byte summary,
 `secretScan`, `runtimeCompatibility`, destination,
-and requested/effective handle. If the dry-run is safe and the user confirms that exact
-public destination, run the same command without `--dry-run` and add `--yes`.
+requested/effective handle and `creationSession`. Once validated and authorized by the
+user’s publishing request, run the same command without `--dry-run` and add `--yes`.
+Do not add `--handle` unless a custom handle was requested; updates retain their existing handle.
 
 Report the returned `url`, handle, file count, mode, and `.clide/publish.json`. Report
-workspace/Square hashes only in Square mode.
+workspace/Square hashes only in Square mode. Also report `creationSession.status` and
+`workflowComplete`. A published site with a pending backup/link is a partial completion:
+retry only the session step and explain what remains. The current API label is “已关联创作记录”,
+which confirms submission/linking. Explain that the shared data source is used by independent
+originality-certification and traffic-support systems; do not present linking as their final result.
 
 For Square publishes, `url` and `shareUrl` are the canonical public link
 `https://www.8x.gg/apps/{squareAppHashKey}`. Use this link in the final reply and anywhere a
@@ -223,7 +238,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
-`--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
+`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
 `--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
 `--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
 `--delete [--handle <handle>]`.

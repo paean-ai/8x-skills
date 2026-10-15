@@ -121,6 +121,17 @@ function transformSkill(md, variant, skill, prior) {
 }
 
 let changed = 0
+// Publish must also work when installed alone. Bundle the sessions helper from
+// its one canonical source before generating any client mirrors.
+const sessionsSource = path.join(SRC, 'paean-sessions/scripts/sessions.mjs')
+if (existsSync(sessionsSource)) {
+  const bundled = path.join(SRC, 'paean-publish/scripts/sessions.mjs')
+  if (!existsSync(bundled) || !readFileSync(bundled).equals(readFileSync(sessionsSource))) {
+    changed++
+    if (check) console.log('would update claude-code/paean-publish/scripts/sessions.mjs')
+    else { mkdirSync(path.dirname(bundled), { recursive: true }); cpSync(sessionsSource, bundled) }
+  }
+}
 for (const skill of readdirSync(SRC).filter((d) => statSync(path.join(SRC, d)).isDirectory())) {
   for (const variant of Object.keys(VARIANTS)) {
     const dst = path.join(root, variant, skill)
