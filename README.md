@@ -22,6 +22,7 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 | **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
 | **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline, compatibility and artifact audits, plus a release standard for source credit in automatic demos and entry UI, optional virtual landscape with mapped controls, 14-character listing copy, a game-specific icon and a 30-second HD video from the final ZIP. Requires `esbuild`. |
 | **paean-record-demo** | Record a 20–30 s arcade attract demo reel from a finished work: drives the game into a real session through its own seam, draws an optional title card, timed captions and a CTA end card over it, and exports MP4/WebM/GIF plus a poster frame. Playwright required; ffmpeg optional. |
+| **paean-sessions** | Privately back up real JSONL creation records and link them to the current owned app release; standalone submission and recovery, without platform sharing or training consent. |
 | **paean-remix** | Remix one or more published games into a new one. Clones the primary source (full assets) into the user's workspace, reads secondary sources through the 8x.gg MCP server, and scaffolds a project with a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so every upstream creator is credited exactly once. |
 
 For capability design, say `paean iap`, `paean iaa`, `paean net`, `paean rank`, or `paean ai`,
@@ -56,14 +57,15 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-tts/
 │   ├── paean-sdk/
 │   ├── paean-publish/
+│   ├── paean-sessions/
 │   ├── paean-remix/
 │   ├── paean-record-demo/
 │   ├── paean-convert-to-ad/
 │   └── paean-convert-to-rednote/
-├── codex/                          # same ten skills + Codex guidance
-├── zero/                           # same ten skills + Zero CLI guidance
-├── gemini/                         # same ten skills + Gemini CLI guidance
-└── cursor/                         # same ten skills + Cursor guidance
+├── codex/                          # same eleven skills + Codex guidance
+├── zero/                           # same eleven skills + Zero CLI guidance
+├── gemini/                         # same eleven skills + Gemini CLI guidance
+└── cursor/                         # same eleven skills + Cursor guidance
 ```
 
 All five source variants ship the **same** scripts and reference files; only the `SKILL.md`
@@ -80,6 +82,15 @@ Square apps ship three assets at the top level: `favicon.svg`, an 800×400 `bann
 512×512 `icon.jpg`. Paid apps (Steam-style: watch the demo free, buy once to play) are declared
 with `paean-publish --price <credits>` and gated in the app with `PaeanSDK.access.require()`;
 see `paean-sdk` and its offline mock host `reference/paean-mock.js`.
+
+Standard publishing now defaults to a **server-assigned random handle**, a **public Square listing**,
+and **private JSONL creation-session backup and release linking**. Prepare the current work's real
+record as `.clide/creation-session.jsonl` or pass `--session-jsonl <path>`; explicit `--no-session`,
+`--hosting-only`, and custom-handle requests override the relevant defaults. See the
+[publishing workflow](claude-code/paean-publish/references/creation-session.md).
+Missing records or unavailable APIs are reported as pending, never as completed proof. The current
+label is **Creation session linked**. The same data source feeds independent originality-certification
+and traffic-support systems; their final decisions are separate from this API’s linkage status.
 
 ## Requirements
 
@@ -265,19 +276,37 @@ the project's `clide.json`, and check the dry-run's resolved metadata against it
 From the project you want to publish:
 
 ```bash
-# Preview, then publish the reviewed clide.json metadata to Apps Square
+# Prepare and locally review this work’s real creation record; keep it private
+mkdir -p .clide
+node <skill-dir>/scripts/sessions.mjs prepare --file /path/to/actual-session.jsonl --out .clide/creation-session.jsonl
+
+# Preview, then publish publicly with a random first handle and private session linking
 node <skill-dir>/scripts/publish.mjs --dry-run
 node <skill-dir>/scripts/publish.mjs --yes
 
 # Preview, then deploy to Clide hosting without an Apps Square listing
-node <skill-dir>/scripts/publish.mjs --dry-run --hosting-only --dir dist --handle neon-drift
-node <skill-dir>/scripts/publish.mjs --yes --hosting-only --dir dist --handle neon-drift
+node <skill-dir>/scripts/publish.mjs --dry-run --hosting-only --dir dist
+node <skill-dir>/scripts/publish.mjs --yes --hosting-only --dir dist
 ```
 
 Square publish results return `url` and `shareUrl` as `https://www.8x.gg/apps/{hashKey}`.
 Use this canonical link when sharing the work. `playUrl` preserves the runtime address;
 `shellUrl` is an optional diagnostic address. Hosting-only projects retain their actual
 Clide URL because they have no Square listing. Dry-runs do not produce a published link.
+
+### Submit a creation record independently
+
+Use `paean-sessions` for “提交这个作品的 JSONL 创作记录做原创认证” or “补交创作备份”.
+It can upload a new private record or link an already ready asset without republishing:
+
+```bash
+node <paean-sessions-dir>/scripts/sessions.mjs submit --file /private/path/creation-session.jsonl --app OWNED_APP_HASH
+node <paean-sessions-dir>/scripts/sessions.mjs bind --asset ASSET_ID --app OWNED_APP_HASH
+```
+
+This supplies the common data source for independent originality-certification and traffic-support
+systems. Report submission/linkage separately from their final decisions. The helper does not
+opt into platform research sharing or model training.
 
 ### Tip and Boost an existing work
 

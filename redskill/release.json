@@ -8,6 +8,7 @@
     "paean-tts",
     "paean-sdk",
     "paean-publish",
+    "paean-sessions",
     "paean-remix"
   ]
 }
