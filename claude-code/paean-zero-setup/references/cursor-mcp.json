@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "8xgg": {
+      "url": "https://api.paean.ai/8x/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:PAEAN_AUTH_TOKEN}"
+      }
+    }
+  }
+}

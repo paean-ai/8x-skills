@@ -10,11 +10,13 @@ export const TARGETS = {
   'claude-code': { source: 'claude-code', directory: '.claude/skills' },
   codex: { source: 'codex', directory: '.agents/skills' },
   zero: { source: 'zero', directory: '.zero/skills' },
-  gemini: { source: 'claude-code', directory: '.gemini/skills' },
+  gemini: { source: 'gemini', directory: '.gemini/skills' },
+  cursor: { source: 'cursor', directory: '.cursor/skills' },
   antigravity: { source: 'claude-code', directory: '.gemini/config/skills' },
   'antigravity-cli': { source: 'claude-code', directory: '.gemini/antigravity-cli/skills' },
   'deepseek-harness': { source: 'claude-code', directory: '.dsh/skills' },
 }
+const SOURCE_DIRECTORIES = [...new Set(Object.values(TARGETS).map(target => target.source))]
 
 export function resolveTarget(target, { home = homedir(), env = process.env, dest } = {}) {
   const config = TARGETS[target]
@@ -76,7 +78,7 @@ export function installSkills({ targets, repoRoot = ROOT, home = homedir(), env 
   const plans = targets.map(target => {
     const plan = resolveTarget(target, { home, env, dest })
     plan.destination = physical(plan.destination)
-    if (within(plan.destination, repo) || ['claude-code', 'codex', 'zero', 'scripts', 'tests', 'redskill'].some(dir => within(path.join(repo, dir), plan.destination))) {
+    if (within(plan.destination, repo) || [...SOURCE_DIRECTORIES, 'scripts', 'tests', 'redskill'].some(dir => within(path.join(repo, dir), plan.destination))) {
       throw new Error('Installation destination overlaps repository sources')
     }
     const sourceRoot = path.join(repo, plan.source)

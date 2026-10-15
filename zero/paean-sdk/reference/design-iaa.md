@@ -9,4 +9,3 @@ Use when an optional reward fits a natural pause: a revive after defeat, a bonus
 - Resume input/audio correctly after presentation. For a revive, specify the restored state and short protection window where the game needs one.
 
 Acceptance: success, dismissed ad, no inventory, denied scope, unavailable namespace, background/return, repeated taps, and a stale callback after restart. Use strict mock checks plus local test doubles for outcomes not exposed by mock options.
-

@@ -10,4 +10,3 @@ Use when cooperation, competition, or shared presence improves the loop. Choose 
 - Dispose listeners on exit and avoid room updates in attract mode. Use the SDK's actual room protocol and current host feature detection.
 
 Acceptance: two independent clients; conflicting moves; late join; disconnect/resync; host/member departure; unavailable room.state; denied scope; restart without duplicate listeners. The bundled mock's phantom peers exercise UI only: they do not prove transport, ordering, or concurrent convergence. Record any remaining real-host verification.
-

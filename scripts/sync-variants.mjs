@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /*
- * sync-variants.mjs — regenerate the `codex/` and `zero/` skill mirrors from
+ * sync-variants.mjs — regenerate the Codex, Zero, Gemini and Cursor mirrors from
  * the canonical `claude-code/` tree.
  *
- * Scripts and reference files are copied byte-for-byte (the three mirrors
+ * Scripts and reference files are copied byte-for-byte (all variants
  * must never diverge there — tests run against `codex/`). Each SKILL.md is
  * derived from the claude-code one with the variant's packaging:
  *
@@ -11,6 +11,7 @@
  *           inserted after the first paragraph with current discovery guidance.
  *   zero:   description gains " Runs from Zero CLI."; H1 gains " (Zero CLI)";
  *           an "Installing in Zero CLI" blockquote is inserted the same way.
+ *   gemini/cursor: client-specific H1 and a native discovery/invocation note.
  *
  * Run from the repo root:  node scripts/sync-variants.mjs [--check]
  * `--check` exits 1 when a mirror would change (for CI / paean-skills-update).
@@ -49,6 +50,37 @@ const VARIANTS = {
       '> reference files live next to this SKILL.md.',
     ].join('\n'),
     description: (d) => (d.endsWith(' Runs from Zero CLI.') ? d : d + ' Runs from Zero CLI.'),
+  },
+  gemini: {
+    h1: ' (Gemini CLI)',
+    refreshQuote: true,
+    marker: /^> \*\*Using this skill in Gemini CLI\.\*\*/,
+    fallback: (skill) => [
+      '> **Using this skill in Gemini CLI.** Install this directory under `~/.gemini/skills/`',
+      '> or the project\'s `.gemini/skills/`. A same-named skill in `.agents/skills/` takes',
+      '> precedence within the same scope; update the copy your client actually discovers.',
+      `> Ask Gemini to use \`${skill}\`; inspect \`gemini skills list\` or \`/skills list\`,`,
+      '> and run `/skills reload` after an update. Keep scripts and references beside this file.',
+      '> Resolve bundled paths from this skill directory; run commands in the project directory',
+      '> when the workflow requires project files. Skill activation uses Gemini\'s normal consent UI.',
+    ].join('\n'),
+    description: (d) => d,
+  },
+  cursor: {
+    h1: ' (Cursor)',
+    refreshQuote: true,
+    marker: /^> \*\*Using this skill in Cursor\.\*\*/,
+    fallback: (skill) => [
+      '> **Using this skill in Cursor.** Install this directory under `~/.cursor/skills/`',
+      '> or the project\'s `.cursor/skills/`. Cursor also discovers `.agents/skills/` and',
+      '> compatible Claude/Codex roots; avoid duplicate installations of the same skill.',
+      `> Find it in Customize → Skills, or type \`/${skill}\` in Agent chat.`,
+      '> Keep scripts and references beside this file and resolve their paths from this directory.',
+      '> Run commands in the project directory when the workflow requires project files.',
+      '> Local global skills are not automatically available to Cloud Agents; use project skills',
+      '> or the user\'s chosen Cursor sync setup for remote work.',
+    ].join('\n'),
+    description: (d) => d,
   },
 }
 
