@@ -14,6 +14,7 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 | Skill | What it does |
 |-------|--------------|
 | **paean-skills-update** | Update this repository and reinstall Paean skills for Zero CLI, Claude Code, Codex, Gemini CLI, Cursor, Antigravity, or DeepSeek Harness. |
+| **[paean-cloud-computer](claude-code/paean-cloud-computer/SKILL.md)** | Give your Personal Agent a creative cloud computer: manage personal environments, delegate durable cloud tasks, retrieve private results, and open Harness for human observation. Portable CLI and remote MCP guide included. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
 | **paean-tts** | Generate game dialogue, spoken tutorials, pronunciation samples, and demo-video narration through Paean TTS using the creator's login. Includes a local CLI, resumable WAV output, and optional pitch-preserving speed adjustment. |
@@ -53,6 +54,7 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 ├── claude-code/                    # canonical skill content
 │   ├── paean-skills-update/
 │   ├── paean-zero-setup/
+│   ├── paean-cloud-computer/
 │   ├── paean-game-create/
 │   ├── paean-tts/
 │   ├── paean-sdk/
@@ -62,10 +64,10 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-record-demo/
 │   ├── paean-convert-to-ad/
 │   └── paean-convert-to-rednote/
-├── codex/                          # same eleven skills + Codex guidance
-├── zero/                           # same eleven skills + Zero CLI guidance
-├── gemini/                         # same eleven skills + Gemini CLI guidance
-└── cursor/                         # same eleven skills + Cursor guidance
+├── codex/                          # same twelve skills + Codex guidance
+├── zero/                           # same twelve skills + Zero CLI guidance
+├── gemini/                         # same twelve skills + Gemini CLI guidance
+└── cursor/                         # same twelve skills + Cursor guidance
 ```
 
 All five source variants ship the **same** scripts and reference files; only the `SKILL.md`

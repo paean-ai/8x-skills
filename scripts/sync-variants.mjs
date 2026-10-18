@@ -13,7 +13,7 @@
  *           an "Installing in Zero CLI" blockquote is inserted the same way.
  *   gemini/cursor: client-specific H1 and a native discovery/invocation note.
  *
- * Run from the repo root:  node scripts/sync-variants.mjs [--check]
+ * Run from the repo root:  node scripts/sync-variants.mjs [--check] [--skill NAME]
  * `--check` exits 1 when a mirror would change (for CI / paean-skills-update).
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -26,6 +26,9 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = path.join(root, 'claude-code')
 const check = process.argv.includes('--check')
+const selectedIndex = process.argv.indexOf('--skill')
+const selected = selectedIndex < 0 ? null : process.argv[selectedIndex + 1]
+if (selectedIndex >= 0 && (!selected || !/^paean-[a-z0-9-]+$/.test(selected) || !existsSync(path.join(SRC, selected, 'SKILL.md')))) throw new Error('Unknown or missing --skill')
 const VARIANTS = {
   codex: {
     h1: ' (Codex)',
@@ -124,7 +127,7 @@ let changed = 0
 // Publish must also work when installed alone. Bundle the sessions helper from
 // its one canonical source before generating any client mirrors.
 const sessionsSource = path.join(SRC, 'paean-sessions/scripts/sessions.mjs')
-if (existsSync(sessionsSource)) {
+if ((!selected || selected === 'paean-publish' || selected === 'paean-sessions') && existsSync(sessionsSource)) {
   const bundled = path.join(SRC, 'paean-publish/scripts/sessions.mjs')
   if (!existsSync(bundled) || !readFileSync(bundled).equals(readFileSync(sessionsSource))) {
     changed++
@@ -132,7 +135,7 @@ if (existsSync(sessionsSource)) {
     else { mkdirSync(path.dirname(bundled), { recursive: true }); cpSync(sessionsSource, bundled) }
   }
 }
-for (const skill of readdirSync(SRC).filter((d) => statSync(path.join(SRC, d)).isDirectory())) {
+for (const skill of readdirSync(SRC).filter((d) => (!selected || d === selected) && statSync(path.join(SRC, d)).isDirectory())) {
   for (const variant of Object.keys(VARIANTS)) {
     const dst = path.join(root, variant, skill)
     if (!check) mkdirSync(dst, { recursive: true })
