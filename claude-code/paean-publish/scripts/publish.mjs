@@ -44,6 +44,8 @@ const SAFETY_PATTERNS = [
   'service-account*.json',
   'secrets/',
   'private/',
+  '.tutorials/',
+  '.tutorial-cache/',
   'node_modules/',
   '.git/',
   '.next/cache/',
