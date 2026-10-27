@@ -63,3 +63,9 @@ test('Skill reads keep the exact revision and encode the reference path', () => 
   const url = new URL(p.endpoint, 'https://example.com');
   assert.equal(url.searchParams.get('version'), '3'); assert.equal(url.searchParams.get('path'), 'references/tutorial.html');
 });
+
+test('discovery requires a game and has no standalone personal catalog', () => {
+  assert.throws(() => planCommand(['mine']), /hashKey/);
+  assert.throws(() => planCommand(['mine', 'game']), /Unknown command/);
+  assert.equal(planCommand(['list', 'game']).endpoint, '/square/apps/game/tutorials');
+});

@@ -18,7 +18,7 @@ export function planCommand(argv, read = file => fs.readFileSync(file, 'utf8')) 
     } else if (!hash && !arg.startsWith('--')) hash = arg;
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (command !== 'mine' && !/^[a-zA-Z0-9_-]{1,64}$/.test(hash || '')) throw new Error('A game/tutorial hashKey is required');
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(hash || '')) throw new Error('A game/tutorial hashKey is required');
   const integer = (name, min = 1) => { const n = Number(options[name]); if (!Number.isSafeInteger(n) || n < min || n > 100000) throw new Error(`--${name} must be an integer between ${min} and 100000`); return n; };
   const file = () => { if (!options.file) throw new Error('--file is required'); return JSON.parse(read(options.file)); };
   const documentFile = (saving = false) => {
@@ -39,7 +39,6 @@ export function planCommand(argv, read = file => fs.readFileSync(file, 'utf8')) 
   let method = 'GET', endpoint, body, mergeDraft = false;
   switch (command) {
     case 'list': endpoint = `/square/apps/${hash}/tutorials`; break;
-    case 'mine': endpoint = '/square/tutorials/mine'; break;
     case 'show': endpoint = `/square/tutorials/${hash}`; break;
     case 'source-file': {
       const query = new URLSearchParams();
@@ -78,7 +77,7 @@ export function planCommand(argv, read = file => fs.readFileSync(file, 'utf8')) 
   }
   if ((['buy', 'publish', 'unpublish'].includes(command) || options.latest) && !options.yes && !options['dry-run'])
     throw new Error(`${command} requires --yes after user authorization`);
-  if (options.offset && ['list', 'mine'].includes(command)) endpoint += `?offset=${integer('offset', 0)}`;
+  if (options.offset && command === 'list') endpoint += `?offset=${integer('offset', 0)}`;
   return { method, endpoint, ...(mergeDraft ? { mergeDraft: true } : {}), ...(body === undefined ? {} : { body }), dryRun: !!options['dry-run'] };
 }
 export function credentials(env = process.env, home = os.homedir()) {
@@ -115,7 +114,7 @@ export async function execute(plan, { token, base = process.env.PAEAN_API_BASE_U
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
     const plan = planCommand(process.argv.slice(2));
-    if (plan.help) console.log('tutorial.mjs list|show|draft|create|save|publish|unpublish|quote|buy|content|skill|learn|progress|notes|mine|revenue [hashKey] [--file path] [--version n] [--price credits] [--title text] [--preview-file path] [--preview] [--latest] [--request-key key] [--yes] [--dry-run]');
+    if (plan.help) console.log('tutorial.mjs list|show|draft|create|save|publish|unpublish|quote|buy|content|skill|learn|progress|notes|revenue [hashKey] [--file path] [--version n] [--price credits] [--title text] [--preview-file path] [--preview] [--latest] [--request-key key] [--yes] [--dry-run]');
     else console.log(JSON.stringify(await execute(plan), null, 2));
   } catch (e) { console.error(e.message); process.exitCode = 1; }
 }

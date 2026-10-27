@@ -54,3 +54,5 @@ node scripts/tutorial.mjs progress <tutorialHash>
 Raw HTML/Markdown saves preserve existing title, pricing and preview unless explicitly overridden with --title/--price/--preview-file. A JSON file can supply the complete document metadata envelope. `--dry-run` makes no credential or network call. `--yes` expresses already-obtained authorization; it does not create permission. No write is retried automatically. Credentials come from PAEAN_AUTH_TOKEN or standard ~/.paean / ~/.zero credential files and must never be displayed.
 
 On 409 reload/reconcile draft or notes; if the purchase price/version changed, show a fresh quote before buying. After a lost purchase response, reuse the request key. On 401 use the existing sign-in flow; on 402 show the access/balance choice. Report saved versus published accurately and link to https://www.8x.gg/tutorials/<hashKey>.
+
+Tutorials always belong to a source game. Discover them with tutorialRead action=list and the game hashKey (CLI: list <gameHash>), never a separate personal catalog. The author sees drafts and unlisted tutorials there; existing buyers can still find their unlisted purchases under that game.
