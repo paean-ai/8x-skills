@@ -16,6 +16,10 @@ the basis for a new game, recording the full remix lineage so upstream creators 
 This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
 (global `fetch`) and the `unzip` command on PATH.
 
+## Creation tutorials versus gameplay guides
+
+For teaching **how to create the game**, use **paean-tutorial**. Reading, authoring and buying a tutorial do not require cloning the source. For teaching **how to play**, keep the existing Guide Remix flow. Tutorial access, source-game access and Remix fees are independent; buying one never authorizes charging for the others.
+
 ## Source references
 
 Each source must resolve to a published Square app `hashKey`. Accepted forms: a bare

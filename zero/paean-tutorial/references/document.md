@@ -1,0 +1,40 @@
+# Freeform tutorial document
+
+Only the metadata envelope is structured. The body can be any HTML or Markdown document; headings, prompts, comparisons, tables, images and narrative are the author's choice.
+
+```json
+{
+  "title": "From a creative brief to an Agent-built world",
+  "summary": "The prompts, iterations and trade-offs behind this project.",
+  "language": "en",
+  "format": "markdown",
+  "content": "# The creative direction\n\nI gave the Agent this brief…\n\n> Use the supplied visual references to propose three directions.\n\nThe first result looked polished but missed the intended atmosphere. Here is the feedback that changed it…",
+  "previewContent": "An optional, separately written public excerpt.",
+  "priceCredits": 100
+}
+```
+
+`format` is `html` or `markdown`. Title ≤200 characters, summary ≤1000, content ≤400000, previewContent ≤80000, entire JSON document ≤500 KB UTF-8. Language uses a BCP47-style tag. Price is 0 (free) or integer 1–100000 credits. Publishing requires a title and nonempty content, not a summary, curriculum or rubric.
+
+Title, summary, language, format, price and presence of a preview are public metadata. The full content is never included there. `tutorialRead action=content` returns `{format,content,version,isPreview}` after access enforcement. `previewOnly:true` returns only the separate previewContent (possibly empty); it never automatically truncates or reveals the paid document.
+
+`tutorialWrite action=create` takes the game hashKey and JSON document in payload. `save` takes the tutorial hashKey, expectedVersion=draftVersion and document payload. `publish` takes the current draftVersion. Publishing increments draftVersion and creates an immutable published version.
+
+`tutorialPurchase` takes hashKey, expectedPriceCredits, expectedVersion (quoted published version) and requestKey. The server checks the actual price/version and deduplicates access.
+
+Optional reading state:
+
+- `tutorialWrite action=learn` starts/resumes a pinned document version without creating a workspace.
+- `tutorialRead action=progress` returns version, updateVersion, position and notes. Position is any personal location hint; notes are freeform and private to that learner.
+- `tutorialWrite action=notes`, payload `{"expectedVersion":1,"position":"Visual direction comparison","notes":"Try the second prompt with my own references."}`. position ≤500 characters, notes ≤10000. expectedVersion is progress.updateVersion.
+- `learn` with payload `{"useLatest":true,"expectedVersion":2}` switches to the latest document, preserving notes and clearing the old location hint.
+
+HTML is retained as authored in storage, then sanitized and sandboxed for Web display; scripts/forms/active embeds cannot execute. It is a document, not a runnable game. Paid content must stay out of public game packages, source exports and shared skills.
+
+## Per-tutorial Skill
+
+`tutorialRead action=skill` (hashKey, optional version/path) returns `{name,title,version,entrypoint,filePaths,path,content,format,contentTrust}`. Omit path to load `SKILL.md`. Read the returned `references/tutorial.md` or `references/tutorial.html` with the same version to get the original freeform document. Both entrypoint and reference enforce full access, including age/moderation restrictions and paid entitlement. Unknown paths return 404. The entrypoint does not inline the reference; it routes the Agent to the exact revision and scopes its use to the user's creation request.
+
+REST: `GET /square/tutorials/:id/skill?version=N&path=SKILL.md`. CLI: `skill <hashKey> --version N [--path references/tutorial.md]`. Skill loading does not buy, fork, publish, or write files. Store any explicitly requested private local copy outside public project and shared skill directories.
+
+Tutorials always belong to a source game. Discover them with tutorialRead action=list and the game hashKey (CLI: list <gameHash>), never a separate personal catalog. The author sees drafts and unlisted tutorials there; existing buyers can still find their unlisted purchases under that game.
