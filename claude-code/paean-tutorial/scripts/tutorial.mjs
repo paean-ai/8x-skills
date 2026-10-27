@@ -48,6 +48,12 @@ export function planCommand(argv, read = file => fs.readFileSync(file, 'utf8')) 
       endpoint = `/square/tutorials/${hash}/source-file?${query}`; break;
     }
     case 'source-files': case 'draft': case 'quote': case 'progress': case 'revenue': endpoint = `/square/tutorials/${hash}/${command}`; break;
+    case 'skill': {
+      const query = new URLSearchParams();
+      if (options.version) query.set('version', integer('version'));
+      if (options.path) query.set('path', options.path);
+      endpoint = `/square/tutorials/${hash}/skill${query.size ? `?${query}` : ''}`; break;
+    }
     case 'content': {
       const query = new URLSearchParams();
       if (options.version) query.set('version', integer('version'));
@@ -109,7 +115,7 @@ export async function execute(plan, { token, base = process.env.PAEAN_API_BASE_U
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
     const plan = planCommand(process.argv.slice(2));
-    if (plan.help) console.log('tutorial.mjs list|show|draft|create|save|publish|unpublish|quote|buy|content|learn|progress|notes|mine|revenue [hashKey] [--file path] [--version n] [--price credits] [--title text] [--preview-file path] [--preview] [--latest] [--request-key key] [--yes] [--dry-run]');
+    if (plan.help) console.log('tutorial.mjs list|show|draft|create|save|publish|unpublish|quote|buy|content|skill|learn|progress|notes|mine|revenue [hashKey] [--file path] [--version n] [--price credits] [--title text] [--preview-file path] [--preview] [--latest] [--request-key key] [--yes] [--dry-run]');
     else console.log(JSON.stringify(await execute(plan), null, 2));
   } catch (e) { console.error(e.message); process.exitCode = 1; }
 }

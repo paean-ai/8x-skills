@@ -30,3 +30,9 @@ Optional reading state:
 - `learn` with payload `{"useLatest":true,"expectedVersion":2}` switches to the latest document, preserving notes and clearing the old location hint.
 
 HTML is retained as authored in storage, then sanitized and sandboxed for Web display; scripts/forms/active embeds cannot execute. It is a document, not a runnable game. Paid content must stay out of public game packages, source exports and shared skills.
+
+## Per-tutorial Skill
+
+`tutorialRead action=skill` (hashKey, optional version/path) returns `{name,title,version,entrypoint,filePaths,path,content,format,contentTrust}`. Omit path to load `SKILL.md`. Read the returned `references/tutorial.md` or `references/tutorial.html` with the same version to get the original freeform document. Both entrypoint and reference enforce full access, including age/moderation restrictions and paid entitlement. Unknown paths return 404. The entrypoint does not inline the reference; it routes the Agent to the exact revision and scopes its use to the user's creation request.
+
+REST: `GET /square/tutorials/:id/skill?version=N&path=SKILL.md`. CLI: `skill <hashKey> --version N [--path references/tutorial.md]`. Skill loading does not buy, fork, publish, or write files. Store any explicitly requested private local copy outside public project and shared skill directories.

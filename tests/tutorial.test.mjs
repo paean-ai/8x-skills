@@ -55,3 +55,11 @@ test('raw file updates preserve existing price, title and preview and reject sta
   await assert.rejects(execute(plan, { token: 'fixture', fetchImpl: async () => { calls++; return { ok: true, json: async () => ({ data: { draftVersion: 4 } }) }; } }), /draft changed/);
   assert.equal(calls, 1);
 });
+
+test('Skill reads keep the exact revision and encode the reference path', () => {
+  assert.equal(planCommand(['skill', 'course']).endpoint, '/square/tutorials/course/skill');
+  const p = planCommand(['skill', 'course', '--version', '3', '--path', 'references/tutorial.html']);
+  assert.equal(p.method, 'GET');
+  const url = new URL(p.endpoint, 'https://example.com');
+  assert.equal(url.searchParams.get('version'), '3'); assert.equal(url.searchParams.get('path'), 'references/tutorial.html');
+});
