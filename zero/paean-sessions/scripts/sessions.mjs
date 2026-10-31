@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
+import { buildBundle } from './bundle.mjs';
 
 const MAX = 20 * 1024 * 1024;
 export const digest = data => createHash('sha256').update(data).digest('hex');
@@ -15,11 +16,18 @@ export function prepare(input) {
   if (!lines.length || lines.length > 50000) throw Error('Expected 1–50000 JSON records');
   function clean(v, depth = 0) {
     if (depth > 40) throw Error('JSON nesting exceeds 40 levels');
-    if (typeof v === 'string') return v
+    if (typeof v === 'string') {
+      if (/^\s*[\[{]/.test(v)) {
+        let decoded;
+        try { decoded = JSON.parse(v); } catch {}
+        if (decoded && typeof decoded === 'object') return JSON.stringify(clean(decoded, depth + 1));
+      }
+      return v
       .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]')
       .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16})\b/g, '[REDACTED]')
       .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
-      .replace(/((?:api[_-]?key|access[_-]?token|password|secret)\s*[=:]\s*["']?)[^\s"',;}]+/gi, '$1[REDACTED]');
+      .replace(/((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)["']?\s*[=:]\s*["']?)[^\s"',;}]+/gi, '$1[REDACTED]');
+    }
     if (Array.isArray(v)) return v.map(x => clean(x, depth + 1));
     if (v && typeof v === 'object') return Object.fromEntries(Object.keys(v).sort().map(k => [k, /^(authorization|cookie|set-cookie|api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credentials|private[_-]?key)$/i.test(k) ? '[REDACTED]' : clean(v[k], depth + 1)]));
     return v;
@@ -55,9 +63,12 @@ export async function main(args = process.argv.slice(2)) {
   if (!command || command === 'help' || command === '--help') {
     console.log(`Paean session JSONL (Node 20+)
 prepare --file original.jsonl[.gz] --out prepared.jsonl
+bundle --manifest inputs.json --project project-directory --out creation.jsonl
+config
 upload --file prepared.jsonl --source stable-session-id --reviewed
 list [--offset 0]
 status --id asset-id
+creation --id asset-id [--section summary|tools|scripts|events|issues] [--offset 0] [--limit 50]
 download --id asset-id --out review.jsonl
 offer --id asset-id --out offer.json
 share --id asset-id --offer offer.json --accept-sharing
@@ -72,6 +83,11 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     writeFileSync(required('--out'), data, { mode: 0o600, flag: 'wx' });
     return { bytes: data.length, digest: digest(data), warning: 'Review the entire prepared file. Automated redaction can miss sensitive information.' };
   }
+  if (command === 'bundle') {
+    const data = buildBundle(JSON.parse(file('--manifest')), dirname(resolve(required('--manifest'))), required('--project'), prepare);
+    writeFileSync(required('--out'), data, { mode: 0o600, flag: 'wx' });
+    return { bytes: data.length, digest: digest(data), warning: 'Review all events and script snapshots before private upload. Only explicitly selected files are included; missing source data cannot be reconstructed.' };
+  }
   const base = new URL(process.env.PAEAN_API_BASE || 'https://api.paean.ai');
   if (base.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(base.hostname)) throw Error('API must use HTTPS');
   const token = credentials();
@@ -82,11 +98,17 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
   }
   const json = async (path, method, body) => (await (await api(path, method, body)).json()).data;
   const id = () => { const value = required('--id'); if (!/^[a-f0-9-]{36}$/.test(value)) throw Error('Invalid asset ID'); return value; };
+  if (command === 'config') return json('config');
   if (command === 'upload') {
     if (!values.includes('--reviewed')) throw Error('Review the prepared file, then supply --reviewed to authorize private upload.');
     const data = file('--file');
     const canonical = prepare(data);
     if (!canonical.equals(data)) throw Error('Run prepare first and review its output; upload accepts prepared files only.');
+    if (JSON.parse(data.toString('utf8').split('\n')[0]).type === 'paean_creation_bundle') {
+      const config = await json('config');
+      if (!config.enabled || !config.creationBundleVersions?.includes(1)) throw Error('Server does not support creation bundles yet');
+      if (!Number.isSafeInteger(config.maxBytes) || data.length > config.maxBytes) throw Error('Creation bundle exceeds server upload limit');
+    }
     const { asset, uploadUrl, headers } = await json('uploads', 'POST', { sourceKey: required('--source'), filename: 'session.jsonl', bytes: data.length, digest: digest(data) });
     if (asset.state === 'ready') return asset;
     const url = new URL(uploadUrl);
@@ -97,6 +119,11 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
   }
   if (command === 'list') return json('assets?offset=' + encodeURIComponent(arg('--offset') || '0'));
   if (command === 'status') return json(`assets/${id()}`);
+  if (command === 'creation') {
+    const section = arg('--section') ?? 'summary', offset = Number(arg('--offset') ?? 0), limit = Number(arg('--limit') ?? 50);
+    if (!['summary', 'tools', 'scripts', 'events', 'issues'].includes(section) || !Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw Error('Invalid creation section or pagination');
+    return json(`assets/${id()}/creation?` + new URLSearchParams({ section, offset: String(offset), limit: String(limit) }));
+  }
   if (command === 'download') {
     const data = Buffer.from(await (await api(`assets/${id()}/download`)).arrayBuffer());
     writeFileSync(required('--out'), data, { mode: 0o600, flag: 'wx' });
