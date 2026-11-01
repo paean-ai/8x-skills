@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, statSync, openSync, closeSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { buildBundle } from './bundle.mjs';
-import { buildFileBundle, readFileBundle, readPortableBundle, writeFileBundle, validateFileManifest } from './multi-file.mjs';
+import { buildFileBundle, readFileBundle, readPortableBundle, writeFileBundle, validateFileManifest, writeDownloadedBundle, streamFiles } from './multi-file.mjs';
 import { inspectPortableBundle } from './offline.mjs';
 
-import { creationLimits } from './creation-index.mjs';
+import { creationLimits, multiFileLimits } from './creation-index.mjs';
 const MAX = creationLimits.maxBytes;
 export const digest = data => createHash('sha256').update(data).digest('hex');
 function clean(v, depth = 0) {
@@ -41,20 +41,20 @@ export function prepareText(input) {
 }
 
 export function prepare(input) {
-  if (input.length > MAX) throw Error('Session exceeds 256 MiB');
+  if (input.length > MAX) throw Error('Session exceeds 64 MiB');
   const bytes = input[0] === 0x1f && input[1] === 0x8b ? gunzipSync(input, { maxOutputLength: MAX }) : input;
   const lines = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
-  if (!lines.length || lines.length > 50000) throw Error('Expected 1–50000 JSON records');
+  if (!lines.length || lines.length > 1000000) throw Error('Expected 1–1000000 JSON records');
   const records = lines.map((line, i) => {
-    if (Buffer.byteLength(line) > creationLimits.maxRecordBytes) throw Error(`Record ${i + 1} exceeds 8 MiB`);
+    if (Buffer.byteLength(line) > creationLimits.maxRecordBytes) throw Error(`Record ${i + 1} exceeds 16 MiB`);
     const value = JSON.parse(line);
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error(`Record ${i + 1} must be an object`);
     const prepared = JSON.stringify(clean(value));
-    if (Buffer.byteLength(prepared) > creationLimits.maxRecordBytes) throw Error(`Prepared record ${i + 1} exceeds 8 MiB`);
+    if (Buffer.byteLength(prepared) > creationLimits.maxRecordBytes) throw Error(`Prepared record ${i + 1} exceeds 16 MiB`);
     return prepared;
   });
   const output = Buffer.from(records.join('\n') + '\n');
-  if (output.length > MAX) throw Error('Prepared session exceeds 256 MiB');
+  if (output.length > MAX) throw Error('Prepared session exceeds 64 MiB');
   return output;
 }
 
@@ -74,7 +74,7 @@ export async function main(args = process.argv.slice(2)) {
   const [command, ...values] = args;
   const arg = name => { const at = values.indexOf(name); return at < 0 ? undefined : values[at + 1]; };
   const required = name => { const value = arg(name); if (!value || value.startsWith('--')) throw Error(`Missing ${name}`); return value; };
-  const file = name => { const path = required(name); if (statSync(path).size > MAX) throw Error('File exceeds 256 MiB'); return readFileSync(path); };
+  const file = name => { const path = required(name); if (statSync(path).size > MAX) throw Error('File exceeds 64 MiB'); return readFileSync(path); };
   if (!command || command === 'help' || command === '--help') {
     console.log(`Paean session JSONL (Node 20+)
 prepare --file original.jsonl[.gz] --out prepared.jsonl
@@ -90,6 +90,7 @@ download --id asset-id --out review.jsonl
 download-bundle --id asset-id --out new-review-directory
 download-file --id asset-id --file-id file-id --out new-file
 verify-bundle --dir local-directory [--layout auto|local|storage] [--digest expected-manifest-sha256]
+restore-stream --dir local-directory --stream stream-id --out original.jsonl
 restore-bundle --dir copied-r2-or-local-directory --out new-directory [--layout auto|local|storage] [--digest expected-manifest-sha256]
 inspect-bundle --dir local-directory [--section summary|tools|scripts|events|issues] [--offset 0] [--limit 50] [--layout auto|local|storage] [--digest expected-manifest-sha256]
 offer --id asset-id --out offer.json
@@ -106,14 +107,23 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     return { bytes: data.length, digest: digest(data), warning: 'Review the entire prepared file. Automated redaction can miss sensitive information.' };
   }
   if (command === 'bundle') {
-    const bundle = buildFileBundle(JSON.parse(file('--manifest')), dirname(resolve(required('--manifest'))), required('--project'), prepare, prepareText);
-    writeFileBundle(required('--out'),bundle);
+    const bundle = buildFileBundle(JSON.parse(file('--manifest')), dirname(resolve(required('--manifest'))), required('--project'), prepare, prepareText, required('--out'));
     return { format:'creation-bundle-v2', files:bundle.manifest.files.length, bytes:bundle.manifest.files.reduce((n,f)=>n+f.bytes,0), warning:'Review manifest.json and every prepared file before private upload.' };
   }
   if (command === 'bundle-jsonl') {
     const data = buildBundle(JSON.parse(file('--manifest')), dirname(resolve(required('--manifest'))), required('--project'), prepare);
     writeFileSync(required('--out'), data, { mode: 0o600, flag: 'wx' });
     return { bytes: data.length, digest: digest(data), warning: 'Review all events and script snapshots before private upload. Only explicitly selected files are included; missing source data cannot be reconstructed.' };
+  }
+  if(command==='restore-stream') {
+    const bundle=readPortableBundle(required('--dir'),{layout:arg('--layout')??'auto',expectedDigest:arg('--digest')});
+    const files=streamFiles(bundle.manifest,required('--stream'));
+    if(!files.length)throw Error('Unknown stream ID');
+    const out=required('--out'),fd=openSync(out,'wx',0o600),hash=createHash('sha256');let bytes=0,failed=true;
+    try {
+      for(const file of files){const data=bundle.blobs.get(file.id);writeFileSync(fd,data);hash.update(data);bytes+=data.length;}
+      failed=false;return {streamId:required('--stream'),parts:files.length,bytes,digest:hash.digest('hex')};
+    }finally{closeSync(fd);if(failed)unlinkSync(out);}
   }
   if(['verify-bundle','restore-bundle','inspect-bundle'].includes(command)) {
     const bundle=readPortableBundle(required('--dir'),{layout:arg('--layout')??'auto',expectedDigest:values.includes('--digest')?required('--digest'):undefined});
@@ -141,16 +151,21 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     const config=await json('config');
     if(!config.enabled||!config.creationBundleVersions?.includes(2))throw Error('Server does not support multi-file creation bundles yet');
     if(config.portableCreationManifest!==true)throw Error('Server does not support portable creation manifests yet');
-    if(!Number.isSafeInteger(config.maxBytes)||bundle.manifest.files.reduce((n,f)=>n+f.bytes,0)>config.maxBytes)throw Error('Bundle exceeds server upload limit');
+    if(!Number.isSafeInteger(config.multiFileLimits?.maxBytes??config.maxBytes)||bundle.manifest.files.reduce((n,f)=>n+f.bytes,0)>(config.multiFileLimits?.maxBytes??config.maxBytes))throw Error('Bundle exceeds server upload limit');
+    if(bundle.manifest.streams.some(s=>bundle.manifest.files.filter(f=>f.kind==='session'&&f.streamId===s.id).length>1)&&config.chunkedCreationStreams!==true)throw Error('Server does not support chunked creation streams yet');
+    if(bundle.manifest.files.some(f=>f.bytes>(config.multiFileLimits?.maxFileBytes??config.maxBytes)))throw Error('File exceeds server limit; rebuild the bundle to create smaller parts');
     const recordLimit=config.creationLimits?.maxRecordBytes ?? 1024*1024;
     if(!Number.isSafeInteger(recordLimit)||recordLimit<1)throw Error('Invalid server record limit');
     for(const f of bundle.manifest.files.filter(f=>f.kind==='session')) {
       if(bundle.blobs.get(f.id).toString('utf8').split('\n').some(line=>Buffer.byteLength(line)>recordLimit))throw Error('Log record exceeds server limit; update the server before uploading');
     }
-    const intent=await json('bundle-uploads','POST',{sourceKey,manifest:bundle.manifest});
+    const renew=()=>json('bundle-uploads','POST',{sourceKey,manifest:bundle.manifest});
+    let intent=await renew();
     if(intent.asset.state==='ready')return intent.asset;
     if(!Array.isArray(intent.files)||intent.files.length!==bundle.manifest.files.length||new Set(intent.files.map(f=>f.id)).size!==intent.files.length)throw Error('Invalid server bundle file list');
-    for(const f of intent.files) {
+    for(const original of intent.files) {
+      if(intent.expiresAt && Date.parse(intent.expiresAt)-Date.now()<60000)intent=await renew();
+      const f=intent.files.find(f=>f.id===original.id);if(!f)throw Error('Missing renewed file');
       const bytes=bundle.blobs.get(f.id);if(!bytes)throw Error('Unknown server file ID');
       if(f.state==='ready')continue;
       const url=new URL(f.uploadUrl);
@@ -159,7 +174,15 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
       if(!response.ok)throw Error(`File upload failed (${response.status}); retry the identical upload-bundle command`);
       await json(`bundle-uploads/${encodeURIComponent(intent.asset.id)}/files/${encodeURIComponent(f.id)}/complete`,'POST');
     }
-    return json(`bundle-uploads/${encodeURIComponent(intent.asset.id)}/complete`,'POST');
+    let previous=-1;
+    for(;;) {
+      if(intent.expiresAt && Date.parse(intent.expiresAt)-Date.now()<60000)intent=await renew();
+      const result=await json(`bundle-uploads/${encodeURIComponent(intent.asset.id)}/complete`,'POST');
+      if(result.state==='ready')return result;
+      const progress=result.finalization?.completedFiles;
+      if(!Number.isSafeInteger(progress)||progress<=previous)throw Error('Finalization did not advance; retry the identical upload-bundle command');
+      previous=progress;
+    }
   }
   if (command === 'upload') {
     if (!values.includes('--reviewed')) throw Error('Review the prepared file, then supply --reviewed to authorize private upload.');
@@ -201,14 +224,9 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     const assetID=id(), asset=await json(`assets/${assetID}`);
     if(asset.format!=='creation-bundle-v2')throw Error('Use download for a legacy JSONL asset');
     const raw=Buffer.from(await(await api(`assets/${assetID}/download`)).arrayBuffer());
-    if(raw.length>512*1024||digest(raw)!==asset.digest)throw Error('Stored manifest digest mismatch');
-    const manifest=validateFileManifest(JSON.parse(raw)),blobs=new Map();
-    for(const f of manifest.files) {
-      const bytes=Buffer.from(await(await api(`assets/${assetID}/files/${encodeURIComponent(f.id)}/download`)).arrayBuffer());
-      if(bytes.length!==f.bytes||digest(bytes)!==f.digest)throw Error('Downloaded file digest mismatch');
-      blobs.set(f.id,bytes);
-    }
-    writeFileBundle(required('--out'),{manifest,blobs,manifestBytes:raw});
+    if(raw.length>multiFileLimits.maxManifestBytes||digest(raw)!==asset.digest)throw Error('Stored manifest digest mismatch');
+    const manifest=validateFileManifest(JSON.parse(raw));
+    await writeDownloadedBundle(required('--out'),manifest,raw,async f=>Buffer.from(await(await api(`assets/${assetID}/files/${encodeURIComponent(f.id)}/download`)).arrayBuffer()));
     return {files:manifest.files.length,digest:asset.digest,warning:'Review the manifest and all downloaded files before platform sharing.'};
   }
   if (command === 'offer') {

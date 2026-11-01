@@ -92,9 +92,10 @@ Read all issue pages using `nextOffset`; inspect `scripts` and `events` sections
 needed. Report missing/orphan/truncated results and absent parent/script associations.
 `coverage: observed-only` always applies: paired calls do not establish complete runtime
 capture, original authorship or reproducibility. Unknown provider events remain raw.
-Limits: 100 streams (one log each), 500 text scripts, 50,000 log records total,
-1 MiB per log record, 5 MiB per script, 512 KiB manifest, 20 MiB total file bodies
-(or a smaller server limit). Binary attachments are not yet supported. Stop and report
+Limits: 100 streams (ordered parts), 500 text scripts, 1,000,000 log records,
+16 MiB per record, 32 MiB per part, 5 MiB per script, 4 MiB manifest and 100 GiB
+total file bodies. Native inline images stay in their events; separate binary files
+are not yet supported. Stop and report
 oversized inputs; never silently truncate.
 Keep manifests and prepared bundles outside public publish folders. Sharing remains a
 separate consent covering all bundled scripts, child logs, arguments and results.
@@ -134,4 +135,24 @@ Use `node <skill-directory>/scripts/sessions.mjs help` for syntax. If authentica
 
 ### Large native histories
 
-Multi-file uploads, downloads and offline restoration support 256 MiB per bundle and 8 MiB per JSON record by default. No size setting or environment opt-in is needed. Keep native screenshot payloads and tool results intact; never truncate events to fit. The CLI checks server capabilities before creating an upload and refuses older servers whose limits are too small. Retry the identical upload command after interruption; already verified files are retained.
+Multi-file bundles support **100 GiB**, using at most 4096 files, 100 streams,
+500 script snapshots, 1,000,000 events and a 4 MiB manifest. No environment opt-in.
+The CLI reads native logs incrementally and splits between records into 32 MiB parts;
+records may be up to 16 MiB. Keep native screenshots and tool results intact: never
+truncate to fit. Over-limit input fails clearly. Legacy single-file upload supports
+64 MiB; use `bundle` for larger input.
+
+`streamId` + contiguous zero-based `part` identify session ordering. Child links and
+script-call links work across parts. Uploads renew expiring URLs, skip verified files
+on retry and resume final validation across server instances. Use the identical source
+ID and bundle to retry. Downloads and offline restore process one file at a time.
+
+To reconstruct a single prepared native JSONL stream from its parts:
+
+```sh
+node <skill-directory>/scripts/sessions.mjs restore-stream --dir exported-package --stream main --out main.jsonl
+```
+
+This verifies every part and returns the merged SHA-256. It requires neither network
+nor credentials nor PostgreSQL. The optional manifest `trace` entries are server-derived
+index caches; raw logs remain authoritative, and the offline reader rebuilds the graph.

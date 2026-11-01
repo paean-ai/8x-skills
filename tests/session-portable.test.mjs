@@ -36,7 +36,7 @@ test('raw R2 prefix restores and inspects offline with no credentials, network o
     const tools=await main(['inspect-bundle','--dir',out,'--section','tools']);
     assert.equal(tools.total,2);assert(tools.items.every(t=>t.status==='paired'));
     assert.equal(tools.items[1].results[0].value,'full build output\nline 2');
-    assert.deepEqual(tools.items[1].results[0].source,{fileId:'worker-log',path:'sessions/worker.jsonl',line:2});
+    assert.deepEqual(tools.items[1].results[0].source,{fileId:'worker-log',path:'sessions/worker.jsonl',line:2,block:0});
     const scripts=await main(['inspect-bundle','--dir',out,'--section','scripts']);
     assert.equal(scripts.items[0].callId,'c1');assert.equal(scripts.items[0].content,f.blobs[2].toString());
     assert.equal((await main(['inspect-bundle','--dir',out])).streams[1].parentCallId,'spawn');

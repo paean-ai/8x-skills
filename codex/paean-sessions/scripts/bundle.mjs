@@ -6,7 +6,7 @@ const MAX = creationLimits.maxBytes;
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,200}$/.test(value);
 const read = path => {
   const stat = statSync(path);
-  if (!stat.isFile() || stat.size > MAX) throw Error('Select a regular file up to 256 MiB');
+  if (!stat.isFile() || stat.size > MAX) throw Error('Select a regular file up to 64 MiB');
   return readFileSync(path);
 };
 
@@ -35,7 +35,7 @@ export function buildBundle(manifest, manifestDirectory, projectDirectory, prepa
   const append = value => {
     const line = JSON.stringify(value);
     size += Buffer.byteLength(line) + 1;
-    if (Buffer.byteLength(line) > creationLimits.maxRecordBytes || size > MAX || lines.length >= 50000) throw Error('Creation bundle exceeds record or total size limits');
+    if (Buffer.byteLength(line) > creationLimits.maxRecordBytes || size > MAX || lines.length >= creationLimits.maxRecords) throw Error('Creation bundle exceeds record or total size limits');
     lines.push(line);
   };
   append({ type: 'paean_creation_bundle', version: 1, streams: [...streams.values()] });

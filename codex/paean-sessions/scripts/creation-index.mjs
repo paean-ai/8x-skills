@@ -1,4 +1,4 @@
-// Generated from zero-api src/modules/session-assets/creation.ts (SHA-256 cb79cb4bee4bc44d836b58883017f1da9a3ada9e275bdae262e9576efc55ff2f).
+// Generated from zero-api src/modules/session-assets/creation.ts (SHA-256 f0718275db02dc7cd9bdcf2986f713a306bf3cb76db84088316f65edd809ca75).
 // Standalone Node adapter; no database, network, credentials or script execution.
 import { createHash } from "crypto";
 class SessionError extends Error {
@@ -7,8 +7,9 @@ class SessionError extends Error {
         this.status = status;
     }
 }
-// Protocol limits shared by API capabilities and the standalone skill parser.
-export const creationLimits = { maxBytes: 256 * 1024 * 1024, maxStreams: 100, maxScripts: 500, maxRecords: 50000, maxRecordBytes: 8 * 1024 * 1024 };
+// Built-in protocol limits; large bundles are independent bounded files.
+export const creationLimits = { maxBytes: 64 * 1024 * 1024, maxStreams: 100, maxScripts: 500, maxRecords: 1000000, maxRecordBytes: 16 * 1024 * 1024 };
+export const multiFileLimits = { maxBytes: 100 * 1024 * 1024 * 1024, maxFiles: 4096, maxManifestBytes: 4 * 1024 * 1024, maxScriptBytes: 5 * 1024 * 1024, maxFileBytes: 32 * 1024 * 1024 };
 export const CREATION_FORMAT = "paean_creation_bundle";
 const object = (v) => v && typeof v === "object" && !Array.isArray(v);
 const identifier = (v) => typeof v === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(v);
@@ -75,19 +76,28 @@ export function creationRecords(records) {
         fail("Creation bundle requires session events");
     return { format: "creation-bundle-v1", streams: [...streams.values()], events, scripts };
 }
-export function inspectCreation(records) {
-    const data = creationRecords(records);
+/** Retains only metadata for unselected tools, never whole history payloads. */
+export function creationScanner(streams, scripts, section = "summary", offset = 0, limit = 50, all = false, format = "creation-bundle-v2") {
+    const data = { streams, scripts, format };
+    let eventCount = 0;
+    const seenStreams = new Set(), events = [];
     const tools = new Map();
+    const positions = new Map();
     const issues = [];
     let recognizedEvents = 0;
     const key = (stream, call) => JSON.stringify([stream, call]);
-    for (const entry of data.events) {
+    const add = (entry, count = true) => {
+        if (count)
+            eventCount++;
+        seenStreams.add(entry.streamId);
+        if (all || (section === "events" && eventCount > offset && eventCount <= offset + limit))
+            events.push(entry);
         const e = entry.event;
         // Codex response_item; Claude Code / Zero message content; explicit tool events.
         const payload = e.type === "response_item" && object(e.payload) ? e.payload : e;
         const blocks = Array.isArray(e.message?.content) ? e.message.content : Array.isArray(e.content) ? e.content : [payload];
         let recognized = false;
-        for (const b of blocks) {
+        for (const [blockIndex, b] of blocks.entries()) {
             if (!object(b))
                 continue;
             const call = ["function_call", "custom_tool_call", "tool_use", "tool_call"].includes(b.type);
@@ -102,7 +112,12 @@ export function inspectCreation(records) {
             }
             const k = key(entry.streamId, id);
             const tool = tools.get(k) || { streamId: entry.streamId, callId: id, calls: [], results: [] };
-            const observation = { record: entry.record, value: call ? (b.arguments ?? b.input ?? b.inputJSON ?? null) : (b.output ?? b.content ?? b.result ?? b.subBlocks ?? b.text ?? null) };
+            const toolIndex = positions.get(k) ?? tools.size;
+            positions.set(k, toolIndex);
+            const keep = all || (section === "tools" && toolIndex >= offset && toolIndex < offset + limit);
+            const observation = { record: entry.record, value: !keep ? null : call ? (b.arguments ?? b.input ?? b.inputJSON ?? null) : (b.output ?? b.content ?? b.result ?? b.subBlocks ?? b.text ?? null) };
+            if (entry.source)
+                observation.source = { ...entry.source, block: b.sourceBlock ?? blockIndex };
             if (typeof e.timestamp === "string")
                 observation.timestamp = e.timestamp;
             if (call) {
@@ -126,36 +141,72 @@ export function inspectCreation(records) {
         }
         if (recognized)
             recognizedEvents++;
-    }
-    for (const tool of tools.values()) {
-        tool.status = !tool.calls.length ? "orphan_result" : !tool.results.length ? "missing_result" : tool.results.some(r => r.error) ? "error" : "paired";
-        if (["orphan_result", "missing_result"].includes(tool.status))
-            issues.push({ code: tool.status, streamId: tool.streamId, callId: tool.callId });
-        if (tool.calls.length > 1)
-            issues.push({ code: "duplicate_call_id", streamId: tool.streamId, callId: tool.callId });
-        if (tool.results.some(r => r.truncated))
-            issues.push({ code: "truncated_result", streamId: tool.streamId, callId: tool.callId });
-        if (tool.parentCallId && !tools.get(key(tool.parentStreamId, tool.parentCallId))?.calls.length)
-            issues.push({ code: "missing_parent_call", streamId: tool.streamId, callId: tool.callId, parentCallId: tool.parentCallId });
-    }
-    for (const stream of data.streams) {
-        if (!data.events.some(e => e.streamId === stream.id))
-            issues.push({ code: "empty_stream", streamId: stream.id });
-        if (stream.parentCallId && !tools.get(key(stream.parentStreamId, stream.parentCallId))?.calls.length)
-            issues.push({ code: "missing_parent_call", streamId: stream.id, parentCallId: stream.parentCallId });
-    }
-    for (const script of data.scripts) {
-        if (script.callId && !tools.get(key(script.streamId, script.callId))?.calls.length)
-            issues.push({ code: "unmatched_script_call", scriptId: script.scriptId, streamId: script.streamId, callId: script.callId });
-    }
-    const toolList = [...tools.values()];
-    const summary = { format: data.format, streams: data.streams, eventCount: data.events.length,
-        scriptCount: data.scripts.length, toolCallCount: toolList.reduce((n, t) => n + t.calls.length, 0),
-        toolResultCount: toolList.reduce((n, t) => n + t.results.length, 0), recognizedToolEventCount: recognizedEvents,
-        issueCount: issues.length, coverage: "observed-only",
-        limitations: ["Only supplied events and script snapshots are available; omitted or truncated source data cannot be reconstructed.",
-            "Script snapshots do not establish which historical bytes executed. Unknown event formats remain available in raw events."] };
-    return { summary, tools: toolList, scripts: data.scripts, events: data.events, issues };
+    };
+    const finish = () => {
+        for (const tool of tools.values()) {
+            tool.status = !tool.calls.length ? "orphan_result" : !tool.results.length ? "missing_result" : tool.results.some(r => r.error) ? "error" : "paired";
+            if (["orphan_result", "missing_result"].includes(tool.status))
+                issues.push({ code: tool.status, streamId: tool.streamId, callId: tool.callId });
+            if (tool.calls.length > 1)
+                issues.push({ code: "duplicate_call_id", streamId: tool.streamId, callId: tool.callId });
+            if (tool.results.some(r => r.truncated))
+                issues.push({ code: "truncated_result", streamId: tool.streamId, callId: tool.callId });
+            if (tool.parentCallId && !tools.get(key(tool.parentStreamId, tool.parentCallId))?.calls.length)
+                issues.push({ code: "missing_parent_call", streamId: tool.streamId, callId: tool.callId, parentCallId: tool.parentCallId });
+        }
+        for (const stream of data.streams) {
+            if (!seenStreams.has(stream.id))
+                issues.push({ code: "empty_stream", streamId: stream.id });
+            if (stream.parentCallId && !tools.get(key(stream.parentStreamId, stream.parentCallId))?.calls.length)
+                issues.push({ code: "missing_parent_call", streamId: stream.id, parentCallId: stream.parentCallId });
+        }
+        for (const script of data.scripts) {
+            if (script.callId && !tools.get(key(script.streamId, script.callId))?.calls.length)
+                issues.push({ code: "unmatched_script_call", scriptId: script.scriptId, streamId: script.streamId, callId: script.callId });
+        }
+        const toolList = [...tools.values()];
+        const summary = { format: data.format, streams: data.streams, eventCount,
+            scriptCount: data.scripts.length, toolCallCount: toolList.reduce((n, t) => n + t.calls.length, 0),
+            toolResultCount: toolList.reduce((n, t) => n + t.results.length, 0), recognizedToolEventCount: recognizedEvents,
+            issueCount: issues.length, coverage: "observed-only",
+            limitations: ["Only supplied events and script snapshots are available; omitted or truncated source data cannot be reconstructed.",
+                "Script snapshots do not establish which historical bytes executed. Unknown event formats remain available in raw events."] };
+        return { summary, tools: toolList, scripts: data.scripts, events, issues };
+    };
+    return { add, skip(streamId, count) { eventCount += count; if (count)
+            seenStreams.add(streamId); }, finish };
+}
+export function inspectCreation(records) {
+    const data = creationRecords(records);
+    const scan = creationScanner(data.streams, data.scripts, "summary", 0, 50, true, data.format);
+    data.events.forEach(e => scan.add(e));
+    return scan.finish();
+}
+/** Small derived index: native events remain authoritative; values are read only for selected pages. */
+export function compactCreationEvents(records) {
+    const events = [];
+    let offset = 0;
+    records.forEach((event, index) => {
+        const payload = event.type === "response_item" && object(event.payload) ? event.payload : event;
+        const blocks = Array.isArray(event.message?.content) ? event.message.content : Array.isArray(event.content) ? event.content : [payload];
+        const content = [];
+        blocks.forEach((b, sourceBlock) => {
+            if (!object(b) || !["function_call", "custom_tool_call", "tool_use", "tool_call", "function_call_output", "custom_tool_call_output", "tool_result"].includes(b.type))
+                return;
+            const compact = { sourceBlock };
+            for (const key of ["type", "call_id", "tool_use_id", "toolUseID", "id", "toolCallId", "name", "toolName", "parent_call_id", "is_error", "isError", "error", "truncated", "output_truncated"]) {
+                const v = b[key];
+                if (typeof v === "string" || typeof v === "boolean")
+                    compact[key] = v;
+            }
+            content.push(compact);
+        });
+        const raw = JSON.stringify(event), bytes = Buffer.byteLength(raw);
+        if (content.length)
+            events.push({ line: index + 1, offset, bytes, digest: hash(raw), event: { timestamp: event.timestamp, parent_tool_use_id: event.parent_tool_use_id, content } });
+        offset += bytes + 1;
+    });
+    return { version: 1, records: records.length, events };
 }
 export function validateCreationQuery(section, offset, limit) {
     if (!["summary", "tools", "scripts", "events", "issues"].includes(section) || !Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100)
