@@ -9,7 +9,8 @@ import { buildBundle } from './bundle.mjs';
 import { buildFileBundle, readFileBundle, readPortableBundle, writeFileBundle, validateFileManifest } from './multi-file.mjs';
 import { inspectPortableBundle } from './offline.mjs';
 
-const MAX = 20 * 1024 * 1024;
+import { creationLimits } from './creation-index.mjs';
+const MAX = creationLimits.maxBytes;
 export const digest = data => createHash('sha256').update(data).digest('hex');
 function clean(v, depth = 0) {
   if (depth > 40) throw Error('JSON nesting exceeds 40 levels');
@@ -40,18 +41,20 @@ export function prepareText(input) {
 }
 
 export function prepare(input) {
-  if (input.length > MAX) throw Error('Session exceeds 20 MB');
+  if (input.length > MAX) throw Error('Session exceeds 256 MiB');
   const bytes = input[0] === 0x1f && input[1] === 0x8b ? gunzipSync(input, { maxOutputLength: MAX }) : input;
   const lines = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
   if (!lines.length || lines.length > 50000) throw Error('Expected 1–50000 JSON records');
   const records = lines.map((line, i) => {
-    if (Buffer.byteLength(line) > 1024 * 1024) throw Error(`Record ${i + 1} exceeds 1 MB`);
+    if (Buffer.byteLength(line) > creationLimits.maxRecordBytes) throw Error(`Record ${i + 1} exceeds 8 MiB`);
     const value = JSON.parse(line);
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error(`Record ${i + 1} must be an object`);
-    return JSON.stringify(clean(value));
+    const prepared = JSON.stringify(clean(value));
+    if (Buffer.byteLength(prepared) > creationLimits.maxRecordBytes) throw Error(`Prepared record ${i + 1} exceeds 8 MiB`);
+    return prepared;
   });
   const output = Buffer.from(records.join('\n') + '\n');
-  if (output.length > MAX) throw Error('Prepared session exceeds 20 MB');
+  if (output.length > MAX) throw Error('Prepared session exceeds 256 MiB');
   return output;
 }
 
@@ -71,7 +74,7 @@ export async function main(args = process.argv.slice(2)) {
   const [command, ...values] = args;
   const arg = name => { const at = values.indexOf(name); return at < 0 ? undefined : values[at + 1]; };
   const required = name => { const value = arg(name); if (!value || value.startsWith('--')) throw Error(`Missing ${name}`); return value; };
-  const file = name => { const path = required(name); if (statSync(path).size > MAX) throw Error('File exceeds 20 MB'); return readFileSync(path); };
+  const file = name => { const path = required(name); if (statSync(path).size > MAX) throw Error('File exceeds 256 MiB'); return readFileSync(path); };
   if (!command || command === 'help' || command === '--help') {
     console.log(`Paean session JSONL (Node 20+)
 prepare --file original.jsonl[.gz] --out prepared.jsonl
@@ -139,6 +142,11 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     if(!config.enabled||!config.creationBundleVersions?.includes(2))throw Error('Server does not support multi-file creation bundles yet');
     if(config.portableCreationManifest!==true)throw Error('Server does not support portable creation manifests yet');
     if(!Number.isSafeInteger(config.maxBytes)||bundle.manifest.files.reduce((n,f)=>n+f.bytes,0)>config.maxBytes)throw Error('Bundle exceeds server upload limit');
+    const recordLimit=config.creationLimits?.maxRecordBytes ?? 1024*1024;
+    if(!Number.isSafeInteger(recordLimit)||recordLimit<1)throw Error('Invalid server record limit');
+    for(const f of bundle.manifest.files.filter(f=>f.kind==='session')) {
+      if(bundle.blobs.get(f.id).toString('utf8').split('\n').some(line=>Buffer.byteLength(line)>recordLimit))throw Error('Log record exceeds server limit; update the server before uploading');
+    }
     const intent=await json('bundle-uploads','POST',{sourceKey,manifest:bundle.manifest});
     if(intent.asset.state==='ready')return intent.asset;
     if(!Array.isArray(intent.files)||intent.files.length!==bundle.manifest.files.length||new Set(intent.files.map(f=>f.id)).size!==intent.files.length)throw Error('Invalid server bundle file list');

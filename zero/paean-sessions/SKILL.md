@@ -131,3 +131,7 @@ Maintainers: the offline parser is generated from zero-api's creation.ts. From t
 (add `--check` to verify without writing), then run `node scripts/sync-variants.mjs`.
 
 Use `node <skill-directory>/scripts/sessions.mjs help` for syntax. If authentication is missing, have the user sign in with Zero CLI or configure `PAEAN_AUTH_TOKEN` locally; never request a token in chat. The international API default is `https://api.paean.ai`. On 503 the feature is not enabled; stop uploading. On a failed/uncertain share, retry the identical offer or check `status`; do not change source IDs to obtain another reward.
+
+### Large native histories
+
+Multi-file uploads, downloads and offline restoration support 256 MiB per bundle and 8 MiB per JSON record by default. No size setting or environment opt-in is needed. Keep native screenshot payloads and tool results intact; never truncate events to fit. The CLI checks server capabilities before creating an upload and refuses older servers whose limits are too small. Retry the identical upload command after interruption; already verified files are retained.

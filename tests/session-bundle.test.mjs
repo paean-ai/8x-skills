@@ -39,7 +39,7 @@ test('bundle rejects escaping symlinks, invalid UTF-8, oversized scripts and inv
     try {
       if (scenario === 'symlink') { symlinkSync(join(f.dir,'main.jsonl'),join(f.dir,'project/leak')); f.manifest.scripts[0].file='leak'; }
       if (scenario === 'utf8') writeFileSync(join(f.dir,'project/scripts/build.mjs'),Buffer.from([0xff]));
-      if (scenario === 'oversize') writeFileSync(join(f.dir,'project/scripts/build.mjs'),'a'.repeat(1024*1024));
+      if (scenario === 'oversize') writeFileSync(join(f.dir,'project/scripts/build.mjs'),'a'.repeat(8*1024*1024));
       if (scenario === 'cycle') f.manifest.streams[0].parentStreamId='child';
       if (scenario === 'duplicate') f.manifest.streams[1].id='main';
       if (scenario === 'missing') f.manifest.scripts[0].streamId='unknown';

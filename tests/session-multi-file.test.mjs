@@ -120,3 +120,38 @@ test('download restores independent files and validates the manifest and every f
     });
   } finally {f.cleanup();}
 });
+
+test('large native image records survive build, offline restore, upload and download without configuration',async()=>{
+  const f=fixture();
+  try {
+    const row=JSON.stringify({type:'user',message:{content:[{type:'image',source:{data:'A'.repeat(2*1024*1024)}}]}})+'\n';
+    writeFileSync(join(f.dir,'session.jsonl'),row.repeat(11));
+    await main(f.args);
+    const b=readFileBundle(f.dirOut,prepare,prepareText);
+    assert(b.blobs.get('log-1').length>20*1024*1024);
+    const restored=join(f.dir,'restored');
+    await main(['restore-bundle','--dir',f.dirOut,'--out',restored]);
+    assert(readFileBundle(restored,prepare,prepareText).blobs.get('log-1').equals(b.blobs.get('log-1')));
+    await withAPI(async()=>{
+      let limit=1024*1024, uploaded=false;
+      const raw=Buffer.from(JSON.stringify(b.manifest)+'\n');
+      globalThis.fetch=async(url,options)=>{
+        const path=new URL(url).pathname;
+        if(path==='/sessions/config')return response({enabled:true,maxBytes:256*1024*1024,creationLimits:{maxRecordBytes:limit},creationBundleVersions:[2],portableCreationManifest:true});
+        if(path==='/sessions/bundle-uploads')return response({asset:{id:assetId,state:'uploading'},files:b.manifest.files.map(f=>({id:f.id,state:'uploading',uploadUrl:`https://test.r2.cloudflarestorage.com/${f.id}`}))});
+        if(options.method==='PUT'){assert(Buffer.from(options.body).equals(b.blobs.get(path.slice(1))));uploaded=true;return new Response('');}
+        if(options.method==='POST')return response({id:assetId,state:'ready'});
+        if(path.includes('/files/'))return new Response(b.blobs.get(decodeURIComponent(path.split('/').at(-2))));
+        if(path.endsWith('/download'))return new Response(raw);
+        return response({format:'creation-bundle-v2',digest:digest(raw)});
+      };
+      const args=['upload-bundle','--dir',f.dirOut,'--source','large','--reviewed'];
+      await assert.rejects(main(args),/record exceeds server limit/);assert.equal(uploaded,false);
+      limit=8*1024*1024;
+      assert.equal((await main(args)).state,'ready');assert(uploaded);
+      const out=join(f.dir,'download');
+      await main(['download-bundle','--id',assetId,'--out',out]);
+      assert(readFileBundle(out,prepare,prepareText).blobs.get('log-1').equals(b.blobs.get('log-1')));
+    });
+  } finally {f.cleanup();}
+});

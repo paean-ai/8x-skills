@@ -1,4 +1,4 @@
-// Generated from zero-api src/modules/session-assets/creation.ts (SHA-256 c4cc566d398100f47e6f5f220a378fec41d7382564433f508cbc6fba31d9986d).
+// Generated from zero-api src/modules/session-assets/creation.ts (SHA-256 cb79cb4bee4bc44d836b58883017f1da9a3ada9e275bdae262e9576efc55ff2f).
 // Standalone Node adapter; no database, network, credentials or script execution.
 import { createHash } from "crypto";
 class SessionError extends Error {
@@ -7,8 +7,9 @@ class SessionError extends Error {
         this.status = status;
     }
 }
+// Protocol limits shared by API capabilities and the standalone skill parser.
+export const creationLimits = { maxBytes: 256 * 1024 * 1024, maxStreams: 100, maxScripts: 500, maxRecords: 50000, maxRecordBytes: 8 * 1024 * 1024 };
 export const CREATION_FORMAT = "paean_creation_bundle";
-export const creationLimits = { maxStreams: 100, maxScripts: 500, maxRecords: 50000, maxRecordBytes: 1024 * 1024 };
 const object = (v) => v && typeof v === "object" && !Array.isArray(v);
 const identifier = (v) => typeof v === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(v);
 const fail = (message) => { throw new SessionError(422, message); };

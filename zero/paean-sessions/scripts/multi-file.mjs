@@ -2,11 +2,12 @@ import { readFileSync, realpathSync, statSync, mkdirSync, writeFileSync, rmSync,
 import { resolve, relative, isAbsolute, sep, dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 
-const MAX = 20 * 1024 * 1024;
+import { creationLimits } from './creation-index.mjs';
+const MAX = creationLimits.maxBytes;
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const id = value => typeof value === 'string' && value!=='.' && value!=='..' && /^[A-Za-z0-9_.:-]{1,200}$/.test(value);
 const safePath = value => typeof value === 'string' && value.length <= 500 && !/[\\:\x00-\x1f\x7f]/.test(value) && value.split('/').every(p=>p && p!=='.' && p!=='..');
-const read = path => { const s=statSync(path); if(!s.isFile() || s.size>MAX)throw Error('Select regular files up to 20 MB');return readFileSync(path); };
+const read = path => { const s=statSync(path); if(!s.isFile() || s.size>MAX)throw Error('Select regular files up to 256 MiB');return readFileSync(path); };
 function inside(root, file) {
   const actual = realpathSync(resolve(root,file)), path = relative(root,actual);
   if (!path || isAbsolute(path) || path==='..' || path.startsWith('..'+sep)) throw Error('File escapes selected directory (including symlinks)');
@@ -55,7 +56,7 @@ export function buildFileBundle(input, manifestDirectory, projectDirectory, prep
   const streams=input.streams.map(s=>({id:s.id,...(s.parentStreamId!==undefined?{parentStreamId:s.parentStreamId}:{}),...(s.parentCallId!==undefined?{parentCallId:s.parentCallId}:{})}));
   let size=0, events=0;
   const add=(meta,bytes)=>{
-    size+=bytes.length;if(size>MAX)throw Error('Bundle exceeds 20 MB');
+    size+=bytes.length;if(size>MAX)throw Error('Bundle exceeds 256 MiB');
     files.push({...meta,bytes:bytes.length,digest:hash(bytes),objectPath:meta.path});blobs.set(meta.id,bytes);
   };
   input.streams.forEach((s,index)=>{
@@ -118,7 +119,7 @@ export function readPortableBundle(directory, { layout='auto', expectedDigest } 
     const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
     if(f.kind==='session') {
       const lines=text.split(/\r?\n/).filter(line=>line.trim());
-      if(!lines.length||lines.some(line=>Buffer.byteLength(line)>1024*1024))throw Error('Invalid log record size');
+      if(!lines.length||lines.some(line=>Buffer.byteLength(line)>creationLimits.maxRecordBytes))throw Error('Invalid log record size');
       const rows=lines.map(line=>JSON.parse(line));
       if(rows.some(r=>!r||typeof r!=='object'||Array.isArray(r)))throw Error('Log records must be objects');
       if(rows.some(r=>['paean_creation_bundle','creation_event','creation_script'].includes(r.type)))throw Error('Nested bundles are not session files');
