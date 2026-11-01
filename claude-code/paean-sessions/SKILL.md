@@ -138,7 +138,7 @@ truncate to fit. Over-limit input fails clearly. Legacy single-file upload suppo
 64 MiB; use `bundle` for larger input.
 
 `streamId` + contiguous zero-based `part` identify session ordering. Child links and
-script-call links work across parts. Uploads renew expiring URLs, skip verified files
+script-call links work across parts. Uploads use three bounded parallel transfers with a ten-minute file-transfer timeout, renew expiring URLs, skip verified files
 on retry and resume final validation across server instances. Use the identical source
 ID and bundle to retry. Downloads and offline restore process one file at a time.
 

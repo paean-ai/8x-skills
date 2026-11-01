@@ -136,13 +136,13 @@ test('large native image records survive build, offline restore, upload and down
     await main(['restore-bundle','--dir',f.dirOut,'--out',restored]);
     assert(readFileBundle(restored,prepare,prepareText).blobs.get('log-1').equals(b.blobs.get('log-1')));
     await withAPI(async()=>{
-      let limit=1024*1024, uploaded=false,intents=0,finishes=0;
+      let limit=1024*1024, uploaded=false,intents=0,finishes=0,active=0,maxActive=0;
       const raw=Buffer.from(JSON.stringify(b.manifest)+'\n');
       globalThis.fetch=async(url,options)=>{
         const path=new URL(url).pathname;
         if(path==='/sessions/config')return response({enabled:true,maxBytes:64*1024*1024,multiFileLimits:{maxBytes:100*1024**3,maxFileBytes:32*1024*1024},chunkedCreationStreams:true,creationLimits:{maxRecordBytes:limit},creationBundleVersions:[2],portableCreationManifest:true});
         if(path==='/sessions/bundle-uploads')return response({expiresAt:new Date(++intents===1?0:Date.now()+600000).toISOString(),asset:{id:assetId,state:'uploading'},files:b.manifest.files.map(f=>({id:f.id,state:'uploading',uploadUrl:`https://test.r2.cloudflarestorage.com/${f.id}`}))});
-        if(options.method==='PUT'){assert(Buffer.from(options.body).equals(b.blobs.get(path.slice(1))));uploaded=true;return new Response('');}
+        if(options.method==='PUT'){active++;maxActive=Math.max(maxActive,active);assert(Buffer.from(options.body).equals(b.blobs.get(path.slice(1))));uploaded=true;await new Promise(resolve=>setTimeout(resolve,5));active--;return new Response('');}
         if(path===`/sessions/bundle-uploads/${assetId}/complete` && ++finishes===1)return response({id:assetId,state:'uploading',finalization:{completedFiles:1,totalFiles:2}});
         if(options.method==='POST')return response({id:assetId,state:'ready'});
         if(path.includes('/files/'))return new Response(b.blobs.get(decodeURIComponent(path.split('/').at(-2))));
@@ -152,7 +152,7 @@ test('large native image records survive build, offline restore, upload and down
       const args=['upload-bundle','--dir',f.dirOut,'--source','large','--reviewed'];
       await assert.rejects(main(args),/record exceeds server limit/);assert.equal(uploaded,false);
       limit=8*1024*1024;
-      assert.equal((await main(args)).state,'ready');assert(uploaded);assert.equal(intents,2);assert.equal(finishes,2);
+      assert.equal((await main(args)).state,'ready');assert(uploaded);assert.equal(intents,2);assert.equal(finishes,2);assert.equal(maxActive,3);
       const out=join(f.dir,'download');
       await main(['download-bundle','--id',assetId,'--out',out]);
       assert(readFileBundle(out,prepare,prepareText).blobs.get('log-1').equals(b.blobs.get('log-1')));

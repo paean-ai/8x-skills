@@ -136,7 +136,7 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
   if (base.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(base.hostname)) throw Error('API must use HTTPS');
   const token = credentials();
   async function api(path, method = 'GET', body) {
-    const response = await fetch(new URL('/sessions/' + path, base), { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, redirect: 'error', signal: AbortSignal.timeout(120000) });
+    const response = await fetch(new URL('/sessions/' + path, base), { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, redirect: 'error', signal: AbortSignal.timeout(path.endsWith('/download') ? 600000 : 120000) });
     if (!response.ok) { const error = await response.json().catch(() => ({})); throw Error(error.error || `Session API returned ${response.status}`); }
     return response;
   }
@@ -163,17 +163,36 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     let intent=await renew();
     if(intent.asset.state==='ready')return intent.asset;
     if(!Array.isArray(intent.files)||intent.files.length!==bundle.manifest.files.length||new Set(intent.files.map(f=>f.id)).size!==intent.files.length)throw Error('Invalid server bundle file list');
-    for(const original of intent.files) {
-      if(intent.expiresAt && Date.parse(intent.expiresAt)-Date.now()<60000)intent=await renew();
-      const f=intent.files.find(f=>f.id===original.id);if(!f)throw Error('Missing renewed file');
-      const bytes=bundle.blobs.get(f.id);if(!bytes)throw Error('Unknown server file ID');
-      if(f.state==='ready')continue;
-      const url=new URL(f.uploadUrl);
-      if(url.protocol!=='https:'||!url.hostname.endsWith('.r2.cloudflarestorage.com'))throw Error('Invalid private upload URL');
-      const response=await fetch(url,{method:'PUT',headers:f.headers,body:bytes,redirect:'error',signal:AbortSignal.timeout(120000)});
-      if(!response.ok)throw Error(`File upload failed (${response.status}); retry the identical upload-bundle command`);
-      await json(`bundle-uploads/${encodeURIComponent(intent.asset.id)}/files/${encodeURIComponent(f.id)}/complete`,'POST');
-    }
+    const selected=intent.files.map(f=>f.id);
+    let next=0,failure,renewal;
+    const fresh=async()=>{
+      if(intent.expiresAt && Date.parse(intent.expiresAt)-Date.now()<60000) {
+        renewal??=renew().then(value=>{intent=value;}).finally(()=>{renewal=undefined;});
+        await renewal;
+      }
+    };
+    const worker=async()=>{
+      while(!failure) {
+        const at=next++;if(at>=selected.length)return;
+        try {
+          await fresh();
+          const f=intent.files.find(f=>f.id===selected[at]);if(!f)throw Error('Missing renewed file');
+          if(f.state==='ready')continue;
+          const bytes=bundle.blobs.get(f.id);if(!bytes)throw Error('Unknown server file ID');
+          const url=new URL(f.uploadUrl);
+          if(url.protocol!=='https:'||!url.hostname.endsWith('.r2.cloudflarestorage.com'))throw Error('Invalid private upload URL');
+          let response;
+          try {response=await fetch(url,{method:'PUT',headers:f.headers,body:bytes,redirect:'error',signal:AbortSignal.timeout(600000)});}
+          catch(error){throw Error(`Direct R2 upload interrupted for ${f.id} (${error.name}); retry the identical upload-bundle command to retain verified parts`);}
+          if(!response.ok)throw Error(`File upload failed (${response.status}); retry the identical upload-bundle command`);
+          await fresh(); // A slow PUT may outlive the original completion window.
+          await json(`bundle-uploads/${encodeURIComponent(intent.asset.id)}/files/${encodeURIComponent(f.id)}/complete`,'POST');
+        }catch(error){failure??=error;}
+      }
+    };
+    // Settle active parts before reporting a failure; completed parts remain resumable.
+    await Promise.all(Array.from({length:Math.min(3,selected.length)},()=>worker()));
+    if(failure)throw failure;
     let previous=-1;
     for(;;) {
       if(intent.expiresAt && Date.parse(intent.expiresAt)-Date.now()<60000)intent=await renew();
@@ -198,7 +217,7 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     if (asset.state === 'ready') return asset;
     const url = new URL(uploadUrl);
     if (url.protocol !== 'https:' || !url.hostname.endsWith('.r2.cloudflarestorage.com')) throw Error('Invalid private upload URL');
-    const result = await fetch(url, { method: 'PUT', headers, body: data, redirect: 'error', signal: AbortSignal.timeout(120000) });
+    const result = await fetch(url, { method: 'PUT', headers, body: data, redirect: 'error', signal: AbortSignal.timeout(600000) });
     if (!result.ok) throw Error(`Private upload failed (${result.status}); retry the same command`);
     return json(`uploads/${asset.id}/complete`, 'POST');
   }
