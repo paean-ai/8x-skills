@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { main, prepare, prepareText, digest } from '../codex/paean-sessions/scripts/sessions.mjs';
+import { main as cliMain, prepare, prepareText, digest } from '../codex/paean-sessions/scripts/sessions.mjs';
+const main=args=>cliMain(args,{put:(url,options)=>globalThis.fetch(url,{method:'PUT',...options})});
 import { readFileBundle, validateFileManifest } from '../codex/paean-sessions/scripts/multi-file.mjs';
 
 const assetId='11111111-1111-4111-8111-111111111111';

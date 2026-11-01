@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { main, prepare } from '../codex/paean-sessions/scripts/sessions.mjs';
+import { main as cliMain, prepare } from '../codex/paean-sessions/scripts/sessions.mjs';
+const main=args=>cliMain(args,{put:(url,options)=>globalThis.fetch(url,{method:'PUT',...options})});
 
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'creation-bundle-'));

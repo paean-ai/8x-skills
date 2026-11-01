@@ -5,6 +5,7 @@ import { join, resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
+import { request as httpsRequest } from 'node:https';
 import { buildBundle } from './bundle.mjs';
 import { buildFileBundle, readFileBundle, readPortableBundle, writeFileBundle, validateFileManifest, writeDownloadedBundle, streamFiles } from './multi-file.mjs';
 import { inspectPortableBundle } from './offline.mjs';
@@ -70,7 +71,17 @@ function credentials() {
   throw Error('Sign in using Zero CLI or set PAEAN_AUTH_TOKEN locally. Never paste credentials into a conversation.');
 }
 
-export async function main(args = process.argv.slice(2)) {
+/** Explicit HTTPS deadline: native fetch has an additional response-header timeout on slow PUTs. */
+export function putDirectR2(url, {headers,body,signal}, request = httpsRequest) {
+  return new Promise((resolve,reject)=>{
+    const req=request(url,{method:'PUT',headers:{...headers,'Content-Length':body.length},signal},res=>{
+      res.on('error',reject);res.on('end',()=>resolve({status:res.statusCode,ok:res.statusCode>=200&&res.statusCode<300}));res.resume();
+    });
+    req.on('error',reject);req.end(body);
+  });
+}
+
+export async function main(args = process.argv.slice(2), {put = putDirectR2} = {}) {
   const [command, ...values] = args;
   const arg = name => { const at = values.indexOf(name); return at < 0 ? undefined : values[at + 1]; };
   const required = name => { const value = arg(name); if (!value || value.startsWith('--')) throw Error(`Missing ${name}`); return value; };
@@ -182,8 +193,8 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
           const url=new URL(f.uploadUrl);
           if(url.protocol!=='https:'||!url.hostname.endsWith('.r2.cloudflarestorage.com'))throw Error('Invalid private upload URL');
           let response;
-          try {response=await fetch(url,{method:'PUT',headers:f.headers,body:bytes,redirect:'error',signal:AbortSignal.timeout(600000)});}
-          catch(error){throw Error(`Direct R2 upload interrupted for ${f.id} (${error.name}); retry the identical upload-bundle command to retain verified parts`);}
+          try {response=await put(url,{headers:f.headers,body:bytes,signal:AbortSignal.timeout(600000)});}
+          catch(error){throw Error(`Direct R2 upload interrupted for ${f.id} (${error.name}); retry the identical upload-bundle command to retain verified parts`,{cause:error});}
           if(!response.ok)throw Error(`File upload failed (${response.status}); retry the identical upload-bundle command`);
           await fresh(); // A slow PUT may outlive the original completion window.
           await json(`bundle-uploads/${encodeURIComponent(intent.asset.id)}/files/${encodeURIComponent(f.id)}/complete`,'POST');
@@ -217,7 +228,7 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     if (asset.state === 'ready') return asset;
     const url = new URL(uploadUrl);
     if (url.protocol !== 'https:' || !url.hostname.endsWith('.r2.cloudflarestorage.com')) throw Error('Invalid private upload URL');
-    const result = await fetch(url, { method: 'PUT', headers, body: data, redirect: 'error', signal: AbortSignal.timeout(600000) });
+    const result = await put(url, { headers, body: data, signal: AbortSignal.timeout(600000) });
     if (!result.ok) throw Error(`Private upload failed (${result.status}); retry the same command`);
     return json(`uploads/${asset.id}/complete`, 'POST');
   }
