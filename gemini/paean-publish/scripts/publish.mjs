@@ -77,6 +77,7 @@ function usage() {
   return [
     'Usage: publish-helper.mjs [--dry-run] [--yes] [--hosting-only] [--allow-secrets]',
     '                          [--allow-static-only] [--dir <publish-dir>]',
+    '                          [--subcategory <gameplay>] [--desktop-only | --mobile-compatible]',
     '                          [--title <title>] [--summary <text>] [--category <category>] [--tag <tag>]',
     '                          [--handle <subdomain>]',
     '                          [--session-jsonl <file.jsonl[.gz]> | --no-session]',
@@ -132,6 +133,14 @@ function parseArgs(argv) {
     else if (arg.startsWith('--title=')) out.title = arg.slice('--title='.length)
     else if (arg === '--summary') out.summary = argv[++i]
     else if (arg.startsWith('--summary=')) out.summary = arg.slice('--summary='.length)
+    else if (arg === '--subcategory') {
+      const value = argv[++i]
+      if (value === undefined || value.startsWith('--')) throw new Error('--subcategory needs a gameplay value (or an empty string to clear it).')
+      out.subcategory = value
+    }
+    else if (arg.startsWith('--subcategory=')) out.subcategory = arg.slice('--subcategory='.length)
+    else if (arg === '--desktop-only') out.desktopOnly = true
+    else if (arg === '--mobile-compatible') out.desktopOnly = false
     else if (arg === '--category') out.category = argv[++i]
     else if (arg.startsWith('--category=')) out.category = arg.slice('--category='.length)
     else if (arg === '--license') out.license = argv[++i]
@@ -167,7 +176,7 @@ function parseArgs(argv) {
   if (out.delete && out.allowSecrets) throw new Error('--allow-secrets is only valid when publishing, not deleting.')
   if (out.delete && out.allowStaticOnly) throw new Error('--allow-static-only is only valid when publishing, not deleting.')
   if (out.delete && out.yes) throw new Error('--yes is only valid when publishing, not deleting.')
-  if (out.delete && (out.title || out.summary || out.category || out.license || out.tags.length > 0)) throw new Error('metadata options are only valid when publishing, not deleting.')
+  if (out.delete && (out.title || out.summary || out.category || out.subcategory !== undefined || out.desktopOnly !== undefined || out.license || out.tags.length > 0)) throw new Error('metadata options are only valid when publishing, not deleting.')
   const declaresAccess = out.price !== undefined || out.free || out.standalone !== undefined || out.products.length > 0
   if (out.delete && declaresAccess) throw new Error('access options (--price/--free/--standalone/--product) are only valid when publishing, not deleting.')
   if (out.hostingOnly && declaresAccess) throw new Error('access options (--price/--free/--standalone/--product) need a Square listing; they are not valid with --hosting-only.')
@@ -638,6 +647,8 @@ function saveState(projectRoot, input) {
     totalBytes: input.totalBytes,
     title: input.title,
     category: input.category,
+    subcategory: input.subcategory,
+    desktopOnly: input.desktopOnly,
     remix: input.remix,
     access: input.access,
     creationSession: input.creationSession,
@@ -724,6 +735,19 @@ function resolveSummary(projectRoot, args) {
   if (manifest && typeof manifest.summary === 'string') return manifest.summary
   const pkg = readPackageJson(projectRoot)
   return typeof (pkg && pkg.description) === 'string' ? pkg.description : ''
+}
+
+function resolveClassification(projectRoot, args) {
+  const manifest = readManifest(projectRoot) || {}
+  const category = resolveCategory(projectRoot, args)
+  const changedParent = manifest.category && manifest.category !== category
+  const subcategory = args.subcategory !== undefined ? args.subcategory.trim() || null
+    : changedParent ? null : manifest.subcategory
+  const desktopOnly = args.desktopOnly ?? manifest.desktopOnly
+  const genres = ['casual', 'puzzle', 'action', 'shooter', 'adventure_rpg', 'strategy', 'simulation', 'racing', 'sports', 'card_board']
+  if (subcategory != null && (category !== 'game' || !genres.includes(subcategory))) throw new Error('subcategory must belong to category')
+  if (desktopOnly !== undefined && typeof desktopOnly !== 'boolean') throw new Error('desktopOnly must be a boolean')
+  return { subcategory, desktopOnly }
 }
 
 function resolveCategory(projectRoot, args) {
@@ -842,7 +866,9 @@ function ensureProjectFiles(projectRoot, metadata, license, remix, access) {
     schemaVersion: typeof existing.schemaVersion === 'number' ? existing.schemaVersion : 1,
     title: existing.title || metadata.title,
     summary: existing.summary !== undefined ? existing.summary : (metadata.summary || undefined),
-    category: existing.category || metadata.category,
+    category: metadata.category,
+    subcategory: metadata.subcategory,
+    desktopOnly: metadata.desktopOnly,
     tags: Array.isArray(existing.tags) && existing.tags.length ? existing.tags : metadata.tags,
     license: existing.license || license,
   }
@@ -982,6 +1008,8 @@ async function publishSquare(token, workspaceHashKey, metadata, remix, handle, a
     title: metadata.title,
     summary: metadata.summary,
     category: metadata.category,
+    subcategory: metadata.subcategory,
+    desktopOnly: metadata.desktopOnly,
     tags: metadata.tags,
     pathPrefix: '',
     indexFile: 'index.html',
@@ -1243,6 +1271,7 @@ async function main() {
     title: resolvedTitle.title,
     summary: resolveSummary(projectRoot, args),
     category: resolveCategory(projectRoot, args),
+    ...resolveClassification(projectRoot, args),
     tags: resolveTags(projectRoot, args),
   }
   const license = resolveLicense(projectRoot, args)
@@ -1321,6 +1350,8 @@ async function main() {
         totalBytes: hosted.totalBytes || summary.totalBytes,
         title: metadata.title,
         category: metadata.category,
+    subcategory: metadata.subcategory,
+    desktopOnly: metadata.desktopOnly,
       })
       const creationSession = preparedSession
         ? await submitSession({ apiBase: API_BASE, token, prepared: preparedSession }) : sessionPlan
@@ -1385,6 +1416,8 @@ async function main() {
       totalBytes: imported.totalBytes || summary.totalBytes,
       title: metadata.title,
       category: metadata.category,
+    subcategory: metadata.subcategory,
+    desktopOnly: metadata.desktopOnly,
       remix: remix ? { parent: remix.parent, parents: remix.parents } : undefined,
       access: app.access || access || undefined,
       creationSession: preparedSession ? { status: 'pending', reason: 'session-submission-not-finished' } : sessionPlan,

@@ -247,3 +247,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
   left by older versions that deleted hosting without unlisting Square.
 
 Deletion is destructive; resolve the exact saved app/hash/handle and obtain confirmation first.
+
+## Gameplay and device distribution
+
+Use the platform category vocabulary from `GET /square/categories`. Games keep `category: "game"` and select one primary `subcategory`: casual, puzzle, action, shooter, adventure_rpg, strategy, simulation, racing, sports, or card_board. Extra mechanics, theme, multiplayer and 3D belong in tags. Set `desktopOnly: true` in clide.json (or `--desktop-only`) for desktop-only works; they are excluded from mobile discovery. Use `--mobile-compatible` to explicitly declare mobile support. This is a creator declaration, not an automatic review result. Omit these fields on updates to retain existing metadata. A mobile Remix must declare its own support after adaptation; do not infer mobile compatibility from lineage alone.
