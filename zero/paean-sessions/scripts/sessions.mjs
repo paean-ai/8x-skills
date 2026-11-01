@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync, statSync, openSync, closeSync, unlinkSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, resolve, dirname } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
@@ -9,6 +8,8 @@ import { request as httpsRequest } from 'node:https';
 import { buildBundle } from './bundle.mjs';
 import { buildFileBundle, readFileBundle, readPortableBundle, writeFileBundle, validateFileManifest, writeDownloadedBundle, streamFiles } from './multi-file.mjs';
 import { inspectPortableBundle } from './offline.mjs';
+import { submissionMain, sessionApiBase, sessionToken, bindSession } from './submission.mjs';
+export { MAX_BYTES, prepareJSONL, readSession, sessionSummary, sessionApiBase, sessionToken, publicEvidence, bindSession, submitSession } from './submission.mjs';
 
 import { creationLimits, multiFileLimits } from './creation-index.mjs';
 const MAX = creationLimits.maxBytes;
@@ -59,18 +60,6 @@ export function prepare(input) {
   return output;
 }
 
-function credentials() {
-  if (process.env.PAEAN_AUTH_TOKEN) return process.env.PAEAN_AUTH_TOKEN;
-  for (const name of ['.paean', '.zero']) {
-    try {
-      const value = JSON.parse(readFileSync(join(homedir(), name, 'credentials.json'), 'utf8'));
-      const token = value.token || value.apiKey || value.authToken || value.accessToken;
-      if (typeof token === 'string' && token) return token;
-    } catch {}
-  }
-  throw Error('Sign in using Zero CLI or set PAEAN_AUTH_TOKEN locally. Never paste credentials into a conversation.');
-}
-
 /** Explicit HTTPS deadline: native fetch has an additional response-header timeout on slow PUTs. */
 export function putDirectR2(url, {headers,body,signal}, request = httpsRequest) {
   return new Promise((resolve,reject)=>{
@@ -83,6 +72,7 @@ export function putDirectR2(url, {headers,body,signal}, request = httpsRequest) 
 
 export async function main(args = process.argv.slice(2), {put = putDirectR2} = {}) {
   const [command, ...values] = args;
+  if (['submit', 'evidence'].includes(command) || (['status', 'bind'].includes(command) && values.includes('--asset'))) return submissionMain(args);
   const arg = name => { const at = values.indexOf(name); return at < 0 ? undefined : values[at + 1]; };
   const required = name => { const value = arg(name); if (!value || value.startsWith('--')) throw Error(`Missing ${name}`); return value; };
   const file = name => { const path = required(name); if (statSync(path).size > MAX) throw Error('File exceeds 64 MiB'); return readFileSync(path); };
@@ -95,7 +85,9 @@ config
 upload --file prepared.jsonl --source stable-session-id --reviewed
 upload-bundle --dir creation-directory --source stable-session-id --reviewed
 list [--offset 0]
-status --id asset-id
+submit --file prepared.jsonl [--app app-hash] [--source-key stable-id] [--dry-run]
+evidence --app app-hash
+status --id asset-id (also accepts --asset)
 creation --id asset-id [--section summary|tools|scripts|events|issues] [--offset 0] [--limit 50]
 download --id asset-id --out review.jsonl
 download-bundle --id asset-id --out new-review-directory
@@ -143,9 +135,9 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     if(command==='restore-bundle')writeFileBundle(required('--out'),bundle);
     return {...summary,restored:command==='restore-bundle'};
   }
-  const base = new URL(process.env.PAEAN_API_BASE || 'https://api.paean.ai');
-  if (base.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(base.hostname)) throw Error('API must use HTTPS');
-  const token = credentials();
+  const base = new URL(sessionApiBase());
+  if (base.username || base.password || base.search || base.hash || (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname)))) throw Error('API must use HTTPS');
+  const token = sessionToken();
   async function api(path, method = 'GET', body) {
     const response = await fetch(new URL('/sessions/' + path, base), { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, redirect: 'error', signal: AbortSignal.timeout(path.endsWith('/download') ? 600000 : 120000) });
     if (!response.ok) { const error = await response.json().catch(() => ({})); throw Error(error.error || `Session API returned ${response.status}`); }
@@ -278,10 +270,10 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     if (!values.includes('--confirm-delete')) throw Error('Deletion requires --confirm-delete');
     return json(`assets/${id()}`, 'DELETE');
   }
-  if (command === 'bind') return json(`assets/${id()}/app-evidence`, 'POST', { appHash: required('--app') });
+  if (command === 'bind') return bindSession({apiBase: base.href.replace(/\/$/, ''), token}, id(), required('--app'));
   throw Error('Unknown command; run help');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  main().then(result => { if (result !== undefined) console.log(JSON.stringify(result, null, 2)); }).catch(error => { console.error(error.message); process.exitCode = 1; });
+  main().then(result => { if (result !== undefined) console.log(JSON.stringify(result, null, 2)); if (result?.status === 'pending') process.exitCode = 1; }).catch(error => { console.error(error.message); process.exitCode = 1; });
 }

@@ -8,9 +8,11 @@ description: Install Zero CLI, help the user sign in to Paean so Paean publish/r
 Install Zero CLI and authenticate the local machine with Paean. Use this before
 `paean-publish` or `paean-remix` when credentials are missing.
 
-> **Using this skill in Codex.** Reference this file explicitly — add a pointer in your
-> project `AGENTS.md` ("To install Zero CLI or log in to Paean for publishing, follow
-> `8x-skills/codex/paean-zero-setup/SKILL.md`.") or name the skill in your prompt.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-zero-setup/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 ## What to check first
 
@@ -67,7 +69,10 @@ credentials file themselves:
 export PAEAN_AUTH_TOKEN="<your-paean-jwt>"
 ```
 
-or create `~/.paean/credentials.json`:
+(PowerShell on Windows: `$env:PAEAN_AUTH_TOKEN = "<your-paean-jwt>"` for the current session,
+or `setx PAEAN_AUTH_TOKEN "<your-paean-jwt>"` to persist it for new sessions.)
+
+or create `~/.paean/credentials.json` (`~` is the user profile directory on Windows):
 
 ```json
 {"token":"<your-paean-jwt>"}
@@ -84,7 +89,13 @@ The **paean-remix** flow pairs with the 8x.gg MCP server at `https://api.paean.a
 It gives the agent `find_app` / `search_apps` (resolve any 8x.gg or clide.app URL, a title or a
 description to an app), `get_app` / `get_remix_lineage` / `get_app_growth` (decide whether a
 remix is worth doing) and `list_app_files` / `read_app_file` (study source without cloning
-anything). It authenticates with the same Paean token the scripts use. Add it once:
+anything). It authenticates with the same Paean token the scripts use.
+
+Choose the configuration for the user's actual agent. For **Gemini CLI or Cursor**, read
+[the client MCP guide](references/gemini-cursor-mcp.md) and use its bundled JSON template;
+merge only the `8xgg` entry into the existing config. Installing skills alone does not
+register MCP or share credentials with a running client. The following commands are for
+**Claude Code**, not Gemini or Cursor:
 
 ```bash
 claude mcp add --transport http --scope user 8xgg https://api.paean.ai/8x/mcp \

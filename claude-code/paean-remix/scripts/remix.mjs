@@ -23,9 +23,9 @@
 //
 // Then write clide.json (remix graph), LICENSE, and .clideignore so the new
 // game is ready to build + /publish.
-import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { extractZip as unzipTo } from './zip.mjs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 
@@ -391,32 +391,14 @@ function savePublishState(targetDir, workspaceHashKey, primaryHashKey) {
   return { file: path.join(CLIDE_STATE_DIR, CLIDE_STATE_FILE), workspaceHashKey, reused: false }
 }
 
-async function run(command, args, opts = {}) {
-  return await new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: opts.cwd, stdio: 'pipe' })
-    let stderr = ''
-    child.stderr.on('data', c => { stderr += c.toString() })
-    child.on('error', reject)
-    child.on('close', code => {
-      if (code === 0) resolve()
-      else reject(new Error(command + ' exited with code ' + code + (stderr ? ': ' + stderr.trim() : '')))
-    })
-  })
-}
-
+// Extracted in-process rather than through `unzip`: Windows ships no `unzip`,
+// nothing has to be staged on disk first, and entries that would escape the
+// destination are rejected instead of quietly written outside it.
 async function extractZip(zipBuffer, destDir) {
-  mkdirSync(destDir, { recursive: true })
-  const tmp = mkdtempSync(path.join(tmpdir(), 'remix-src-'))
-  const zipPath = path.join(tmp, 'source.zip')
   try {
-    writeFileSync(zipPath, zipBuffer)
-    try {
-      await run('unzip', ['-o', '-q', zipPath, '-d', destDir])
-    } catch (err) {
-      throw new Error('Failed to extract source archive (need the "unzip" command on PATH): ' + (err && err.message ? err.message : String(err)))
-    }
-  } finally {
-    rmSync(tmp, { recursive: true, force: true })
+    unzipTo(zipBuffer, destDir)
+  } catch (err) {
+    throw new Error('Failed to extract source archive: ' + (err && err.message ? err.message : String(err)))
   }
 }
 
@@ -529,6 +511,7 @@ function buildManifest(args, parents, license) {
         role: p.role || '',
         weight: 1,
         title: p.title || undefined,
+        shareUrl: p.shareUrl,
         playUrl: p.playUrl || undefined,
         category: p.category || undefined,
         author: p.author || undefined,
@@ -547,6 +530,8 @@ function planSources(args, parents) {
       role: p.role,
       title: p.title,
       category: p.category,
+      url: p.shareUrl,
+      shareUrl: p.shareUrl,
       playUrl: p.playUrl,
       author: p.author,
       fetch: clone ? 'remix-clone' : 'mcp-read',
@@ -608,8 +593,8 @@ async function main() {
       // Say where to buy it instead of the bare reason code.
       if (app.remixDisabledReason === 'not_owned') {
         const price = app.access && app.access.price ? app.access.price.amount + ' credits' : 'its listed price'
-        const shell = app.publishedSiteHandle ? 'https://' + app.publishedSiteHandle + '.8x.gg/' : 'https://8x.gg/apps/' + app.hashKey
-        throw new Error('Source ' + s.hashKey + ' is a PAID app (' + price + '). Buy it first at ' + shell + ' — the purchase unlocks both the full app and remixing it. Remixes of a paid app are published as paid apps too.')
+        const shareUrl = 'https://www.8x.gg/apps/' + encodeURIComponent(app.hashKey)
+        throw new Error('Source ' + s.hashKey + ' is a PAID app (' + price + '). Buy it first at ' + shareUrl + ' — the purchase unlocks both the full app and remixing it. Remixes of a paid app are published as paid apps too.')
       }
       throw new Error('Source ' + s.hashKey + ' is not remixable' + (app.remixDisabledReason ? ': ' + (app.remixDisabledMessage || app.remixDisabledReason) : '.'))
     }
@@ -623,6 +608,7 @@ async function main() {
       summary: app.summary || '',
       category: app.category || '',
       tags: Array.isArray(app.tags) ? app.tags : [],
+      shareUrl: 'https://www.8x.gg/apps/' + encodeURIComponent(app.hashKey),
       playUrl: app.playUrl || '',
       author: app.authorName || '',
     })
@@ -713,7 +699,7 @@ async function main() {
     license,
     manifest: MANIFEST_FILE,
     sourcesDir: path.relative(targetDir, sourcesDir),
-    sources: downloaded,
+    sources: downloaded.map((source, i) => ({ ...source, url: parents[i].shareUrl, shareUrl: parents[i].shareUrl })),
     publishWorkspace: publishState ? { workspaceHashKey: publishState.workspaceHashKey, stateFile: publishState.file, reusedExisting: publishState.reused } : undefined,
     remixGraph: manifest.remix,
     nextSteps: 'Build the new game in ' + (path.relative(projectRoot, targetDir) || '.') + ' using the sources under ' + REMIX_SOURCES_DIR + '/ (secondary sources are text-only; see each ' + FETCH_NOTE_FILE + '), then publish with paean-publish from that directory — it reuses the saved workspace and declares every parent in clide.json.',

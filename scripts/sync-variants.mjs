@@ -1,36 +1,45 @@
 #!/usr/bin/env node
 /*
- * sync-variants.mjs — regenerate the `codex/` and `zero/` skill mirrors from
+ * sync-variants.mjs — regenerate the Codex, Zero, Gemini and Cursor mirrors from
  * the canonical `claude-code/` tree.
  *
- * Scripts and reference files are copied byte-for-byte (the three mirrors
+ * Scripts and reference files are copied byte-for-byte (all variants
  * must never diverge there — tests run against `codex/`). Each SKILL.md is
  * derived from the claude-code one with the variant's packaging:
  *
  *   codex:  H1 gains " (Codex)"; a "Using this skill in Codex" blockquote is
- *           inserted after the first paragraph (kept from the existing codex
- *           file when present, so per-skill wording survives).
+ *           inserted after the first paragraph with current discovery guidance.
  *   zero:   description gains " Runs from Zero CLI."; H1 gains " (Zero CLI)";
  *           an "Installing in Zero CLI" blockquote is inserted the same way.
+ *   gemini/cursor: client-specific H1 and a native discovery/invocation note.
  *
- * Run from the repo root:  node scripts/sync-variants.mjs [--check]
+ * Run from the repo root:  node scripts/sync-variants.mjs [--check] [--skill NAME]
  * `--check` exits 1 when a mirror would change (for CI / paean-skills-update).
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+// fileURLToPath, not `.pathname`: the raw pathname keeps percent-escapes (a repo
+// checked out under a path with spaces) and, on Windows, a leading slash before
+// the drive letter.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = path.join(root, 'claude-code')
 const check = process.argv.includes('--check')
+const selectedIndex = process.argv.indexOf('--skill')
+const selected = selectedIndex < 0 ? null : process.argv[selectedIndex + 1]
+if (selectedIndex >= 0 && (!selected || !/^paean-[a-z0-9-]+$/.test(selected) || !existsSync(path.join(SRC, selected, 'SKILL.md')))) throw new Error('Unknown or missing --skill')
 const VARIANTS = {
   codex: {
     h1: ' (Codex)',
+    refreshQuote: true,
     marker: /^> \*\*Using this skill in Codex\.\*\*/,
     fallback: (skill) => [
-      '> **Using this skill in Codex.** Codex has no frontmatter skill loader, so',
-      '> reference this file explicitly: add a line to your project `AGENTS.md` such as',
-      `> *"For this task, follow \`8x-skills/codex/${skill}/SKILL.md\`."*, or point Codex at`,
-      '> this file in your prompt. Any scripts and reference files live next to this SKILL.md.',
+      '> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`',
+      '> or the project\'s `.agents/skills/` for discovery. Existing clients that already load',
+      '> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.',
+      `> You can also reference \`8x-skills/codex/${skill}/SKILL.md\` directly.`,
+      '> Keep the bundled scripts and references beside this file; avoid duplicate installations.',
     ].join('\n'),
     description: (d) => d,
   },
@@ -44,6 +53,37 @@ const VARIANTS = {
       '> reference files live next to this SKILL.md.',
     ].join('\n'),
     description: (d) => (d.endsWith(' Runs from Zero CLI.') ? d : d + ' Runs from Zero CLI.'),
+  },
+  gemini: {
+    h1: ' (Gemini CLI)',
+    refreshQuote: true,
+    marker: /^> \*\*Using this skill in Gemini CLI\.\*\*/,
+    fallback: (skill) => [
+      '> **Using this skill in Gemini CLI.** Install this directory under `~/.gemini/skills/`',
+      '> or the project\'s `.gemini/skills/`. A same-named skill in `.agents/skills/` takes',
+      '> precedence within the same scope; update the copy your client actually discovers.',
+      `> Ask Gemini to use \`${skill}\`; inspect \`gemini skills list\` or \`/skills list\`,`,
+      '> and run `/skills reload` after an update. Keep scripts and references beside this file.',
+      '> Resolve bundled paths from this skill directory; run commands in the project directory',
+      '> when the workflow requires project files. Skill activation uses Gemini\'s normal consent UI.',
+    ].join('\n'),
+    description: (d) => d,
+  },
+  cursor: {
+    h1: ' (Cursor)',
+    refreshQuote: true,
+    marker: /^> \*\*Using this skill in Cursor\.\*\*/,
+    fallback: (skill) => [
+      '> **Using this skill in Cursor.** Install this directory under `~/.cursor/skills/`',
+      '> or the project\'s `.cursor/skills/`. Cursor also discovers `.agents/skills/` and',
+      '> compatible Claude/Codex roots; avoid duplicate installations of the same skill.',
+      `> Find it in Customize → Skills, or type \`/${skill}\` in Agent chat.`,
+      '> Keep scripts and references beside this file and resolve their paths from this directory.',
+      '> Run commands in the project directory when the workflow requires project files.',
+      '> Local global skills are not automatically available to Cloud Agents; use project skills',
+      '> or the user\'s chosen Cursor sync setup for remote work.',
+    ].join('\n'),
+    description: (d) => d,
   },
 }
 
@@ -78,16 +118,28 @@ function transformSkill(md, variant, skill, prior) {
   let i = h1 + 1
   while (i < lines.length && lines[i].trim() === '') i++
   while (i < lines.length && lines[i].trim() !== '') i++
-  const quote = existingBlockquote(prior, v.marker) || v.fallback(skill)
+  const quote = (!v.refreshQuote && existingBlockquote(prior, v.marker)) || v.fallback(skill)
   lines.splice(i, 0, '', quote)
   return lines.join('\n')
 }
 
 let changed = 0
-for (const skill of readdirSync(SRC).filter((d) => statSync(path.join(SRC, d)).isDirectory())) {
+// Publish must also work when installed alone. Bundle the sessions helper from
+// its canonical submission module before generating any client mirrors.
+// The bundle CLI has additional offline-parser dependencies that publish does not need.
+const sessionsSource = path.join(SRC, 'paean-sessions/scripts/submission.mjs')
+if ((!selected || selected === 'paean-publish' || selected === 'paean-sessions') && existsSync(sessionsSource)) {
+  const bundled = path.join(SRC, 'paean-publish/scripts/sessions.mjs')
+  if (!existsSync(bundled) || !readFileSync(bundled).equals(readFileSync(sessionsSource))) {
+    changed++
+    if (check) console.log('would update claude-code/paean-publish/scripts/sessions.mjs')
+    else { mkdirSync(path.dirname(bundled), { recursive: true }); cpSync(sessionsSource, bundled) }
+  }
+}
+for (const skill of readdirSync(SRC).filter((d) => (!selected || d === selected) && statSync(path.join(SRC, d)).isDirectory())) {
   for (const variant of Object.keys(VARIANTS)) {
     const dst = path.join(root, variant, skill)
-    mkdirSync(dst, { recursive: true })
+    if (!check) mkdirSync(dst, { recursive: true })
     for (const sub of ['scripts', 'reference', 'references']) {
       const from = path.join(SRC, skill, sub)
       if (!existsSync(from)) continue

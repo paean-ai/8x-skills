@@ -36,3 +36,38 @@ test('upload and sharing require explicit operation flags before network calls',
     await assert.rejects(main(['delete','--id','11111111-1111-4111-8111-111111111111']),/confirm-delete/);
   } finally {globalThis.fetch=fetchBefore;if(prior===undefined)delete process.env.PAEAN_AUTH_TOKEN;else process.env.PAEAN_AUTH_TOKEN=prior;}
 });
+
+test('bundle CLI preserves credential-file overrides, asset aliases and verified release linking', async () => {
+  const directory=mkdtempSync(join(tmpdir(),'session-compat-'));
+  const keys=['PAEAN_AUTH_TOKEN','PAEAN_CREDENTIALS_FILE','PAEAN_API_BASE'];
+  const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
+  const fetchBefore=globalThis.fetch,requests=[];
+  const asset='11111111-1111-4111-8111-111111111111';
+  writeFileSync(join(directory,'credentials.json'),JSON.stringify({token:'override-token'}));
+  delete process.env.PAEAN_AUTH_TOKEN;
+  process.env.PAEAN_CREDENTIALS_FILE=join(directory,'credentials.json');
+  process.env.PAEAN_API_BASE='https://api.paean.ai';
+  globalThis.fetch=async(url,options)=>{
+    const endpoint=new URL(url).pathname;requests.push(endpoint);
+    const isPublic=endpoint.startsWith('/session-evidence/');
+    assert.equal(options.headers.Authorization,isPublic?undefined:'Bearer override-token');
+    const data=isPublic?{assurance:'linked',releaseId:'release-1',label:'Creation session linked'}
+      :endpoint.endsWith('/app-evidence')?{assurance:'linked',release_id:'release-1',receipt:'private-receipt'}
+      :{id:asset,state:'ready'};
+    return new Response(JSON.stringify({data}),{status:200});
+  };
+  try {
+    for(const alias of ['--id','--asset']) {
+      assert.equal((await main(['status',alias,asset])).state,'ready');
+      const linked=await main(['bind',alias,asset,'--app','app-1']);
+      assert.equal(linked.publicVerified,true);assert.equal(linked.status,'linked');
+      assert.equal(linked.receipt,undefined);
+    }
+    assert.equal((await main(['evidence','--app','app-1'])).releaseId,'release-1');
+    assert.equal(requests.length,7);
+  } finally {
+    globalThis.fetch=fetchBefore;
+    for(const key of keys){if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}
+    rmSync(directory,{recursive:true,force:true});
+  }
+});
