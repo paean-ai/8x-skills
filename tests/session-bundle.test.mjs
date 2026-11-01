@@ -12,7 +12,7 @@ function fixture() {
   writeFileSync(join(dir, 'main.jsonl'), JSON.stringify({ type:'response_item',payload:{type:'function_call',call_id:'c1',name:'exec',arguments:'{"cmd":"node scripts/build.mjs","api_key":"private-args-secret"}'}})+'\n');
   writeFileSync(join(dir, 'child.jsonl'), JSON.stringify({type:'tool_result',tool_use_id:'x1',content:'full output\nline2'})+'\n');
   const manifest = {streams:[{id:'main',file:'main.jsonl'},{id:'child',file:'child.jsonl',parentStreamId:'main',parentCallId:'c1'}],scripts:[{scriptId:'build-v1',file:'scripts/build.mjs',streamId:'main',callId:'c1'}]};
-  const args = ['bundle','--manifest',join(dir,'inputs.json'),'--project',join(dir,'project'),'--out',join(dir,'creation.jsonl')];
+  const args = ['bundle-jsonl','--manifest',join(dir,'inputs.json'),'--project',join(dir,'project'),'--out',join(dir,'creation.jsonl')];
   return {dir,manifest,args,save:()=>writeFileSync(join(dir,'inputs.json'),JSON.stringify(manifest)),cleanup:()=>rmSync(dir,{recursive:true,force:true})};
 }
 
