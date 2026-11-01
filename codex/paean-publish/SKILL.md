@@ -235,7 +235,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
-`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
+`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, `--desktop-only` / `--mobile-compatible`, repeated `--tag`, `--license`,
 `--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
 `--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
 `--delete [--handle <handle>]`.
@@ -254,6 +254,12 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 
 Deletion is destructive; resolve the exact saved app/hash/handle and obtain confirmation first.
 
-## Gameplay and device distribution
+## Desktop-only distribution
 
-Use the platform category vocabulary from `GET /square/categories`. Games keep `category: "game"` and select one primary `subcategory`: casual, puzzle, action, shooter, adventure_rpg, strategy, simulation, racing, sports, or card_board. Extra mechanics, theme, multiplayer and 3D belong in tags. Set `desktopOnly: true` in clide.json (or `--desktop-only`) for desktop-only works; they are excluded from mobile discovery. Use `--mobile-compatible` to explicitly declare mobile support. This is a creator declaration, not an automatic review result. Omit these fields on updates to retain existing metadata. A mobile Remix must declare its own support after adaptation; do not infer mobile compatibility from lineage alone.
+Keep the existing `category` unchanged. Gameplay subcategories are not part of this release.
+
+Set `desktopOnly: true` in `clide.json` or pass `--desktop-only` for works that should only appear on computers. The API excludes these listings from mobile feeds, search and other discovery responses. There is no mobile warning card or automatic-review dependency.
+
+Use `--mobile-compatible` to explicitly set `desktopOnly: false` after confirming mobile support. Omitting the declaration preserves an existing listing's value; a new listing defaults to false. The flag is persisted in `clide.json` for later publishes. These CLI options require Square mode, not `--hosting-only`.
+
+Do not infer desktop-only from resolution, asset size, 3D libraries or tags alone. Follow the creator's intended device support and verified behavior. A mobile Remix declares its own support after adaptation; lineage alone does not establish mobile compatibility.

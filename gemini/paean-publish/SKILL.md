@@ -3,19 +3,17 @@ name: paean-publish
 description: Publish a static frontend with a random handle, public Apps Square listing and private JSONL creation-session linking by default, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings.
 ---
 
-# Paean Publish (Gemini CLI)
+# Paean Publish (Codex)
 
 Publish a static frontend to a public `*.clide.app` URL using the bundled
 `scripts/publish.mjs`. The script needs Node 18+ and nothing else — the upload archive is
 built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
-> **Using this skill in Gemini CLI.** Install this directory under `~/.gemini/skills/`
-> or the project's `.gemini/skills/`. A same-named skill in `.agents/skills/` takes
-> precedence within the same scope; update the copy your client actually discovers.
-> Ask Gemini to use `paean-publish`; inspect `gemini skills list` or `/skills list`,
-> and run `/skills reload` after an update. Keep scripts and references beside this file.
-> Resolve bundled paths from this skill directory; run commands in the project directory
-> when the workflow requires project files. Skill activation uses Gemini's normal consent UI.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-publish/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 ## Choose the mode from the user's intent
 
@@ -237,7 +235,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
-`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
+`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, `--desktop-only` / `--mobile-compatible`, repeated `--tag`, `--license`,
 `--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
 `--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
 `--delete [--handle <handle>]`.
@@ -256,6 +254,12 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 
 Deletion is destructive; resolve the exact saved app/hash/handle and obtain confirmation first.
 
-## Gameplay and device distribution
+## Desktop-only distribution
 
-Use the platform category vocabulary from `GET /square/categories`. Games keep `category: "game"` and select one primary `subcategory`: casual, puzzle, action, shooter, adventure_rpg, strategy, simulation, racing, sports, or card_board. Extra mechanics, theme, multiplayer and 3D belong in tags. Set `desktopOnly: true` in clide.json (or `--desktop-only`) for desktop-only works; they are excluded from mobile discovery. Use `--mobile-compatible` to explicitly declare mobile support. This is a creator declaration, not an automatic review result. Omit these fields on updates to retain existing metadata. A mobile Remix must declare its own support after adaptation; do not infer mobile compatibility from lineage alone.
+Keep the existing `category` unchanged. Gameplay subcategories are not part of this release.
+
+Set `desktopOnly: true` in `clide.json` or pass `--desktop-only` for works that should only appear on computers. The API excludes these listings from mobile feeds, search and other discovery responses. There is no mobile warning card or automatic-review dependency.
+
+Use `--mobile-compatible` to explicitly set `desktopOnly: false` after confirming mobile support. Omitting the declaration preserves an existing listing's value; a new listing defaults to false. The flag is persisted in `clide.json` for later publishes. These CLI options require Square mode, not `--hosting-only`.
+
+Do not infer desktop-only from resolution, asset size, 3D libraries or tags alone. Follow the creator's intended device support and verified behavior. A mobile Remix declares its own support after adaptation; lineage alone does not establish mobile compatibility.
