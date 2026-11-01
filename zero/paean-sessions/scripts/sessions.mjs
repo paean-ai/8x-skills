@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { buildBundle } from './bundle.mjs';
-import { buildFileBundle, readFileBundle, writeFileBundle, validateFileManifest } from './multi-file.mjs';
+import { buildFileBundle, readFileBundle, readPortableBundle, writeFileBundle, validateFileManifest } from './multi-file.mjs';
+import { inspectPortableBundle } from './offline.mjs';
 
 const MAX = 20 * 1024 * 1024;
 export const digest = data => createHash('sha256').update(data).digest('hex');
@@ -85,6 +86,9 @@ creation --id asset-id [--section summary|tools|scripts|events|issues] [--offset
 download --id asset-id --out review.jsonl
 download-bundle --id asset-id --out new-review-directory
 download-file --id asset-id --file-id file-id --out new-file
+verify-bundle --dir local-directory [--layout auto|local|storage] [--digest expected-manifest-sha256]
+restore-bundle --dir copied-r2-or-local-directory --out new-directory [--layout auto|local|storage] [--digest expected-manifest-sha256]
+inspect-bundle --dir local-directory [--section summary|tools|scripts|events|issues] [--offset 0] [--limit 50] [--layout auto|local|storage] [--digest expected-manifest-sha256]
 offer --id asset-id --out offer.json
 share --id asset-id --offer offer.json --accept-sharing
 withdraw --contribution contribution-id
@@ -108,6 +112,13 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     writeFileSync(required('--out'), data, { mode: 0o600, flag: 'wx' });
     return { bytes: data.length, digest: digest(data), warning: 'Review all events and script snapshots before private upload. Only explicitly selected files are included; missing source data cannot be reconstructed.' };
   }
+  if(['verify-bundle','restore-bundle','inspect-bundle'].includes(command)) {
+    const bundle=readPortableBundle(required('--dir'),{layout:arg('--layout')??'auto',expectedDigest:values.includes('--digest')?required('--digest'):undefined});
+    if(command==='inspect-bundle')return inspectPortableBundle(bundle,arg('--section')??'summary',Number(arg('--offset')??0),Number(arg('--limit')??50));
+    const summary=inspectPortableBundle(bundle);
+    if(command==='restore-bundle')writeFileBundle(required('--out'),bundle);
+    return {...summary,restored:command==='restore-bundle'};
+  }
   const base = new URL(process.env.PAEAN_API_BASE || 'https://api.paean.ai');
   if (base.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(base.hostname)) throw Error('API must use HTTPS');
   const token = credentials();
@@ -126,6 +137,7 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
     if(sourceKey.length>200||/[\x00-\x1f\x7f]/.test(sourceKey)||!sourceKey.trim())throw Error('Invalid stable source ID');
     const config=await json('config');
     if(!config.enabled||!config.creationBundleVersions?.includes(2))throw Error('Server does not support multi-file creation bundles yet');
+    if(config.portableCreationManifest!==true)throw Error('Server does not support portable creation manifests yet');
     if(!Number.isSafeInteger(config.maxBytes)||bundle.manifest.files.reduce((n,f)=>n+f.bytes,0)>config.maxBytes)throw Error('Bundle exceeds server upload limit');
     const intent=await json('bundle-uploads','POST',{sourceKey,manifest:bundle.manifest});
     if(intent.asset.state==='ready')return intent.asset;
@@ -188,7 +200,7 @@ Use PAEAN_AUTH_TOKEN or existing local Paean/Zero credentials. Uploads are priva
       if(bytes.length!==f.bytes||digest(bytes)!==f.digest)throw Error('Downloaded file digest mismatch');
       blobs.set(f.id,bytes);
     }
-    writeFileBundle(required('--out'),{manifest,blobs});
+    writeFileBundle(required('--out'),{manifest,blobs,manifestBytes:raw});
     return {files:manifest.files.length,digest:asset.digest,warning:'Review the manifest and all downloaded files before platform sharing.'};
   }
   if (command === 'offer') {

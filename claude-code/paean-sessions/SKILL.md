@@ -18,7 +18,8 @@ Use the bundled Node 20+ CLI at `scripts/sessions.mjs`. It reads existing Paean/
 
 ## Creation bundle workflow
 
-Use `config` to check `creationBundleVersions` includes `2`. Select the task's original
+Use `config` to check `creationBundleVersions` includes `2` and
+`portableCreationManifest` is `true`. Select the task's original
 session, available child-agent/runtime logs and relevant script/source snapshots within
 the user's authorized project/file scope. Do not execute scripts to reconstruct missing
 outputs, fabricate call IDs/results, or discover unrelated histories. A current file is
@@ -56,10 +57,15 @@ node <skill-directory>/scripts/sessions.mjs download-file --id <asset-id> --file
 ```
 
 `bundle` creates a new directory containing `manifest.json`, separate session JSONL
-files and standalone scripts. The manifest records paths, kinds, byte sizes, SHA-256
+files and standalone scripts. The manifest records relative paths, kinds, byte sizes, SHA-256
 digests and associations; it contains no file bodies. Logs get IDs `log-1`, `log-2`, etc.;
 script file IDs use `scriptId` (avoid collisions). All files are uploaded as separate
 private R2 objects. Only a fully verified package becomes ready to read or share.
+
+`path` gives the restored local filename. `objectPath` gives the stored file location
+relative to `manifest.json`; new packages use the same value for both. The server derives
+objectPath itself. Stream parentStreamId/parentCallId, file streamId/callId and native log
+call IDs preserve relationships without a PostgreSQL export.
 
 Review the manifest and every prepared file before upload; they can contain proprietary
 code/tool output after common credentials are removed. Output directories use mode 0700
@@ -87,5 +93,36 @@ Limits: 100 streams (one log each), 500 text scripts, 50,000 log records total,
 oversized inputs; never silently truncate.
 Keep manifests and prepared bundles outside public publish folders. Sharing remains a
 separate consent covering all bundled scripts, child logs, arguments and results.
+
+## Offline verification and restoration
+
+Use a downloaded package or a copy of the contents of its R2 asset prefix. These commands
+require no login, API connection or database and never execute bundled scripts:
+
+```sh
+node <skill-directory>/scripts/sessions.mjs verify-bundle --dir exported-package --digest <trusted-manifest-sha256>
+node <skill-directory>/scripts/sessions.mjs restore-bundle --dir exported-package --out new-restored-directory
+node <skill-directory>/scripts/sessions.mjs inspect-bundle --dir new-restored-directory --section summary
+node <skill-directory>/scripts/sessions.mjs inspect-bundle --dir new-restored-directory --section tools --offset 0 --limit 50
+node <skill-directory>/scripts/sessions.mjs inspect-bundle --dir new-restored-directory --section issues
+```
+
+All three support `--layout auto|local|storage` (default auto) and optional `--digest`.
+Local layout reads path; raw storage layout reads objectPath. Auto falls back to objectPath
+only if the local path is absent. Missing, modified or escaping files cause failure.
+Restoration preserves exact manifest bytes and all file hashes, never overwrites an
+existing output directory, and requires only the package's files. A trusted digest checks
+the entire package identity; without one, verification establishes internal consistency.
+Inspection rebuilds the observed tool-call graph, script links and child streams and
+includes log file/line locations. Use nextOffset for subsequent pages. It cannot recover
+omitted events or reconstruct the original runtime environment.
+
+Older v2 manifests without objectPath remain usable in local layout. For a raw R2 export
+of such a package, first use authenticated download-bundle once to obtain its local layout;
+do not invent UUID storage mappings or rewrite the stored manifest/consent digest.
+
+Maintainers: the offline parser is generated from zero-api's creation.ts. From the
+8x-skills repository, run `node scripts/sync-session-creation-parser.mjs --api-dir <zero-api-checkout>`
+(add `--check` to verify without writing), then run `node scripts/sync-variants.mjs`.
 
 Use `node <skill-directory>/scripts/sessions.mjs help` for syntax. If authentication is missing, have the user sign in with Zero CLI or configure `PAEAN_AUTH_TOKEN` locally; never request a token in chat. The international API default is `https://api.paean.ai`. On 503 the feature is not enabled; stop uploading. On a failed/uncertain share, retry the identical offer or check `status`; do not change source IDs to obtain another reward.

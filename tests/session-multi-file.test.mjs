@@ -66,7 +66,7 @@ test('multi-file upload retries skip completed files and do not share or upload 
     await withAPI(async()=>{
       globalThis.fetch=async(url,options)=>{
         const u=new URL(url);
-        if(u.pathname==='/sessions/config')return response({enabled:true,maxBytes:20*1024*1024,creationBundleVersions:[1,2]});
+        if(u.pathname==='/sessions/config')return response({enabled:true,maxBytes:20*1024*1024,creationBundleVersions:[1,2],portableCreationManifest:true});
         if(u.pathname==='/sessions/bundle-uploads') {
           const body=JSON.parse(options.body);assert.equal(body.sourceKey,'stable');assert.deepEqual(body.manifest,b.manifest);
           return response({asset:{id:assetId,state:completed?'ready':'uploading'},files:b.manifest.files.map(f=>({id:f.id,state:ready.has(f.id)?'ready':'uploading',uploadUrl:ready.has(f.id)?null:`https://test.r2.cloudflarestorage.com/${f.id}`,headers:{'Content-Type':f.kind==='session'?'application/x-ndjson':'text/plain; charset=utf-8'}}))});
