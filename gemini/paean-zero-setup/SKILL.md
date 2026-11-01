@@ -1,0 +1,130 @@
+---
+name: paean-zero-setup
+description: Install Zero CLI, help the user sign in to Paean so Paean publish/remix skills can read credentials, and register the 8x.gg MCP server (8xgg) used for remix discovery. Use when Zero is missing, Paean credentials are missing, login is needed, the 8x.gg / 8xgg MCP server is missing, or the user asks how to set up Zero / Paean auth / ~/.zero credentials for clide.app publishing.
+---
+
+# Paean Zero Setup (Gemini CLI)
+
+Install Zero CLI and authenticate the local machine with Paean. Use this before
+`paean-publish` or `paean-remix` when credentials are missing.
+
+> **Using this skill in Gemini CLI.** Install this directory under `~/.gemini/skills/`
+> or the project's `.gemini/skills/`. A same-named skill in `.agents/skills/` takes
+> precedence within the same scope; update the copy your client actually discovers.
+> Ask Gemini to use `paean-zero-setup`; inspect `gemini skills list` or `/skills list`,
+> and run `/skills reload` after an update. Keep scripts and references beside this file.
+> Resolve bundled paths from this skill directory; run commands in the project directory
+> when the workflow requires project files. Skill activation uses Gemini's normal consent UI.
+
+## What to check first
+
+Run these without printing secrets:
+
+```bash
+command -v zero
+zero --version
+zero auth status --json
+zero provider status --json
+```
+
+If `zero` is missing, install it. If a third-party provider is active and the user wants
+Paean login for publishing, switch back to Paean with `zero provider clear`.
+
+## Install Zero CLI
+
+Zero requires Node.js 18+.
+
+```bash
+node -v
+npm install -g @paean-ai/zero-cli
+zero --version
+```
+
+If the user uses Bun:
+
+```bash
+bun add -g @paean-ai/zero-cli
+```
+
+If global install is not desired, use `npx @paean-ai/zero-cli` for one-off runs, but prefer a
+global install for ongoing publish/remix workflows.
+
+## Sign in to Paean
+
+Use the browser/device flow provided by Zero:
+
+```bash
+zero provider clear
+zero login
+zero auth status --json
+```
+
+`zero login` is the shortcut for `zero auth login`. It stores Paean auth locally under the
+Zero config directory. Do not ask the user to paste JWTs or API keys into chat.
+
+## Manual fallback
+
+If browser login is not possible, ask the user to set a local environment variable or
+credentials file themselves:
+
+```bash
+export PAEAN_AUTH_TOKEN="<your-paean-jwt>"
+```
+
+(PowerShell on Windows: `$env:PAEAN_AUTH_TOKEN = "<your-paean-jwt>"` for the current session,
+or `setx PAEAN_AUTH_TOKEN "<your-paean-jwt>"` to persist it for new sessions.)
+
+or create `~/.paean/credentials.json` (`~` is the user profile directory on Windows):
+
+```json
+{"token":"<your-paean-jwt>"}
+```
+
+The publish/remix scripts also read `~/.zero/credentials.json`. `PAEAN_API_BASE` overrides the
+API endpoint (default `https://api.paean.ai`); `ZERO_API_BASE` / `ZERO_CLI_BASE_URL` are
+honored only when they point at a `*.paean.ai` host — `ZERO_CLI_BASE_URL` is often the LLM
+gateway (e.g. an Anthropic-compatible provider URL) and is never a Paean API address.
+
+## Register the 8x.gg MCP server (remix discovery)
+
+The **paean-remix** flow pairs with the 8x.gg MCP server at `https://api.paean.ai/8x/mcp`.
+It gives the agent `find_app` / `search_apps` (resolve any 8x.gg or clide.app URL, a title or a
+description to an app), `get_app` / `get_remix_lineage` / `get_app_growth` (decide whether a
+remix is worth doing) and `list_app_files` / `read_app_file` (study source without cloning
+anything). It authenticates with the same Paean token the scripts use.
+
+Choose the configuration for the user's actual agent. For **Gemini CLI or Cursor**, read
+[the client MCP guide](references/gemini-cursor-mcp.md) and use its bundled JSON template;
+merge only the `8xgg` entry into the existing config. Installing skills alone does not
+register MCP or share credentials with a running client. The following commands are for
+**Claude Code**, not Gemini or Cursor:
+
+```bash
+claude mcp add --transport http --scope user 8xgg https://api.paean.ai/8x/mcp \
+  --header 'Authorization: Bearer ${PAEAN_AUTH_TOKEN}'
+claude mcp list
+```
+
+Claude Code expands `${VAR}` in MCP server config when it connects, so the token never lands
+in `~/.claude.json` — `PAEAN_AUTH_TOKEN` must be exported in the shell that launches `claude`.
+If the token only lives in `~/.paean/credentials.json` / `~/.zero/credentials.json`, either
+export it from there in the shell profile, or register a literal `os_ak_…` API key (Paean
+dashboard → API keys) instead of the login JWT: a literal header is written to
+`~/.claude.json`, and an API key can be revoked on its own without signing the machine out.
+`--scope project` writes a shareable `.mcp.json` instead — never put a literal token there.
+
+`claude mcp list` must show `8xgg` as connected; `claude mcp remove --scope user 8xgg` undoes
+it. Without the server `remix.mjs` still works (it calls `/8x/mcp` itself for secondary
+sources) — only URL/title discovery is lost, so ask the user for hashKeys instead.
+
+## Verify for Paean skills
+
+From the project or target working directory, dry-run the relevant skill:
+
+```bash
+node "<paean-publish-skill-dir>/scripts/publish.mjs" --dry-run
+node "<paean-remix-skill-dir>/scripts/remix.mjs" --dry-run <hash>
+```
+
+If the only failure is missing credentials, repeat the login steps. If Zero is configured for
+a third-party provider, `zero provider clear` restores Paean.ai as the active login surface.

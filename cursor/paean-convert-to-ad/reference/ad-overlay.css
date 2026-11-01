@@ -1,0 +1,46 @@
+/* 广告态覆盖层：常驻 CTA + 到时强制 CTA。视觉与游戏本体解耦。 */
+#ad-cta {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  z-index: 2147483000;
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 26px; border: 0; border-radius: 999px;
+  font: 600 16px/1.1 system-ui, -apple-system, "PingFang SC", sans-serif;
+  color: #08121c; background: linear-gradient(180deg,#7fe8c4,#35c79a);
+  box-shadow: 0 6px 20px rgba(0,0,0,.35); cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  animation: ad-cta-pulse 2.4s ease-in-out infinite;
+}
+#ad-cta:active { transform: translateX(-50%) scale(.97); }
+@keyframes ad-cta-pulse { 0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.35)} 50%{box-shadow:0 6px 28px rgba(53,199,154,.55)} }
+@media (prefers-reduced-motion: reduce) { #ad-cta { animation: none; } }
+
+#ad-end {
+  position: fixed; inset: 0; z-index: 2147483001;
+  display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: rgba(4,14,24,.86); backdrop-filter: blur(6px);
+  font-family: system-ui, -apple-system, "PingFang SC", sans-serif; color: #eaf6ff;
+  padding: 24px; text-align: center;
+}
+#ad-end.show { display: flex; }
+#ad-end .ad-end-title { font-size: 22px; font-weight: 700; }
+#ad-end .ad-end-sub { font-size: 14px; opacity: .8; max-width: 22em; line-height: 1.5; }
+#ad-end .ad-end-btn {
+  margin-top: 6px; padding: 14px 34px; border: 0; border-radius: 999px;
+  font: 700 17px/1.1 inherit; color: #08121c;
+  background: linear-gradient(180deg,#7fe8c4,#35c79a); cursor: pointer;
+}
+
+/* 广告导演层：自动演示 → 交还控制权的提示 */
+#ad-turn {
+  position: fixed; left: 50%; top: 42%; transform: translate(-50%,-50%);
+  z-index: 2147483000; pointer-events: none;
+  font: 800 30px/1 system-ui, -apple-system, "PingFang SC", sans-serif;
+  letter-spacing: .1em; color: #fff;
+  text-shadow: 0 2px 0 #0a1622, 0 0 26px rgba(127,232,196,.85);
+  animation: ad-turn-in .32s cubic-bezier(.2,1.4,.4,1) both;
+}
+#ad-turn.out { animation: ad-turn-out .55s ease-in both; }
+@keyframes ad-turn-in  { from { opacity:0; transform:translate(-50%,-50%) scale(.6) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }
+@keyframes ad-turn-out { to   { opacity:0; transform:translate(-50%,-62%) scale(1.06) } }
+@media (prefers-reduced-motion: reduce) { #ad-turn { animation: none; } }

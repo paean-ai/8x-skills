@@ -1,6 +1,6 @@
 ---
 name: paean-game-create
-description: Create or substantially upgrade a production-quality, self-contained Paean web game. Use for new games, game prototypes that must be finished to release quality, or broad gameplay/visual/UI polish. Produces a directly runnable pure-JavaScript index.html project; not for SDK-only integration or publishing.
+description: Create or substantially upgrade a production-quality, self-contained Paean web game. Use for new games, game prototypes that must be finished to release quality, or broad gameplay/visual/UI/audio polish, including Paean TTS dialogue and narration when useful. Produces a directly runnable pure-JavaScript index.html project; not for SDK-only integration or publishing.
 ---
 
 # Paean Game Create (Codex)
@@ -10,21 +10,40 @@ coherent in gameplay, art direction, characters, enemies, abilities, UI, audio, 
 Do not call placeholder art, generic large color blocks, incomplete systems, or an unpolished
 prototype finished.
 
-> **Using this skill in Codex.** Reference this file explicitly—add a project `AGENTS.md` pointer
-> such as “To create or substantially polish a Paean game, follow
-> `8x-skills/codex/paean-game-create/SKILL.md`,” or point Codex at this file in the prompt.
+> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
+> or the project's `.agents/skills/` for discovery. Existing clients that already load
+> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
+> You can also reference `8x-skills/codex/paean-game-create/SKILL.md` directly.
+> Keep the bundled scripts and references beside this file; avoid duplicate installations.
 
 ## Start with a production brief
 
 Before implementation, establish the game's fantasy, core loop, input model, session length,
-progression, fail/win states, target orientation, art pipeline, and performance budget. Make
-reasonable creative decisions when the user leaves these open. Prefer an original direction; when
-references are supplied, extract principles and produce a more resolved result rather than a close
-copy.
+progression, fail/win states, portrait and landscape adaptation, art pipeline, and performance
+budget. Make reasonable creative decisions when the user leaves these open. Prefer an original
+direction; when references are supplied, extract principles and produce a more resolved result
+rather than a close copy.
 
 Read [references/production-standard.md](references/production-standard.md) before building. It is
 the release bar and contains the attract-mode pattern, responsive layout rules, asset guidance, and
 acceptance matrix.
+
+## Speech and narration with Paean TTS
+
+When spoken dialogue, tutorials, pronunciation examples, or narration serve the game, include them
+in the audio plan and use [paean-tts](../paean-tts/SKILL.md) to generate fixed speech assets during
+creation. It uses the creator's Paean login without requiring an upstream TTS key. Save and reuse
+the generated audio locally; keep subtitles, a mute control, and user-gesture audio unlock.
+Use the language and voice chosen for the work, split long scripts by scene, and verify timing
+and pronunciation before shipping. Speech is optional; do not add it to every game by default.
+
+For player-generated text or live NPC dialogue, use `paean-sdk`'s
+[AI guide](../paean-sdk/reference/design-ai.md) and the host's `ai.tts()` capability instead.
+The creator's JWT is an account secret for the local helper only. Runtime speech uses the player's
+host-managed session; never embed credentials in code, frontend environment variables, browser
+storage, or the release ZIP. Follow the TTS skill's security requirements and inspect the final
+artifact before delivery. Do not use signed audio URLs as permanent assets. For RedNote targets,
+follow the TTS skill's offline restrictions; independent promo-video narration remains possible.
 
 ## Choose the rendering approach deliberately
 
@@ -46,6 +65,9 @@ engine, or a real pixel-art pipeline. Technology is not a substitute for art dir
 
 Keep characters, monsters, abilities, effects, environment, typography, and UI in the same visual
 language. Avoid emoji as game art or interface icons; author or bundle real icons instead.
+Default to a bright, colorful, approachable casual style with clean, tactile surfaces and restrained
+depth. If the theme or an explicit art brief calls for a different palette or material treatment,
+record that direction in the production brief and keep the UI clear and readable within it.
 
 ## Required project shape
 
@@ -75,8 +97,10 @@ external location.
   expansion, wrapping, suitable fonts, and future RTL direction. Additional translations are not
   required unless requested. Minimize copy through clear, authored icons and spatial feedback.
 
-During the production brief, inspect the current `paean-sdk` skill and make a deliberate platform
-feature plan. Prefer documented Paean SDK capabilities over bespoke third-party services when they
+During the production brief, inspect the current `paean-sdk` skill's capability router and read
+only the IAP, IAA, Net, Rank, or AI design guides that fit the game. Record player benefit, entry
+point, API/scope, state/recovery, and verification for selected features. Prefer documented Paean
+SDK capabilities over bespoke third-party services when they
 fit the work: cloud save, shared leaderboards, shared app data, paid apps / durable products
 (`access.*`), in-app purchases and tips, rewarded ads, online rooms, AI, and share are all
 documented in the current SDK (1.10). Do not add platform features as checkboxes, invent APIs, or
@@ -109,23 +133,52 @@ gameplay HUD, menus, controls, consent prompts, or platform UI. Let the scene re
 before any optional restrained `DEMO · TAP TO PLAY` cue fades in. The first intentional touch/click
 stops every demo process, reveals only essential play UI, and enters a deterministic fresh run.
 
+## Keep the UI compact and clear
+
+Give the playfield most of the screen and keep gameplay-critical action unobscured. Show only
+decision-relevant status and immediate controls during play; put occasional actions in a compact
+menu or contextual panel. Use a clear primary action, concise labels, and recognizable authored
+icons. Avoid oversized headers, stacked status cards, persistent tutorial paragraphs, and decorative
+panels that consume scarce screen space.
+
+Optimize the smallest supported screen first. Reduce panel chrome, spacing, and secondary detail
+before reducing text legibility or touch target size. Reflow by available width and height, including
+short landscape viewports; do not uniformly scale down a desktop UI. Follow the production standard's
+UI and responsive-composition checks for small-screen controls, text, overlays, and visual hierarchy.
+
 ## Mobile, desktop, and runtime behavior
 
-Design mobile/touch first with portrait as the primary composition. Unless the core mechanic
-intrinsically requires a fixed orientation, support both portrait and landscape by recomposing the
-camera, playfield, HUD, and controls rather than merely shrinking or rotating them. When one
-orientation is genuinely unsuitable, provide an intentional branded rotate treatment. Adapt across
-narrow and short phones, tablets in both orientations, and desktop resolutions. Prevent document
-scrolling, overscroll, accidental selection, and canvas drag. Respect safe areas and Paean host
+For every original work and remix, aim for a complete, comfortable experience in both portrait and
+landscape. Design mobile/touch first and recompose the camera, playfield, HUD, and controls for the
+available width and height rather than merely shrinking or rotating them. Do not make rotation a
+prerequisite for play or use an orientation lock or blocking "rotate device" screen as a substitute
+for adaptation. When a mechanic favors one aspect ratio, preserve its logical playfield with an
+adaptive camera or a fitted frame and reflow the surrounding UI. Adapt across narrow and short
+phones, tablets in both orientations, and desktop resolutions. Prevent document scrolling,
+overscroll, accidental selection, and canvas drag. Respect safe areas and Paean host
 chrome. On desktop, compose the playfield intentionally—usually a centered game frame with a
 suitable `max-width`, while backgrounds can extend to the viewport. Never stretch portrait
 gameplay into a loose full-width desktop layout.
 
 Pause or safely throttle when hidden. Handle resize, orientation change, pointer cancellation,
-audio unlock, and restart without corrupting game state. Keep startup and total transfer small;
-prefer compact MIDI/WebAudio sequencing and a restrained reusable sound bank when audio adds value.
+audio unlock, and restart without corrupting game state. Changing orientation during attract mode,
+play, pause, or results must preserve the current state and keep controls reachable and correctly
+mapped to the resized playfield. Keep startup and total transfer small; prefer compact MIDI/WebAudio
+sequencing and a restrained reusable sound bank when audio adds value.
 
 ## Validate before claiming completion
+
+### Prepare the work's release copy
+
+Write the release title, description, tags, and player-facing README in English unless the user
+explicitly requests another language for them. Follow
+[the release-copy standard](../paean-publish/references/release-copy.md): cover the actual gameplay,
+play style, art style, theme, setting/background, and distinctive design features with accurate
+keywords and tags. Describe the experience without technical implementation language. Keep
+development commands, integration notes, and recording entry points in `DEVELOPING.md`.
+Prepare matching `clide.json` metadata for a requested Square release without publishing it early.
+
+### Verify play and presentation
 
 Let `$SKILL_DIR` be the directory containing this `SKILL.md`. Run the bundled validator from the
 game directory's parent:
@@ -148,8 +201,17 @@ Completion requires all of the following:
   external/runtime paths, or viewport scrollbars;
 - loading → automatic UI-free attract highlight → play → result → restart works, and core
   interactions are verified rather than merely loaded;
-- portrait and landscape phone, portrait and landscape tablet, and desktop screenshots meet the
-  production standard (including an intentional rotate treatment where justified), with no
-  placeholder or half-finished state;
+- portrait and landscape phone, portrait and landscape tablet, and desktop screenshots and actual
+  play meet the production standard, with reachable controls, no forced rotation, and no placeholder
+  or half-finished state;
+- switching between portrait and landscape in attract mode, play, pause, and results preserves the
+  current state, reflows the UI, and keeps touch input aligned;
+- compact portrait and short landscape screens preserve a readable, unobscured playfield, concise
+  UI, and comfortable touch targets; menus and results also fit, and intermediate resolutions do
+  not introduce clipping or overlap;
+- color and surface treatment follow the approachable casual default or the recorded theme-specific
+  direction, with clear text, controls, and action hierarchy over the actual scene;
 - the game remains playable after reload and after background/foreground transitions;
+- release title, description, tags, and README meet the release-copy standard and describe only
+  features present in the finished work;
 - final project size and largest assets are reviewed, with obvious waste removed.

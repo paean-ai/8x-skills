@@ -1,0 +1,193 @@
+/*
+ * demo-overlay.css — the promo layer drawn over a recording.
+ *
+ * Injected at record time only. Nothing here ships with the game, so it may
+ * assume the capture viewport and ignore older browsers: the only renderer is
+ * the Chromium that Playwright drives.
+ *
+ * Everything is pointer-events:none except where stated — the demo underneath
+ * must keep receiving the scripted input track.
+ */
+
+.pd-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  font-family: var(--pd-font, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif);
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Boot cover: painted before the game's first frame so the clip never opens on
+   a white flash or a half-laid-out page. */
+.pd-cover {
+  position: absolute;
+  inset: 0;
+  background: var(--pd-bg, #0b1020);
+  opacity: 1;
+  transition: opacity var(--pd-fade, 420ms) ease;
+}
+.pd-cover[data-state='gone'] { opacity: 0; }
+
+/* ---- title card ---- */
+
+.pd-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.2vmin;
+  padding: 8vmin 7vmin;
+  box-sizing: border-box;
+  text-align: center;
+  background: var(--pd-bg, #0b1020);
+  opacity: 0;
+  transition: opacity var(--pd-fade, 420ms) ease;
+}
+.pd-card[data-state='in'] { opacity: 1; }
+
+.pd-logo {
+  width: min(28vmin, 168px);
+  height: min(28vmin, 168px);
+  object-fit: contain;
+  border-radius: 22%;
+  filter: drop-shadow(0 2vmin 4vmin rgba(0, 0, 0, 0.55));
+}
+
+.pd-title {
+  margin: 0;
+  font-size: clamp(22px, 7.4vmin, 62px);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.pd-tagline {
+  margin: 0;
+  font-size: clamp(13px, 3.5vmin, 26px);
+  font-weight: 500;
+  line-height: 1.35;
+  opacity: 0.82;
+  text-wrap: balance;
+  max-width: 34ch;
+}
+
+/* ---- beat captions ---- */
+
+/* Captions sit in a band, never centred over the action. `safe` keeps them
+   clear of the playfield the author marked as the important region. */
+.pd-beats {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 5vmin;
+  box-sizing: border-box;
+}
+.pd-beats[data-pos='bottom'] { bottom: var(--pd-safe-bottom, 9vmin); }
+.pd-beats[data-pos='top'] { top: var(--pd-safe-top, 9vmin); }
+
+.pd-beat {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.4vmin;
+  max-width: 100%;
+  padding: 1.5vmin 3vmin;
+  border-radius: 999px;
+  background: rgba(8, 11, 22, 0.62);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 1.4vmin 3.4vmin rgba(0, 0, 0, 0.38);
+  font-size: clamp(12px, 3.2vmin, 24px);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: 0.005em;
+  opacity: 0;
+  transform: translateY(1.4vmin);
+  transition: opacity 280ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pd-beat[data-state='in'] { opacity: 1; transform: none; }
+
+.pd-beat-accent { color: var(--pd-accent, #6ee7ff); }
+
+/* ---- end card ---- */
+
+.pd-end {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.6vmin;
+  padding: 8vmin 7vmin;
+  box-sizing: border-box;
+  text-align: center;
+  background: var(--pd-end-bg, rgba(8, 11, 22, 0.86));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  opacity: 0;
+  transition: opacity var(--pd-fade, 420ms) ease;
+}
+.pd-end[data-state='in'] { opacity: 1; }
+
+.pd-end-title {
+  margin: 0;
+  font-size: clamp(20px, 6.6vmin, 54px);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+/* Styled as a button but deliberately not one: a recording has no click. */
+.pd-cta {
+  display: inline-block;
+  padding: 2.1vmin 5.2vmin;
+  border-radius: 999px;
+  background: var(--pd-accent, #6ee7ff);
+  color: var(--pd-accent-ink, #04121b);
+  font-size: clamp(14px, 3.8vmin, 28px);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1.8vmin 4vmin rgba(0, 0, 0, 0.4);
+}
+
+.pd-url {
+  font-size: clamp(11px, 2.9vmin, 20px);
+  font-weight: 500;
+  opacity: 0.72;
+  letter-spacing: 0.02em;
+}
+
+/* ---- corner handle ---- */
+
+.pd-mark {
+  position: absolute;
+  top: var(--pd-safe-top, 4vmin);
+  right: 4vmin;
+  padding: 1vmin 2.2vmin;
+  border-radius: 999px;
+  background: rgba(8, 11, 22, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: clamp(10px, 2.4vmin, 17px);
+  font-weight: 650;
+  opacity: 0.85;
+}
+
+/* A recording is not an interface: nothing may animate on a loop forever, and
+   a viewer never sees a hover state. Kill both so no stray CSS from the game's
+   own stylesheet leaks motion into the promo layer. */
+.pd-root *,
+.pd-root *::before,
+.pd-root *::after {
+  animation-iteration-count: 1 !important;
+}

@@ -1,12 +1,12 @@
 ---
 name: paean-sdk
-description: Add Paean platform capabilities to a static app/game published to Paean Apps Square (*.clide.app / 8x.gg) via the Paean Web SDK — cloud save, shared leaderboards, shared app data, paid apps and durable products (access.*), in-app purchases and tips (pay.*), rewarded ads, online rooms, AI, share — plus the offline mock library that proves the integration before publishing. Use when the user wants to add cloud save, sync progress across devices, a global/online leaderboard, "接入积分/存档/排行榜", make an app paid / sell it / add a paywall or season pass, add in-app purchases, tips, rewarded ads, multiplayer rooms, or test the SDK integration locally. Not for publishing (see paean-publish). Runs from Zero CLI.
+description: Design and integrate Paean SDK capabilities for static apps/games — cloud save, leaderboards, paid access, IAP, rewarded ads (IAA), multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. Use for capability selection, implementation, and local SDK testing; route paean iap, paean iaa, paean net, paean rank, or paean ai to the corresponding guide. For speech assets during creation use paean-tts; for publishing use paean-publish. Runs from Zero CLI.
 ---
 
 # Paean SDK (Zero CLI) — platform capabilities for Square apps
 
 Give a published Paean app the platform's account-bound capabilities through
-the Paean Web SDK (`paean-sdk.js`, currently **1.10.0**). The app never sees a
+the Paean Web SDK (`paean-sdk.js`, **SDK 1.10+ baseline**). The app never sees a
 token or a backend URL: every call goes through a host bridge (`window.paean`,
 wrapped by the friendly `PaeanSDK` helper) that the Paean app / `8x.gg` web
 shell proxies for the signed-in user, isolated per **(app × user)**. In a plain
@@ -21,6 +21,46 @@ app must stay fully usable (or, for a paid app, stay in its demo).
 This skill integrates platform services into an existing app. For creating or
 broadly polishing the game itself use `paean-game-create`; for publishing (and
 declaring a price) use `paean-publish`.
+
+For a one-off tip/打赏 (including your own work) or Boost/加热 on an already published work,
+use [paean-publish's Tip and Boost guide](../paean-publish/references/tip-boost.md).
+That account operation needs no game-code change; this skill's `pay.tip()` guidance is for
+integrating a player-triggered tip sheet inside an app.
+
+## Choose capabilities from the work's design
+
+Use this single entry for combinations of platform features. Phrases such as `paean iap`,
+`paean iaa`, `paean net`, `paean rank`, and `paean ai` are intent aliases within this skill,
+not separate installed skills, CLI commands, or SDK namespaces. Read only the matching guides:
+
+| Intent | Design fit | Read before implementing |
+| --- | --- | --- |
+| `paean iap` / purchases | Paid entry, durable content, consumables, tips | [IAP guide](reference/design-iap.md) |
+| `paean iaa` / ads | Optional rewards at natural pauses | [IAA guide](reference/design-iaa.md) |
+| `paean net` / multiplayer | Cooperative or competitive shared sessions | [Net guide](reference/design-net.md) |
+| `paean rank` / leaderboard | Comparable scored runs; cloud continuity | [Rank guide](reference/design-rank.md) |
+| `paean ai` / AI | Runtime hints, dialogue, creation, voice | [AI guide](reference/design-ai.md) |
+| Runtime TTS / read-aloud / spoken NPC dialogue | Player-triggered speech through `ai.tts()` | [AI guide: speech](reference/design-ai.md#speech-with-paean-tts) |
+
+For `paean tts` requests to create fixed voice files or video narration, use the companion
+[paean-tts skill](../paean-tts/SKILL.md). That production workflow uses the creator's local login;
+runtime speech uses each player's host session and the `ai.tts` scope.
+
+For new games/remixes, record a compact capability plan in the production brief: selected feature,
+player benefit, entry point, API/scope, persistent state, failure behavior, and verification.
+Briefly explain omitted capabilities when their fit is uncertain. For a focused SDK request,
+design only the requested feature and its dependencies. For example, a score-chasing game may use
+save + rank + an optional ad revive; a story game may use save + durable chapters + AI dialogue.
+If combining features, resolve reward delivery, ownership, ranking eligibility, and room/AI
+lifecycle together. Do not require all capabilities in every work.
+
+This reference documents the SDK 1.10.0 baseline, not the latest release.
+Before implementation, inspect the actual SDK file's
+`PaeanSDK.VERSION` and its matching canonical README (the SDK source repository's
+`docs/paean-sdk/README.md`). Resolve that source from the workspace or SDK provenance; do not
+invent a repository URL. If unavailable, use this documented baseline and report the verification
+limit. A newer helper does not guarantee every host implements every namespace. Keep common
+readiness, consent, paid-access, preview, and mock rules here; feature guides refine product design.
 
 ## Files (`reference/`)
 
@@ -113,15 +153,25 @@ else if (r.status && r.status.shellUrl && !r.status.hosted) offerOpenOn8x(() => 
 else stayInDemo();                                  // the user closed the sheet — normal
 ```
 
-- **Free apps and the publisher resolve `unlocked: true` with no UI**, so gate
-  unconditionally and let the platform decide. Write the gate for every app.
-- **You never name a price and need no scope.** The host reads the price from
-  the listing and confirms it in its own UI (same trust model as `pay.tip`).
+- **Free base-game entry and publisher-owned access resolve `unlocked: true`
+  with no UI**, so gate unconditionally. A free game can still sell paid durable
+  products; the free-entry rule applies to `require()` / SKU `app`.
+- **Never pass an amount to `access.require`; it needs no scope.** The publisher
+  must declare product prices in the platform catalogue. At purchase time, the
+  host reads that server price and confirms it in its own UI.
 - `unlocked: false` is a normal outcome: keep the demo, keep the entry point.
 - Durable products (a season pass, an expansion) use the same call with a
-  `sku` declared in `clide.json` `access.products`; read ownership back with
+  `sku` registered in the Square listing's `access.products`. Local `clide.json`
+  is input to the publish tool, not an automatically discovered live catalogue.
+  Uploading that JSON/static assets alone does not register products. Read ownership with
   `access.owned(sku)` / `access.status()` — it is a **server record**, do not
   cache it in `localStorage` as truth.
+- A successful hosted status with no matching SKU means the product is not
+  listed **for this platform-managed access contract**; it is not a missing
+  `pay.spend` permission. An app-managed `pay.spend` shop does not depend on
+  `access.products`. Read the
+  [IAP catalogue checks](reference/design-iap.md#catalogue-registration-and-live-checks)
+  before declaring a shop ready. Mock purchases prove integration, not listing activation.
 - Until the app is owned, every account-bound call (storage, leaderboards,
   shared, `app.stats`, `pay.spend`, rooms) rejects with `e.code === 'APP_NOT_OWNED'`.
   Treat it like a declined scope: local fallback, no crash.
@@ -143,17 +193,22 @@ Documented in full in the SDK's own README (`paean-sdk.js` header + the
 - **`pay.spend`** is real money at an amount the app names, confirmed natively.
   Grant goods only when `granted === true`; pass a STABLE `idempotencyKey` per
   purchase intent; read `quote().limits`, never hardcode minimums; prefer
-  `credits` (iOS refuses the USD lane). For anything durable prefer
-  `access.products` — the server remembers it, `pay.spend` does not.
+  `credits` (iOS refuses the USD lane). It can sell app-defined cosmetics as
+  well as consumables; no platform product registration is required. For permanent
+  unlocks, choose either platform-managed `access.products` ownership or direct
+  spend with app-managed, account-bound receipt persistence and recovery. Only
+  the former automatically records a durable entitlement. See the
+  [IAP guide](reference/design-iap.md) before choosing or migrating the contract.
 - **`pay.tip()`** needs no scope; the host owns the sheet.
 - **Ads**: request `ads.rewarded` on the user's tap, then `showRewarded()`;
   grant only when `result.rewarded === true`. Never use preload as a
   capability probe.
-- **Rooms**: request `net.room` on the user's tap; single-player must keep
-  working without it. Prefer `room.state` (server-authoritative) over
-  broadcasting the world.
-- **AI**: request the scope on first real use; default to `deepseek-v4-flash`
-  for text and `gemini-3.1-flash-lite` for vision; stream when the UI shows text.
+- **Rooms**: request `net.room` on the user's tap; preserve solo play when networking is
+  optional. Prefer `room.state` for shared state; server storage does not validate game rules
+  or prevent cheating. See the Net guide for ownership, concurrency, and resync design.
+- **AI**: request the scope on first real use; verify current model availability, account-tier
+  support, and cost in the matching SDK documentation. Keep model configuration centralized,
+  handle quota failures, and stream displayed text where supported. See the AI guide.
 
 ## Integration recipe
 

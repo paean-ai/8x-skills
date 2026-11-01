@@ -18,6 +18,12 @@ visual style. A game can be small; it cannot feel unfinished.
 
 - Establish a compact art bible: shape language, palette, contrast hierarchy, typography, camera,
   materials/texture, lighting, effect language, and motion timing.
+- Default to a bright, colorful, welcoming casual style suitable for a broad audience. Use a
+  coherent palette, friendly shapes, clean surfaces, and restrained highlights, shading, or soft
+  depth to make controls and rewards feel tactile. Reserve strong accents for key actions and
+  feedback; keep supporting surfaces calm enough that the scene and text remain easy to read.
+  A theme-specific direction or explicit user brief may call for dark, muted, realistic, or other
+  treatments; record that reason in the art bible and preserve the same clarity and polish.
 - Make the playfield readable in motion. Critical actors and threats need distinct silhouettes,
   depth separation, anticipation, contact feedback, and recovery—not only different colors.
 - Do not treat large flat color blocks, generic rounded rectangles, or raw engine primitives as
@@ -48,16 +54,32 @@ visual style. A game can be small; it cannot feel unfinished.
 
 ## 3. UI and feedback
 
-- Keep the active play HUD to information that changes decisions. Use hierarchy and spatial
-  grouping; do not cover the scene with panels or tutorial prose.
+- Keep the active play HUD to information that changes decisions, giving most of the usable
+  screen to gameplay. Place compact status groups and essential controls around the action without
+  obscuring actors, targets, paths, or important feedback. Avoid oversized headers, stacked cards,
+  repeated labels, and large decorative backplates during play.
+- Give each screen or panel a clear primary action and a simple reading order. Use concise labels,
+  consistent alignment, and modest spacing. Put settings, help, collection details, and other
+  occasional actions behind a compact menu or contextual panel; keep immediate play controls
+  visible and discoverable. Teach through brief contextual cues that dismiss after use.
 - Use authored pixel-art or SVG/vector icon shapes rather than emoji. Icons must share the game's
-  visual language, remain legible at their rendered size, and communicate without relying on text.
+  visual language and remain legible at their rendered size. Familiar actions can use icons alone;
+  give ambiguous actions short labels and give icon-only buttons accessible names. Do not make
+  essential instructions depend on hover or unexplained symbols.
 - Touch targets should normally be at least 44 CSS pixels, separated enough for thumbs, and placed
-  within comfortable reach without colliding with safe areas or host chrome.
+  within comfortable reach without colliding with safe areas or host chrome. A compact visual icon
+  can have a larger hit area, but neighboring hit areas must not overlap. Save space by reducing
+  decoration and secondary content before shrinking readable text or tappable controls.
+- Keep text and control states distinct from the actual scene behind them. Use calm local backing
+  or subtle outlines when needed; avoid noisy textures, competing saturated panels, and heavy glow
+  behind labels. Pair color-coded status with shape, icons, or text so color alone carries no
+  essential meaning.
 - Every action needs proportionate feedback: pressed/armed state, animation, sound where useful,
   impact, score/resource change, and clear unavailable/cooldown state.
-- Menus, pause, result, restart, settings, and orientation warnings use the same art direction as
-  the game. They are not browser-default overlays added at the end.
+- Menus, pause, result, restart, and settings use the same art direction as the game. Size panels
+  to their content and available viewport; keep close/back and primary actions reachable on short
+  screens. If secondary content needs scrolling, contain it inside the panel without causing the
+  play surface or document to scroll. They are not browser-default overlays added at the end.
 
 ### Language and localization
 
@@ -111,24 +133,232 @@ PLAYING → RESULT → restart → PLAYING
   a prompt at boot or mid-demo.
 - Returning from background preserves the current real run; it must not silently re-enter demo.
 
+### The demo is a composed 20–30 second arc
+
+Attract mode is not "the game, running, with the HUD off". It is a **composition with a length**,
+and the length is 20–30 seconds before it loops. Under ~20 s a stranger sees a mechanic but never a
+loop — no consequence, no second beat, nothing to want. Over ~30 s it stops fitting the places it
+has to go: store preview videos, muted social autoplay and video ad slots all sit in that band.
+
+Design the arc, then build it. A workable default:
+
+```text
+0:00  the hook          strongest readable moment, on the first frame
+0:06  the loop, named   the mechanic legible at a glance
+0:12  escalation        the same loop, harder / faster / denser
+0:19  the depth         what the player has not seen yet
+0:25  loop back         never to a death screen or a results panel
+```
+
+- **Open on the hook, not on level one.** First levels are deliberately sparse. Enter a tuned
+  showcase — the second level, the seed the author picked — and export that seed as a named
+  constant so every later reel and ad reproduces the same run.
+- **Show one loop twice** rather than two mechanics once each. Two things shown once reads as
+  noise; one thing shown twice reads as a game.
+- **The arc must not be able to end badly.** If the demo can lose, restart it. The last frame
+  before the loop point is the one a viewer decides on, and a death screen is the worst of them.
+- **Author it as a beat list**, in a form something outside the game can read — a timeline the
+  work exposes, or at minimum a documented constant. An arc that exists only as emergent behaviour
+  cannot be recorded, tuned, or reproduced after a balance change.
+
+### Recorded demo reels, and how much framing they may carry
+
+The same arc is also the source for a **recorded reel**: a 20–30 s video for the Square listing,
+the store, social, or an ad slot. Build the arc so it survives being recorded — deterministic,
+loop-safe, and legible at thumbnail size.
+
+A reel is a different artefact from in-app attract mode, and the rules differ on one point. The
+in-app attract state stays **UI-free**, because it is a screen the player is standing in front of
+and any chrome there is chrome between them and the game. A reel is watched with no page around
+it, often muted, by someone who does not yet know what the game is called — so **promotional
+framing is allowed and usually right**: a title card, timed captions naming the mechanic on screen,
+a mark, a CTA end card. A reel does not have to be unadorned gameplay.
+
+Match the framing to where it lands: a store page already carries the name and the button, so the
+video should mostly be the game; a muted social autoplay needs captions throughout and a strong
+first frame; a video ad slot is the entire pitch and takes the full treatment. Keep every claim
+verifiable from the 25 seconds actually on screen.
+
+The **paean-record-demo** skill records this reel without editing gameplay code, driving the work
+through the same seam *Ad-conversion readiness* below defines. Three affordances make that work at
+no cost, and all three are the same ones a playable ad needs:
+
+- a programmatic entry that starts a real session with showcase parameters as arguments,
+- an autopilot flag **read every frame**, so the arc can play itself,
+- a ready predicate an external caller can await, so a recording never opens on a loading screen.
+
+### Ad-conversion readiness
+
+Finished works are reused as **playable ad creatives** (HTML5 media bundles for Google Ads and
+comparable networks). A conversion must be possible without editing gameplay code, so build these
+four affordances in from the start. They cost nothing and are good engineering regardless.
+
+- **Expose one programmatic entry point** that starts a real, playable session directly — skipping
+  title, story, hub, draft, shop, and tutorial gates. Any one of these is enough, in order of
+  preference: a command on the event bus (`emit('cmd', { type: 'start-run', ... })`), an exported
+  function or state object from the entry module, or a single namespaced global handle
+  (`window.__game = { startRound, game, state, ... }`). Document which one it is in `DEVELOPING.md`;
+  keep the work's README player-facing and free of implementation details.
+  Without a seam, a converter is reduced to clicking DOM buttons, which breaks whenever the UI moves.
+- **Take showcase parameters as arguments**, not constants baked into the start path: seed,
+  level/floor, character, weapon, difficulty. Export the tuned demo seed as a named constant
+  (`export const DEMO_SEED = ...`) so a conversion reproduces the exact showcase you tuned.
+- **Read the autopilot flag every frame**, not once at session creation
+  (`if (run.autopilot && run.pilot) input = run.pilot.input(dt)`). This is what lets an ad play
+  itself for a few seconds and then hand control to the viewer — the single highest-value pattern
+  in playable advertising. A flag latched at creation makes that impossible.
+- **Let an external caller pin the language.** Read the locale from one documented storage key (or
+  accept an explicit override) before falling back to the device, so an ad build can force English
+  without editing i18n code. Keep static markup — `<html lang>`, pre-i18n strings — on the default
+  locale so the first painted frame never flashes another language.
+- **Guard every host capability with `typeof`** and degrade to full local play, including when the
+  SDK script is absent entirely. Ad containers have no host, no network, and often no working
+  `localStorage`; wrap storage access in `try/catch`. A work that only runs inside the 8x shell
+  cannot become an ad.
+
+Front-load the core loop for the same reason a good attract mode does: a multi-page story, a hub
+screen, or a draft step before the first real interaction is fine in the app and fatal in an ad,
+where the whole value is letting someone play before they decide to install.
+
+
+### Offline-container readiness (RedNote mini-tool and similar)
+
+Finished works are also repackaged as **offline container builds** — a zip of static files with no
+network at all, running on an **Android 8.1 / Chrome 61** WebView (RedNote mini-tools are the current
+target). The conversion is mechanical *except* where the work makes it impossible. These affordances
+cost nothing while building and are the difference between a two-hour port and a rewrite. They
+overlap heavily with ad-conversion readiness above; where they differ, the container is stricter.
+
+- **Keep one source of truth for the default language.** Works routinely hard-code it in two or three
+  places — a module-level `let current = 'en'`, a `save.lang || 'en'` fallback, a new-save factory,
+  and a `register('en', ..., { default: true })` that also sets the *current* locale. A converter must
+  find all of them or the build silently ships English. Resolve the initial locale **once**, from a
+  documented override, and let everything else read that.
+- **Funnel every storage access through one wrapper that cannot throw.** Not just `setItem` quota:
+  under some WebView policies *reading `window.localStorage` itself throws*. One unguarded read on a
+  top-level boot path aborts the module, so no listener is ever attached and the page renders with
+  every control dead — no error the player can see. Wrap reads and writes, and keep the game fully
+  playable when storage is unavailable.
+- **Clamp the frame delta at both ends**: `Math.max(0, Math.min(cap, (now - last) / 1000))`. The first
+  rAF timestamp can precede the `performance.now()` captured at module load, and a negative delta runs
+  in-game time backwards — which surfaces far from the cause, as negative array indices or corrupted
+  animation state.
+- **A `catch` that substitutes a fallback is a place the product can quietly disappear.** Optional
+  dependencies loaded through `import(someVariable)` cannot be bundled: a bundler lowers them to
+  `__require(x)`, which throws, the surrounding `catch` swallows it, and the game runs on the
+  placeholder implementations its author wrote for the module-not-landed-yet case — flat circles
+  instead of sprites, a plain rectangle instead of terrain. Nothing errors, nothing blanks, and
+  automated checks stay green. Keep dynamic-import specifiers **literal** (or resolve names through
+  a static registry module), do not set a loader's `loaded` flag unless something actually loaded,
+  and verify a build by comparing it against the original side by side — a draw-call count or a
+  screenshot at the same screen — not only by looking for errors.
+- **Never let the boot path be one long unguarded top-level sequence.** This is the single most
+  expensive shape in practice. A typical entry module builds the renderer, compiles shaders, reads
+  the save, and only at the end calls `addEventListener` to wire the UI. HTML and CSS have already
+  painted, so any throw in the middle leaves a complete, correct-looking screen on which nothing
+  responds — with no visible error. It reaches the market as *"页面按钮无法点击"*, which sends
+  everyone hunting an input bug that does not exist. Wire the UI **before** the expensive work, or
+  wrap the boot sequence in `try/catch` and render a readable failure state.
+- **Treat WebGL as something that can simply be absent.** Reviewers and many desktop users run
+  machines with no GPU, a blocklisted GPU, or hardware acceleration switched off; there
+  `new THREE.WebGLRenderer()` throws. Across one 56-work batch, **21 works became dead pages** when
+  WebGL was removed. Construct the renderer inside `try/catch` and show an explicit
+  "this device has no usable WebGL" screen, so the failure is legible instead of looking like
+  missing functionality. Offline containers add a boot guard, but **it cannot save you here**: if
+  the entry is `async function boot()` and the renderer is built *outside* its own `try`, the throw
+  becomes an unhandled rejection the work swallows, and in the measured case no `error` or
+  `unhandledrejection` reached `window` at all. Having a `try/catch` is not enough — check which
+  line the `try` actually starts on, and keep every expensive constructor inside it.
+- **Keep the top corners clear — the host draws its own chrome there.** Every host floats
+  controls over the page's top edge: a back affordance at the top left, a share/profile capsule
+  at the top right, and the system status bar above both. A control the work places in those
+  corners is covered and untappable, and the usual casualty is a modal's top-right close button —
+  it shipped that way once and players could not close the panel. Reserve the band with
+  `--paean-chrome-inset-top` (never a hard-coded `top: 12px`), keep roughly 56px clear on the
+  left and 104px on the right within it, and prefer not to put anything in the top-right corner
+  at all. **Read the variable with a usable fallback** — offline container builds strip the host
+  script that injects it, so `var(--paean-chrome-inset-top, env(safe-area-inset-top))` silently
+  degrades to clearing only the status bar.
+- **Gate on-screen controls by layout, never by pointer type.** `@media (pointer: coarse)` and
+  `navigator.maxTouchPoints` answer "is this a touch device", but the question you actually need
+  answered is "is the phone layout in use". Those differ in the single most common review setup:
+  a desktop browser narrowed to phone size. There the phone layout applies — the one that assumes a
+  virtual stick and leaves no room for a keyboard legend — while the pointer is a mouse, so the
+  stick stays `display: none`. The result is a screen with no controls at all: reviewers report it
+  as *"按钮无法点击"* and it genuinely cannot be played on the web. Use the layout breakpoint
+  instead, e.g. `@media (pointer: coarse), (max-width: 820px), (max-height: 620px)`, and keep one
+  live `matchMedia` as the single source of truth so orientation changes track it.
+- **Bind controls with Pointer Events, never `touch*` only.** `pointerdown`/`pointermove`/
+  `pointerup` fire for mouse, touch and pen alike, so one binding serves every device and a virtual
+  stick stays usable when it is dragged with a mouse. A control that is visible but bound only to
+  `touchstart` is dead under a mouse — the same symptom, a different cause.
+- **Keep genuinely pointer-dependent affordances on the pointer test.** A mouse crosshair or a hover
+  tooltip should still follow `pointer: fine`. Splitting the two predicates — one for layout, one for
+  the actual input device — is the whole fix; collapsing them back into one is how this bug returns.
+- **Do not put player-visible text in a hand-rolled bitmap font.** A 3×5 glyph table cannot draw CJK,
+  and text drawn into a low-resolution buffer and scaled up is unreadable. Draw localisable canvas text
+  with `fillText` on the output layer, with a font stack that includes CJK faces.
+- **Do not assemble display strings ahead of render.** Logs, toasts and result lines built by
+  concatenation keep whatever language was active when they were created. Store the parameters (or a
+  closure) and resolve at render, so a language switch updates history too.
+- **Namespace the localisation helper.** A bare `t` or `T` collides with local variables in real
+  codebases; pick something unlikely (or export it under a distinct name) so a converter adding i18n
+  does not shadow, or get shadowed by, gameplay code.
+- **Stay inside the container's file types**: `html css js png jpg jpeg gif webp svg woff woff2 json`.
+  `ttf`/`otf` fonts, `mp3` audio, `.glb` models and `.txt` licence files are all rejected. Prefer
+  system font stacks and synthesised audio; if you ship a licence-bearing dependency, expect its notice
+  to have to travel inside HTML rather than as a text file.
+- **Import third-party libraries by name, not as a namespace.** `import * as THREE from 'three'`
+  defeats tree-shaking, so loader code — and its `fetch` — lands in the bundle and fails an offline
+  audit outright. Named imports keep it out.
+- **Keep the modern-API surface small and guarded on the boot path.** Anything above the Chrome 61
+  baseline (`Object.fromEntries`, `Array.flat/flatMap/at`, `String.replaceAll`, `structuredClone`,
+  `AbortController`, `ResizeObserver`, `ctx.roundRect`) must be feature-detected if it runs during
+  boot; unguarded use there yields a blank page rather than a degraded feature.
+- **Compose for portrait at phone size and verify landscape by actually playing.** Container builds are
+  opened in a phone-shaped WebView. A panel that covers the only tappable area, or a HUD that squeezes
+  the playfield to nothing, produces no console error and no failed assertion — only a player who
+  cannot proceed.
+
+Also keep offline degradation honest: if a capability can never work without a host, the converted
+build should be able to **remove** its entry rather than show a control that always fails.
+
 ## 5. Responsive composition
 
-- Mobile/touch is the primary design surface and portrait is the default composition. Unless
-  horizontal space is intrinsic to the mechanic, make both orientations genuinely playable by
-  recomposing the camera, playfield, HUD, and controls rather than merely shrinking or rotating.
-  Test narrow and short phones, not only one flagship phone.
+- Every original work and remix should adapt to both portrait and landscape so players can use
+  their current screen orientation. Mobile/touch is the primary design surface; a preferred art
+  composition must not become a required device orientation. Recompose the camera, playfield, HUD,
+  and controls for the available width and height rather than merely shrinking or rotating.
+  Do not use orientation locks or blocking "rotate device" screens to replace adaptation. Test
+  narrow and short phones, not only one flagship phone.
+- Make layout respond to both available width and height. Use fluid sizing with sensible bounds
+  and content-driven breakpoints to regroup HUD items, relocate controls, and simplify secondary
+  content. Keep text readable at native size; never solve a small viewport by uniformly shrinking
+  the entire desktop interface. Cap panel widths on large displays so empty space does not inflate
+  the UI or separate related controls.
 - Use `100dvh` with a safe fallback, `viewport-fit=cover`, CSS safe-area/Paean chrome variables,
   pointer events, and resize/orientation handling. Prevent document scroll/overscroll, text
   selection, callouts, and unwanted gesture navigation on the play surface.
 - Scale a logical game coordinate system into the available play rectangle. Preserve aspect where
   distortion would damage gameplay or pixel art; use intentional crop, letterbox art, or adaptive
-  camera rather than stretching.
+  camera rather than stretching. Keep gameplay-critical content visible and touch targets usable
+  in both orientations, including when the mechanic favors a fixed logical aspect ratio.
 - Desktop needs a designed composition. Center portrait play inside an appropriate max-width frame
   and use the remaining area for restrained atmosphere, not duplicated controls or empty accidental
   whitespace. Ensure the primary scene and HUD remain visually centered relative to each other.
-- Verify phone and tablet sizes in both portrait and landscape, plus desktop. If one orientation is
-  genuinely incompatible with the mechanic, show a deliberate branded rotate treatment rather than
-  a broken or stretched game. No viewport may show a page scrollbar or drift under touch.
+- Reflow attract mode, play, pause, and result screens on resize or orientation change without
+  restarting the run or losing progress. Recalculate canvas dimensions and pointer coordinate
+  mapping together; release interrupted gestures so controls do not stick after rotation.
+- Verify phone and tablet sizes with actual play in both portrait and landscape, plus desktop.
+  Rotate in both directions during attract mode, play, pause, and results; confirm state is
+  preserved and the scene, text, and controls remain visible, legible, and reachable. A rotate
+  prompt is not evidence of orientation support. No viewport may show a page scrollbar or drift
+  under touch.
+- Include 320x568 and 568x320 CSS-pixel viewports as small-screen baselines alongside the validator's
+  phone, tablet, and desktop profiles. Capture and operate the active HUD, menus, pause, and results,
+  not only the UI-free preview. Resize through intermediate widths and heights and inspect both
+  sides of layout breakpoints with long labels and large score values; fix clipped text, overlapping
+  controls, unreachable actions, and panels that crowd out gameplay.
 
 ## 6. Code and asset architecture
 
@@ -170,6 +400,9 @@ PLAYING → RESULT → restart → PLAYING
 - During the brief, inspect the current `paean-sdk` skill and documented host capabilities. Prefer
   Paean SDK implementations when cloud storage, shared ranking, payments, ads, multiplayer, or
   social interaction genuinely strengthens this game's loop or continuity.
+- Use the SDK skill's IAP/IAA/Net/Rank/AI router to read only selected feature guides. Record the
+  player benefit, interaction point, API/scope, persistent state, failure recovery, and test evidence.
+  Resolve cross-feature rules such as ad revives or paid boosts on ranked runs and AI in multiplayer.
 - Treat the current documentation as authoritative. Cloud save, leaderboards, shared data, paid
   apps / durable products (`access.*`), in-app purchases, tips, rewarded ads, rooms, AI and share
   are documented in SDK 1.10; use only what the installed SDK/host documentation exposes. Never
@@ -184,6 +417,11 @@ PLAYING → RESULT → restart → PLAYING
 - Audio should share the game's identity. Prefer a small reusable WebAudio sound palette and compact
   MIDI/sequenced BGM when it provides the right result; do not add generic sounds merely to check a
   box.
+- For fixed dialogue, spoken tutorials, or narration that serves the design, use
+  [paean-tts](../../paean-tts/SKILL.md) during creation and bundle reusable audio where the target
+  permits it. Keep subtitles and verify pronunciation, timing, and file size. Dynamic speech uses
+  the SDK AI guide with host consent and a text fallback; never synthesize on every frame or
+  attract-loop iteration. RedNote's current file whitelist excludes WAV/MP3 and runtime networking.
 - Unlock audio on user interaction, expose a coherent mute setting, avoid clipping, and stop or
   reduce playback when hidden. Layer important events without turning every action into noise.
 - Keep first interaction fast on mobile. Load the minimum launch set, decode large media off the
@@ -199,17 +437,26 @@ Before completion, record evidence for each row:
 | --- | --- |
 | Core loop | Multiple complete sessions including win/fail/restart and unusual input timing |
 | Preview | Load enters an automatic UI-free core highlight; demo is deterministic, non-persistent, and converts on first tap |
+| Demo arc | A composed 20–30 s arc: hook on frame one, one loop shown twice, escalation, loop-back that can never land on a death or results screen; showcase seed exported as a named constant |
+| Demo reel | A 20–30 s recording exists and is legible muted and at thumbnail size; framing matched to its destination; ready predicate, programmatic entry and per-frame autopilot flag all present so it records without gameplay edits |
 | Mobile portrait | Full-size screenshot plus touch play; safe areas and all targets verified |
-| Mobile landscape | Full-size screenshot plus touch play, or a justified branded rotate treatment |
+| Mobile landscape | Full-size screenshot plus touch play; safe areas and all targets verified, with no forced rotation |
 | Tablet | Portrait and landscape screenshots/play with intentional composition and reachable controls |
+| Orientation changes | Rotate both ways in attract/play/pause/results; state and progress preserved, UI reflows, touch mapping stays accurate, no rotation gate |
 | Desktop | Full-size screenshot showing deliberate max-width/centering and no loose scene drift |
+| Compact UI | Active-play capture shows concise status, clear primary controls, and unobscured action; secondary panels open and close with reachable actions |
+| Small screens and resize | 320x568 and 568x320 touch play plus HUD/menu/pause/result captures; readable text, usable targets, and no clipping or overlap through intermediate sizes |
+| Color and surfaces | Bright, approachable casual treatment or recorded theme-specific direction; coherent materials, legible text and states, and restrained accents over the actual scene |
 | Platform fit | SDK capability plan recorded; chosen integrations verified with graceful fallback |
 | Localization | English default/fallback complete; centralized keys, locale configuration, and expanded-text layout verified |
+| Release copy | Title, description, tags, and player-facing README use English unless explicitly requested otherwise; accurate gameplay, play style, art style, theme, setting, and design-feature tags follow [the release-copy standard](../../paean-publish/references/release-copy.md); no technical promotional copy |
 | Runtime | Playwright reports no page errors, console errors, failed assets, or scrollbars |
 | Lifecycle | Resize, rotate, pointer cancel, hide/show, reload, pause, and audio unlock verified |
 | Architecture | Static `index.html`, pure JS, focused files, no external/out-of-directory runtime refs |
 | Assets | Original/licensed, coherent, optimized; `favicon.svg`, 800×400 `banner.jpg`, 512×512 `icon.jpg` present |
 | Paid gate | `access.require()` on the first intentional tap only; mock-host cases (free, paid, declined, preview) pass |
+| Ad-conversion | Programmatic session entry documented; showcase params are arguments; autopilot flag read per frame; locale pinnable from one storage key; runs with the SDK script absent |
+| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs; no unbundled dynamic `import()` (specifiers literal), and the build compared against the original so a silent downgrade to fallback rendering is caught; UI wired before expensive init (or the boot sequence wrapped so a throw renders a readable failure state); WebGL construction guarded and the no-WebGL case shown explicitly; on-screen controls gated by layout breakpoint (not pointer type) and bound with Pointer Events, so a desktop browser narrowed to phone size stays playable ; nothing interactive inside the host chrome band (`--paean-chrome-inset-top`, plus ~56px left / ~104px right) |
 | Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |

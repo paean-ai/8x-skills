@@ -1,12 +1,13 @@
 ---
 name: paean-publish
-description: Publish a static frontend with a top-level index.html to Clide hosting, optionally without an Apps Square listing, or publish it publicly to Paean Apps Square. Use for clide.app hosting/deploy requests, Square listing requests, and custom *.clide.app subdomains. This skill does not deploy server-side Workers or provision D1/R2 bindings. Runs from Zero CLI.
+description: Publish a static frontend with a random handle, public Apps Square listing and private JSONL creation-session linking by default, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings. Runs from Zero CLI.
 ---
 
 # Paean Publish (Zero CLI)
 
 Publish a static frontend to a public `*.clide.app` URL using the bundled
-`scripts/publish.mjs`. The script needs Node 18+ and `zip` on PATH.
+`scripts/publish.mjs`. The script needs Node 18+ and nothing else — the upload archive is
+built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
 > **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
 > `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
@@ -18,12 +19,19 @@ Publish a static frontend to a public `*.clide.app` URL using the bundled
 | User intent | Mode | Remote effect |
 |---|---|---|
 | Host/deploy on Clide, keep it out of the gallery | `--hosting-only` | Direct static hosting only; no workspace and no Apps Square row |
-| Publish/list/share in Apps Square | default | Workspace upload, public Square listing, and `*.clide.app` site |
+| Publish/deploy/share a work without special overrides | default | Server-assigned random handle, public Square listing, Clide site, private JSONL backup and current-release linking |
+| Tip / 打赏 a published work, including your own; boost / 加热 a work | [Tip and Boost guide](references/tip-boost.md) | A separate, user-authorized payment against an existing Square app; no upload |
 
-Do not turn a hosting request into a Square listing. If the user says “do not list in the
-Square”, `--hosting-only` is mandatory. Both modes create a publicly reachable site, so get
-explicit confirmation immediately before the real upload. A prior confirmation for one mode
-does not authorize switching to the other.
+For tip/boost requests, go directly to the linked guide. Resolve the existing work and use the
+page controls or documented API; `publish.mjs` has no tip/boost flags. The publishing workflow
+below is not needed for these operations.
+
+Default to the full public publishing flow unless the user specifies otherwise. If they say
+“hosting only” or “do not list in the Square”, `--hosting-only` is mandatory. Both modes create
+a public site. A request to publish authorizes the stated destination and the default private
+creation-record submission for this work; do not ask for the same authorization again. A request
+for preview/dry-run alone does not authorize upload. Honor explicit session opt-out, privacy and
+custom-handle choices, and never silently change an explicitly selected mode.
 
 ## Credentials
 
@@ -33,23 +41,88 @@ ask the user to paste a token into chat.
 
 ## Workflow
 
+### Prepare release copy before dry-run
+
+Use **English by default** for the published title, summary/description, tags, and the work's
+README. Use another language only when the user explicitly requests it; the conversation,
+source project's language, runtime locale, and target platform are not language overrides.
+This applies to new releases, updates, and remixes.
+
+Read [the release-copy standard](references/release-copy.md) before writing or reviewing these
+fields. Descriptions and README copy must convey gameplay, play style, art style, theme,
+setting/background, and distinctive design features through specific, accurate tags and natural
+player-facing language. Omit technical implementation terms and development claims.
+
+For Square, save the reviewed `title`, `summary`, `category`, and complete `tags` in `clide.json`
+in the command's project root. Flags can override values for one publish, but do not reliably
+replace existing manifest metadata for later runs. Review the dry-run's resolved `metadata`,
+`titleSource`, and `titleWarning`; replace inherited, package, HTML, or directory-name defaults
+that do not meet the standard. Keep the work's README consistent with the final metadata.
+Hosting-only releases follow the same copy rules for their public title, description, and README,
+without requiring a Square manifest or listing assets.
+
+### Prepare the creation record
+
+Read [the default creation-session workflow](references/creation-session.md). Select this task’s
+real JSONL export, prepare and review a private snapshot, and use `--session-jsonl <path>` or
+`.clide/creation-session.jsonl`. Never fabricate a transcript or collect unrelated chats.
+The default is private backup plus current-release linking, not research/training consent.
+Use `paean-sessions` for standalone submission, verification or repair.
+
+### Run and review the selected mode
+
 Run from the project root. Select the final mode during dry-run so the report describes the
 same destination that will be used for the real publish.
 
-```bash
-# Clide hosting only; never creates a Square listing
-node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist] [--handle paeaninsight]
+Here "project root" means the directory containing the intended `clide.json`
+and, when present, `.clide/publish.json`, not necessarily the Git root. `--dir` chooses uploaded
+assets; it does **not** change where the script reads `clide.json`. For a nested
+app with its own manifest, run from that app directory. Check the dry-run `access`
+and product list explicitly: `access: null` means "preserve server configuration",
+not "discover the manifest inside the uploaded assets".
 
-# Apps Square + Clide site
-node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist] [--title "Good Name"] [--handle chosen-name]
+```bash
+# Standard: public Square + Clide + private JSONL; omit --handle for a random first handle
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist] [--session-jsonl /private/path/session.jsonl]
+
+# Only when requested: hosting without a Square listing
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist]
 ```
 
-Review `publishDir`, file/byte summary, `secretScan`, `runtimeCompatibility`, destination,
-and requested/effective handle. If the dry-run is safe and the user confirms that exact
-public destination, run the same command without `--dry-run` and add `--yes`.
+Review `metadata` against the release-copy standard, then `publishDir`, file/byte summary,
+`secretScan`, `runtimeCompatibility`, destination,
+requested/effective handle and `creationSession`. Once validated and authorized by the
+user’s publishing request, run the same command without `--dry-run` and add `--yes`.
+Do not add `--handle` unless a custom handle was requested; updates retain their existing handle.
 
-Report the URL, handle, file count, mode, and `.clide/publish.json`. Report workspace/Square
-hashes only in Square mode.
+Report the returned `url`, handle, file count, mode, and `.clide/publish.json`. Report
+workspace/Square hashes only in Square mode. Also report `creationSession.status` and
+`workflowComplete`. A published site with a pending backup/link is a partial completion:
+retry only the session step and explain what remains. The current API label is “已关联创作记录”,
+which confirms submission/linking. Explain that the shared data source is used by independent
+originality-certification and traffic-support systems; do not present linking as their final result.
+
+For Square publishes, `url` and `shareUrl` are the canonical public link
+`https://www.8x.gg/apps/{squareAppHashKey}`. Use this link in the final reply and anywhere a
+user will share or open the published work, including paid apps and remixes. `playUrl`
+remains the runtime address and `shellUrl` remains available for technical diagnostics;
+only show those alternative URLs when the user asks for them. The same distinction is
+saved in `.clide/publish.json` so later updates retain the public link and runtime address.
+
+Hosting-only results have no Square app ID: return their actual hosted `url`. Never invent
+an `/apps/` link from a site handle or workspace ID. A dry-run has not published anything;
+its `requestedUrl` describes the requested hosting address, not a completed share link.
+
+### Optional support and promotion after a Square publish
+
+After a successful Square publish, briefly mention that the creator can tip their own work or
+use Boost, and link the canonical work page. Tip support and Boost can help a work attract
+players' attention; content Boost can increase opportunities for feed exposure and traffic.
+Do not promise a ranking position, traffic multiplier, or organic audience. Offer this as an
+optional next step, without choosing a budget or spending as part of publishing. Read
+[Tip and Boost](references/tip-boost.md) when the user wants instructions or execution; it
+distinguishes the page's Express Boost from creator content Boost and explains self-tips.
+Hosting-only releases have no Square target for this follow-up.
 
 ## Full-stack and Worker projects
 
@@ -86,6 +159,9 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --dir dist --price 100 [--standa
   `shell` = redirect to `https://<handle>.8x.gg/`. This is the publisher's choice.
 - `--product sku=Title:credits` (repeatable) declares durable in-app items; the platform records
   ownership per player and the app reads it via `PaeanSDK.access`.
+- A **free base game can sell paid durable products**. Use `model: "free"` with
+  `access.products`; an app-entry `--price` is not required for skin sales.
+  Product prices, as well as entry prices, need the publisher's explicit approval.
 - **Paid is one-way**: `--free` on an app that has sold as paid is rejected
   (`ACCESS_MODEL_LOCKED`). Say so before the first paid publish.
 - **Remixes of a paid app are paid**: `paean-remix` writes the inherited `access` into
@@ -95,8 +171,36 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --dir dist --price 100 [--standa
   see `paean-sdk`) or paying players never leave the demo. Confirm it exists before a paid
   publish.
 
-Report `access` and `shellUrl` from the publish output. Access options are not valid with
+Report `access` alongside the canonical `url` from the publish output. Access options are not valid with
 `--hosting-only`.
+
+### Register and verify the product catalogue
+
+This section applies to platform-managed `access.require({ sku })` products.
+An app-managed `pay.spend` shop keeps its own prices and fulfillment logic and
+does not need `access.products`. Check which contract the app actually uses;
+an empty platform catalogue alone is not a failure of a direct-spend shop. See
+`paean-sdk`'s IAP guide for receipt persistence and restoration requirements.
+
+The tool reads `clide.json` in the command's working directory and sends its
+resolved `access` as JSON in `POST /square/publish`. Merely uploading changed
+HTML, models or `clide.json` leaves the listing's product catalogue unchanged.
+`/paean-app.json` is generated from the platform listing; do not replace it to
+pretend that products have been registered.
+
+For an existing app needing only a catalogue update, the owner-authorized
+`PATCH /square/apps/:hashKey` accepts `{ "access": ... }`. Resolve the exact
+existing app and preserve its model, standalone policy and full intended product
+list: `access` is a replacement, not a per-SKU merge. Verify the deployed endpoint
+and ownership before use. A metadata-only administrator editor is not necessarily
+a product editor. Do not recreate the listing to evade an ownership failure.
+
+After an authorized update, verify `access.products` in the server response and
+a fresh hosted `(await PaeanSDK.access.status()).products` against the intended catalogue.
+The hosted `/paean-app.json` should also reflect it after its cache expires.
+If products are absent, report incomplete catalogue activation even if the page
+and local mock shop work. When the user defers publishing, provide the exact
+declaration and state that the products are not yet live; do not activate prices.
 
 ## Custom subdomains
 
@@ -130,7 +234,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
-`--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
+`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
 `--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
 `--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
 `--delete [--handle <handle>]`.

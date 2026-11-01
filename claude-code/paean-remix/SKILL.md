@@ -9,7 +9,8 @@ Download the source of one or more published `*.clide.app` games (by hash) and u
 the basis for a new game, recording the full remix lineage so upstream creators are credited.
 
 This skill bundles a self-contained Node script — `scripts/remix.mjs`. It needs Node 18+
-(global `fetch`) and the `unzip` command on PATH.
+(global `fetch`) and nothing else; source archives are unpacked in-process by
+`scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
 ## Source references
 
@@ -26,7 +27,7 @@ the publish result or Square app detail before running the script.
 
 A source that is a paid app (`remixable: false`, `remixDisabledReason: "not_owned"`) must be
 bought before it can be remixed — the purchase unlocks both the full app and remixing. The
-script says where to buy (`https://<handle>.8x.gg/`). Remixes of a paid app are published as
+script says where to buy (`https://www.8x.gg/apps/{hashKey}`). Remixes of a paid app are published as
 paid apps: the script writes the inherited `access` (parent's price, `standalone: demo`) into
 the new `clide.json`; the publisher may raise the price with `paean-publish --price`, but
 `--free` is rejected by the server (`ACCESS_MODEL_INHERITED`). Tell the user this before
@@ -121,6 +122,14 @@ is how you pick the primary and assign roles honestly.
    license explicitly allows it and attribution is recorded. Keep `.remix-sources/` for
    reference only; it is not published. Include top-level `favicon.svg` and `banner.jpg`;
    `banner.jpg` should be exactly 800x400.
+   Adapt the new work to both portrait and landscape using the production standard's responsive
+   composition rules. Replace inherited orientation locks or blocking rotate prompts with adaptive
+   camera, playfield, HUD, and control layouts that keep both orientations playable.
+   Simplify inherited UI for small screens: retain essential status and play controls, move
+   occasional actions into contextual panels, and remove oversized headers or redundant cards.
+   Apply the production standard's bright, approachable casual palette and tactile surface
+   treatment unless the remix's theme or explicit art brief calls for another direction; preserve
+   legibility and comfortable touch targets as the UI reflows across resolutions.
    If the remix uses vector/skeletal art, resolve it into one coherent cartoon family and explicit
    head-to-body proportion system for the new game. Rebuild crude source rigs or linework as needed;
    do not inherit thick black contours, mixed anatomy, or rigid paper-doll animation.
@@ -131,20 +140,36 @@ is how you pick the primary and assign roles honestly.
    enough finished-game references to preserve the remix's actual identity; otherwise compose it
    from the UI-free attract scene or a dedicated in-game promotional camera capture.
    Reassess platform features for the new loop rather than copying a parent's integration blindly.
+   Use `paean-sdk`'s capability router and selected IAP/IAA/Net/Rank/AI design guides. Record the
+   benefit, entry point, state/recovery, and tests for the new work; reassess inherited product SKUs,
+   score rules, room protocols, and AI prompts against its new identity and app namespace.
    Prefer the current `paean-sdk` when its documented storage, leaderboard, payment, advertising,
    multiplayer, or social capabilities suit the remix; never invent unavailable APIs, and preserve
    graceful local play for optional capabilities.
+   If the remix needs new dialogue, spoken tutorials, or narration, use
+   [paean-tts](../paean-tts/SKILL.md) to generate and save fixed speech in the new work's language
+   and identity. For dynamic speech use the SDK AI guide. Preserve valid source credits; an
+   inherited character voice is not permission or an API facility to clone that voice.
 
 5. **Finalize `clide.json`.** Set a fitting `title`, `summary`, `category`, and `tags` for the
-   new game, and set each `remix.parents[].role` to the aspect actually borrowed. Adjust
+   new game and update its player-facing README. Use English unless the user explicitly requests
+   another language, regardless of the parents' language. Follow
+   [the release-copy standard](../paean-publish/references/release-copy.md): use accurate keywords
+   and tags for the new gameplay, play style, art style, theme, setting, and design features; remove
+   inherited claims that no longer apply and keep technical details out of descriptions and README.
+   Set each `remix.parents[].role` to the aspect actually borrowed. Adjust
    `weight` if the user wants an uneven upstream split. If the remix keeps a parent gameplay
    loop, save keys, storage namespaces, and visible title/identity must be changed so it does
    not collide with or impersonate the parent.
 
 6. **Validate** with `paean-game-create/scripts/validate-game.mjs`, including Playwright runtime
    checks and full-size visual review at its phone, tablet, and desktop viewports in both mobile
-   orientations. Confirm every initial load automatically reaches the UI-free core-play highlight,
-   and inspect the banner at full 800x400 size and listing-thumbnail size.
+   orientations. Play in both orientations and rotate during attract mode, play, pause, and results
+   to verify preserved state, reachable controls, and accurate touch mapping without forced rotation.
+   Inspect active HUD, menus, pause, and results at 320x568 and 568x320 CSS pixels and through
+   intermediate sizes; check concise UI, unobscured action, text contrast, and usable touch targets.
+   Confirm every initial load automatically reaches the UI-free core-play highlight, and inspect
+   the banner at full 800x400 size and listing-thumbnail size.
 
 7. **Publish** with the **paean-publish** skill from the target directory. It reads
    `clide.json` for naming, metadata, and the remix lineage automatically, publishes into the
@@ -174,8 +199,9 @@ directly used them as sources.
 - Keep a project `LICENSE`. Default to `MIT` only for original/local code. If upstream code or
   assets impose a stricter license, preserve that license and attribution.
 - Ship top-level `favicon.svg` and an 800x400 `banner.jpg` for Square presentation.
-- Add a short README or `clide.json.summary` provenance note when the remix materially keeps a
-  parent loop, art direction, asset, or system.
+- Add concise factual creator/source credits in the README when the remix materially keeps a
+  parent loop, art direction, asset, or system. Keep required notices intact and technical lineage
+  details in `clide.json.remix` or `DEVELOPING.md`; the listing summary remains player-facing.
 - Never publish `.remix-sources/`; `.clideignore` excludes it.
 
 ## Flags
@@ -195,4 +221,9 @@ Run with `--help`.
   `HTTP 429` → the MCP server allows 120 requests per minute per user; wait and re-run.
 - A secondary's `REMIX-FETCH.json` lists files you truly need as-is → recreate them, or re-run
   with `--clone-all` after telling the user that source will be credited twice.
-- `unzip` not found → install it (ships with macOS and most Linux distros).
+- `Failed to extract source archive` → the download was truncated or the workspace export is
+  not a plain zip; re-run, and report the message as-is if it repeats.
+
+When reporting source works, use their returned `url` / `shareUrl` canonical 8x link.
+Keep `playUrl` for runtime/source inspection. The local remix has no public link until it
+is published; after publishing, return the new work's canonical URL from paean-publish.

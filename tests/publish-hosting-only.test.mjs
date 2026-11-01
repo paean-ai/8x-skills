@@ -5,9 +5,11 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { listZip } from '../claude-code/paean-publish/scripts/zip.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
 const script = path.join(repoRoot, 'codex/paean-publish/scripts/publish.mjs')
+const remixScript = path.join(repoRoot, 'codex/paean-remix/scripts/remix.mjs')
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'paean-publish-test-'))
@@ -17,11 +19,11 @@ async function fixture() {
   return root
 }
 
-async function runPublish(cwd, args, env = {}) {
+async function runPublish(cwd, args, env = {}, command = script) {
   return await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script, ...args], {
+    const child = spawn(process.execPath, [command, ...args], {
       cwd,
-      env: { ...process.env, ...env },
+      env: { ...process.env, PAEAN_SESSION_JSONL: '', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -96,6 +98,12 @@ test('hosting-only real publish calls only /publish/clide and saves its handle',
     assert.match(result.stdout, /"listedInSquare": false/)
     const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
     assert.equal(state.mode, 'hosting-only')
+    assert.equal(state.url, 'https://paeaninsight.clide.app/')
+    assert.equal(state.playUrl, state.url)
+    assert.equal(state.shareUrl, undefined)
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.url, state.url)
+    assert.equal(output.shareUrl, undefined)
     assert.equal(state.handle, 'paeaninsight')
     assert.equal(state.squareAppHashKey, undefined)
     await assert.rejects(readFile(path.join(root, 'clide.json'), 'utf8'))
@@ -518,8 +526,9 @@ test('default mode remains the workspace and Apps Square pipeline', async () => 
       const body = JSON.parse(request.body.toString('utf8'))
       assert.equal(body.visibility, 'public')
       assert.equal(body.workspaceHashKey, 'workspace-1')
+      assert.equal(body.handle, undefined)
       res.end(JSON.stringify({ success: true, data: {
-        hashKey: 'square-1',
+        hashKey: 'c-4QMQlOB0rkbBUa',
         playUrl: 'https://assigned123.clide.app/',
         publishedSiteHandle: 'assigned123',
         status: 'listed',
@@ -542,8 +551,33 @@ test('default mode remains the workspace and Apps Square pipeline', async () => 
     ])
     const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
     assert.equal(state.mode, 'square')
-    assert.equal(state.squareAppHashKey, 'square-1')
+    assert.equal(state.squareAppHashKey, 'c-4QMQlOB0rkbBUa')
     assert.equal(state.handle, 'assigned123')
+    const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.url, 'https://www.8x.gg/apps/c-4QMQlOB0rkbBUa')
+    assert.equal(output.shareUrl, output.url)
+    assert.equal(output.creationSession.reason, 'missing-session-jsonl')
+    assert.equal(output.workflowComplete, false)
+    assert.equal(output.playUrl, 'https://assigned123.clide.app/')
+    assert.equal(state.url, output.url)
+    assert.equal(state.shareUrl, output.url)
+    assert.equal(state.playUrl, output.playUrl)
+
+    // Existing projects may have saved the runtime URL in both fields.
+    await writeFile(path.join(root, '.clide/publish.json'), JSON.stringify({
+      ...state, url: output.playUrl, shareUrl: undefined,
+    }))
+    const again = await runPublish(root, ['--yes', '--dir', 'dist'], {
+      PAEAN_API_BASE: api.baseUrl, PAEAN_AUTH_TOKEN: 'test-token',
+    })
+    assert.equal(again.code, 0, again.stderr)
+    assert.deepEqual(api.requests.slice(3).map(request => request.url), [
+      '/v2/workspace/workspace-1/files/zip', '/square/publish',
+    ])
+    const updated = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
+    assert.equal(updated.url, output.url)
+    assert.equal(updated.shareUrl, output.url)
+    assert.equal(updated.playUrl, output.playUrl)
   } finally {
     await api.close()
     await rm(root, { recursive: true, force: true })
@@ -606,6 +640,9 @@ test('paid listing flags reach clide.json, the dry-run report and the Square pay
     const state = JSON.parse(await readFile(path.join(root, '.clide/publish.json'), 'utf8'))
     assert.equal(state.access.model, 'paid')
     const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+    assert.equal(output.url, 'https://www.8x.gg/apps/square-paid')
+    assert.equal(output.shareUrl, output.url)
+    assert.equal(output.playUrl, 'https://paidfixture1.clide.app/')
     assert.equal(output.shellUrl, 'https://paidfixture1.8x.gg/')
     assert.equal(output.access.model, 'paid')
 
@@ -637,4 +674,132 @@ test('access flags are rejected for hosting-only and malformed input', async () 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+for (const paid of [false, true]) {
+  test(`remix ${paid ? 'purchase guidance' : 'source output'} uses canonical share links`, async () => {
+    const root = await fixture()
+    const hashKey = 'm_jkVnoo3C_yOxDg'
+    const url = `https://www.8x.gg/apps/${hashKey}`
+    const api = await mockApi((request, res) => {
+      assert.equal(request.method, 'GET')
+      assert.equal(request.url, `/square/apps/${hashKey}`)
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ success: true, data: {
+        hashKey, title: 'Source', playUrl: 'https://source123.clide.app/',
+        publishedSiteHandle: 'source123', remixable: !paid,
+        remixDisabledReason: paid ? 'not_owned' : undefined,
+        access: paid ? { model: 'paid', price: { amount: 100 } } : undefined,
+      } }))
+    })
+    try {
+      const result = await runPublish(root, [url, '--dry-run'], {
+        PAEAN_API_BASE: api.baseUrl, PAEAN_AUTH_TOKEN: 'test-token',
+      }, remixScript)
+      assert.equal(api.requests.length, 1)
+      if (paid) {
+        assert.equal(result.code, 1)
+        assert.ok(result.stderr.includes(`Buy it first at ${url}`), result.stderr)
+        assert.ok(!result.stderr.includes('source123.8x.gg'))
+      } else {
+        assert.equal(result.code, 0, result.stderr)
+        const output = JSON.parse(result.stdout)
+        assert.equal(output.sources[0].url, url)
+        assert.equal(output.sources[0].shareUrl, url)
+        assert.equal(output.sources[0].playUrl, 'https://source123.clide.app/')
+        assert.equal(output.writesLocalFiles, false)
+      }
+    } finally {
+      await api.close()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+}
+
+test('default project snapshot is private, linked after each publish, and opt-out overrides it', async () => {
+  const root = await fixture()
+  await mkdir(path.join(root, '.clide'))
+  await writeFile(path.join(root, '.clide/creation-session.jsonl'), '{"event":"actual task","password":"private"}\n')
+  await writeFile(path.join(root, 'dist/transcript.JSONL'), '{"private":"history"}')
+  await writeFile(path.join(root, 'dist/transcript.jsonl.gz'), 'private history')
+  await mkdir(path.join(root, 'dist/.cursor'))
+  await writeFile(path.join(root, 'dist/.cursor/history.json'), '{"private":"history"}')
+  let release = 0, disabled = false
+  const api = await mockApi(async (request, res) => {
+    res.setHeader('content-type', 'application/json')
+    const data = value => res.end(JSON.stringify({ data: value }))
+    if (request.url === '/v2/workspace') return res.end(JSON.stringify({ success: true, workspace: { hashKey: 'workspace-1' } }))
+    if (request.url === '/v2/workspace/workspace-1/files/zip') {
+      const start = request.body.indexOf(Buffer.from('PK\x03\x04', 'binary'))
+      const end = request.body.indexOf(Buffer.from('PK\x05\x06', 'binary')) + 22
+      assert.ok(start >= 0 && end > start)
+      assert.deepEqual(listZip(request.body.subarray(start, end)).sort(), ['app.js', 'index.html'])
+      return res.end(JSON.stringify({ success: true, fileCount: 2, totalBytes: 64 }))
+    }
+    if (request.url === '/square/publish') {
+      const body = JSON.parse(request.body)
+      assert.equal(body.visibility, 'public')
+      assert.equal(body.handle, undefined)
+      release++
+      return data({ hashKey: 'app-1', playUrl: 'https://random123.clide.app/', publishedSiteHandle: 'random123', status: 'listed' })
+    }
+    if (request.url === '/sessions/config') {
+      const saved = JSON.parse(await readFile(path.join(root, '.clide/publish.json')))
+      assert.equal(saved.squareAppHashKey, 'app-1')
+      assert.equal(saved.creationSession.status, 'pending')
+      return data({ enabled: !disabled, maxBytes: 20 * 1024 * 1024 })
+    }
+    if (request.url === '/sessions/uploads') return data({ asset: { id: 'asset-1', state: 'ready' } })
+    if (request.url === '/sessions/assets/asset-1/app-evidence') {
+      assert.deepEqual(JSON.parse(request.body), { appHash: 'app-1' })
+      return data({ assurance: 'linked', release_id: 'release-' + release })
+    }
+    assert.equal(request.url, '/session-evidence/app-1')
+    data({ assurance: 'linked', releaseId: 'release-' + release, label: 'Creation session linked' })
+  })
+  const env = { PAEAN_API_BASE: api.baseUrl, PAEAN_AUTH_TOKEN: 'test-token' }
+  try {
+    const dry = await runPublish(root, ['--dry-run', '--allow-secrets'], env)
+    assert.equal(dry.code, 0, dry.stderr)
+    assert.equal(JSON.parse(dry.stdout).creationSession.status, 'prepared')
+    assert.equal(api.requests.length, 0)
+    for (let i = 1; i <= 2; i++) {
+      const result = await runPublish(root, ['--yes', '--allow-secrets'], env)
+      assert.equal(result.code, 0, result.stderr)
+      const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+      assert.equal(output.creationSession.status, 'linked')
+      assert.equal(output.creationSession.releaseId, 'release-' + i)
+      assert.equal(output.workflowComplete, true)
+      assert.equal(JSON.parse(await readFile(path.join(root, '.clide/publish.json'))).creationSession.status, 'linked')
+    }
+    disabled = true
+    const partial = await runPublish(root, ['--yes'], env)
+    assert.equal(partial.code, 0, partial.stderr)
+    const output = JSON.parse(partial.stdout.slice(partial.stdout.indexOf('{')))
+    assert.equal(output.url, 'https://www.8x.gg/apps/app-1')
+    assert.equal(output.success, true)
+    assert.equal(output.workflowComplete, false)
+    assert.equal(output.creationSession.reason, 'session_uploads_disabled')
+    const count = api.requests.length
+    // Opt-out must skip even an invalid source, including the environment override.
+    await writeFile(path.join(root, '.clide/creation-session.jsonl'), 'invalid-json')
+    const optedOut = await runPublish(root, ['--yes', '--no-session'], { ...env, PAEAN_SESSION_JSONL: '/missing.jsonl' })
+    assert.equal(optedOut.code, 0, optedOut.stderr)
+    assert.equal(api.requests.length - count, 2)
+    assert.equal(JSON.parse(optedOut.stdout.slice(optedOut.stdout.indexOf('{'))).creationSession.status, 'skipped')
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('invalid explicit session paths and conflicting options fail before public upload', async () => {
+  const root = await fixture()
+  try {
+    for (const args of [['--session-jsonl'], ['--session-jsonl', 'missing.jsonl'], ['--session-jsonl', 'a.jsonl', '--no-session'], ['--delete', '--no-session']]) {
+      const result = await runPublish(root, [...args, ...(args.includes('--delete') ? [] : ['--yes'])], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
+      assert.equal(result.code, 1)
+      assert.doesNotMatch(result.stdout, /Uploading|Creating Paean/)
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
 })
