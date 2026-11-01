@@ -125,8 +125,9 @@ function transformSkill(md, variant, skill, prior) {
 
 let changed = 0
 // Publish must also work when installed alone. Bundle the sessions helper from
-// its one canonical source before generating any client mirrors.
-const sessionsSource = path.join(SRC, 'paean-sessions/scripts/sessions.mjs')
+// its canonical submission module before generating any client mirrors.
+// The bundle CLI has additional offline-parser dependencies that publish does not need.
+const sessionsSource = path.join(SRC, 'paean-sessions/scripts/submission.mjs')
 if ((!selected || selected === 'paean-publish' || selected === 'paean-sessions') && existsSync(sessionsSource)) {
   const bundled = path.join(SRC, 'paean-publish/scripts/sessions.mjs')
   if (!existsSync(bundled) || !readFileSync(bundled).equals(readFileSync(sessionsSource))) {

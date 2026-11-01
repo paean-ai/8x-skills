@@ -76,7 +76,11 @@ export function sessionToken() {
   for (const file of [process.env.PAEAN_CREDENTIALS_FILE,
     process.env.ZERO_CONFIG_DIR && path.join(process.env.ZERO_CONFIG_DIR, 'credentials.json'),
     path.join(homedir(), '.paean/credentials.json'), path.join(homedir(), '.zero/credentials.json')].filter(Boolean)) {
-    try { const c = JSON.parse(readFileSync(file, 'utf8')); if (c.token) return c.token } catch { /* next source */ }
+    try {
+      const c = JSON.parse(readFileSync(file, 'utf8'))
+      const token = c.token || c.paean_token || c.apiKey || c.authToken || c.accessToken
+      if (typeof token === 'string' && token) return token
+    } catch { /* next source */ }
   }
   fail('paean_login_required')
 }
@@ -169,8 +173,8 @@ Private backup and current-release linking only; no sharing, training or reward 
 prepare preserves the original, writes a new 0600 file and refuses to overwrite.
 submit retries reuse the prepared content identity; --dry-run makes no API calls or writes.`
 
-async function main() {
-  const [command, ...argv] = process.argv.slice(2)
+export async function submissionMain(argvInput = process.argv.slice(2)) {
+  const [command, ...argv] = argvInput
   if (!command || command === '--help' || command === '-h') { console.log(HELP); return }
   const allowed = { prepare: ['file', 'out'], submit: ['file', 'app', 'source-key', 'dry-run'], bind: ['asset', 'app'], status: ['asset'], evidence: ['app'] }
   if (!allowed[command]) fail('unknown_session_command')
@@ -199,12 +203,12 @@ async function main() {
     if (command === 'status') result = await api(options, '/sessions/assets/' + encodeURIComponent(args.asset))
     if (command === 'evidence') result = await publicEvidence(options, args.app)
   }
-  console.log(JSON.stringify(result, null, 2))
   if (result.status === 'pending') process.exitCode = 1
+  return result
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
-  main().catch(error => {
+  submissionMain().then(result => { if (result !== undefined) console.log(JSON.stringify(result, null, 2)) }).catch(error => {
     console.error(JSON.stringify({ status: 'failed', reason: error.code || 'session_operation_failed' }))
     process.exitCode = 1
   })
