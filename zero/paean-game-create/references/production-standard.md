@@ -106,10 +106,9 @@ Treat the preview as a separate state, not as a normal game with the HUD hidden 
 
 ```text
 LOAD COMPLETE → ATTRACT (autonomous, UI-free gameplay highlight)
-  └─ intentional tap/click → reset deterministic demo state
-                              → unlock audio
-                              → reveal essential HUD
-                              → PLAYING
+  └─ intentional activation → required access check (when applicable)
+                              → reset demo state, reveal essential HUD → PLAYING
+                              ↘ optional audio unlock (failure does not block entry)
 PLAYING → RESULT → restart → PLAYING
 ```
 
@@ -126,6 +125,9 @@ PLAYING → RESULT → restart → PLAYING
   spend persistent currency, submit scores, or mutate the player's save.
 - On first intentional input, stop every demo timer/listener, reset to a fair fresh state, reveal
   only essential play UI, and route that same input safely so it cannot cause an accidental move.
+  Share a single entry intent across compatibility events and protect the new screen from the
+  completed gesture's mouseup/click tails. Keep the next genuine press usable immediately; see
+  [event ownership and lifecycle](input-reliability.md).
 - That same first intentional input is where the paid-app gate lives: call
   `PaeanSDK.access.require()` and enter `PLAYING` only on `unlocked: true`. A free app passes
   instantly; a paid one shows the host's purchase sheet at the listing's price. On
@@ -288,10 +290,12 @@ overlap heavily with ad-conversion readiness above; where they differ, the conta
   as *"按钮无法点击"* and it genuinely cannot be played on the web. Use the layout breakpoint
   instead, e.g. `@media (pointer: coarse), (max-width: 820px), (max-height: 620px)`, and keep one
   live `matchMedia` as the single source of truth so orientation changes track it.
-- **Bind controls with Pointer Events, never `touch*` only.** `pointerdown`/`pointermove`/
-  `pointerup` fire for mouse, touch and pen alike, so one binding serves every device and a virtual
-  stick stays usable when it is dragged with a mouse. A control that is visible but bound only to
-  `touchstart` is dead under a mouse — the same symptom, a different cause.
+- **Use one control owner across the target's event families.** Prefer Pointer Events for held
+  controls; preview hosts may supply only Mouse/Touch or mixed chains, so test before choosing
+  fallbacks. Route fallbacks through the same state, including existing bridges, and deduplicate
+  each physical contact. Native buttons retain keyboard/click behavior; add shared release
+  confirmation where the host omits click. Never make the same stick gesture also own camera look.
+  Follow [input reliability](input-reliability.md) for cancellation, scrolling and transition tails.
 - **Keep genuinely pointer-dependent affordances on the pointer test.** A mouse crosshair or a hover
   tooltip should still follow `pointer: fine`. Splitting the two predicates — one for layout, one for
   the actual input device — is the whole fix; collapsing them back into one is how this bug returns.
@@ -424,6 +428,9 @@ build should be able to **remove** its entry rather than show a control that alw
   attract-loop iteration. RedNote's current file whitelist excludes WAV/MP3 and runtime networking.
 - Unlock audio on user interaction, expose a coherent mute setting, avoid clipping, and stop or
   reduce playback when hidden. Layer important events without turning every action into noise.
+  Attempt unlock during the gesture without awaiting audio success before changing UI/game state.
+  Isolate constructor/node/resume failures and later audio callbacks from the frame loop; a rejected
+  or pending audio promise must not strand the player in demo or a menu.
 - Keep first interaction fast on mobile. Load the minimum launch set, decode large media off the
   critical path, preload likely next content, reuse pools, and cap particles/lights/physics work.
 - Check transferred bytes and the largest files. Optimize based on measured cost while preserving
@@ -436,6 +443,7 @@ Before completion, record evidence for each row:
 | Area | Required evidence |
 | --- | --- |
 | Core loop | Multiple complete sessions including win/fail/restart and unusual input timing |
+| Input ownership | Narrow-screen real mouse and native touch; one action per gesture across actual and translated event families; repeated presses, cancel/scroll/keyboard, panel reentry and startup recovery; stick movement and camera look remain independent. Use [the input checks](input-reliability.md) and report synthetic fixtures separately |
 | Preview | Load enters an automatic UI-free core highlight; demo is deterministic, non-persistent, and converts on first tap |
 | Demo arc | A composed 20–30 s arc: hook on frame one, one loop shown twice, escalation, loop-back that can never land on a death or results screen; showcase seed exported as a named constant |
 | Demo reel | A 20–30 s recording exists and is legible muted and at thumbnail size; framing matched to its destination; ready predicate, programmatic entry and per-frame autopilot flag all present so it records without gameplay edits |
@@ -456,7 +464,7 @@ Before completion, record evidence for each row:
 | Assets | Original/licensed, coherent, optimized; `favicon.svg`, 800×400 `banner.jpg`, 512×512 `icon.jpg` present |
 | Paid gate | `access.require()` on the first intentional tap only; mock-host cases (free, paid, declined, preview) pass |
 | Ad-conversion | Programmatic session entry documented; showcase params are arguments; autopilot flag read per frame; locale pinnable from one storage key; runs with the SDK script absent |
-| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs; no unbundled dynamic `import()` (specifiers literal), and the build compared against the original so a silent downgrade to fallback rendering is caught; UI wired before expensive init (or the boot sequence wrapped so a throw renders a readable failure state); WebGL construction guarded and the no-WebGL case shown explicitly; on-screen controls gated by layout breakpoint (not pointer type) and bound with Pointer Events, so a desktop browser narrowed to phone size stays playable ; nothing interactive inside the host chrome band (`--paean-chrome-inset-top`, plus ~56px left / ~104px right) |
+| Offline-container | Single source of truth for the default locale; all storage access wrapped so it cannot throw; frame delta clamped at both ends; no bitmap-font player text; container-legal file types only; named (not namespace) third-party imports; boot path free of unguarded post-Chrome-61 APIs; no unbundled dynamic `import()` (specifiers literal), and the build compared against the original so a silent downgrade to fallback rendering is caught; UI wired before expensive init (or the boot sequence wrapped so a throw renders a readable failure state); WebGL construction guarded and the no-WebGL case shown explicitly; on-screen controls gated by layout breakpoint (not pointer type) and verified with mouse/touch plus any required shared-state fallbacks, so a desktop browser narrowed to phone size stays playable ; nothing interactive inside the host chrome band (`--paean-chrome-inset-top`, plus ~56px left / ~104px right) |
 | Vector/rig (if used) | Cartoon family and head ratios recorded; fine linework, joint deformation, key poses, and final-scale motion inspected |
 | Banner | Faithful high-quality composition, source method recorded, exact 800×400 JPEG and thumbnail inspected |
 | Finish | No placeholder art/copy, debug UI, broken affordance, dead control, or half-built state |

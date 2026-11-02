@@ -72,6 +72,32 @@ CLI 不自动重试 POST。遇 401/403 停止并让用户处理登录/权限，�
 
 CLI 会验证输出 WAV 和 SHA-256，断点续跑只跳过请求内容与文件校验都一致的段落。完成文件不会重复生成；遇不匹配或残留未知文件会停下，不删除用户内容。音频下载使用独立无认证请求，绝不转发 Paean JWT 给存储站点。
 
+## 本机免费离线神经网络 TTS 引擎（零费用、免网络、首选回退方案）
+
+当 Paean 云端 `/dashscope/tts` 服务不可用（如返回 `500`）、离线创作、或用户希望完全免费且不消耗任何云端额度时，优先使用本机已安装配置的 **Apple Silicon MLX `Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` 本地大模型** 或 **Kokoro-82M v1.1-zh 本地 ONNX 引擎**（严禁调用 `gcloud` / Vertex AI 计费接口，也不要退回机械感强的传统 `say -v Tingting` 或 Siri TTS）：
+
+1. **统一调度脚本 `free-tts`**（已安装于 `~/.local/bin/free-tts`、本 skill 的 `scripts/free-tts.mjs` 及工作区 `tools/free-tts.mjs`）：
+   - 查看所有可用本地神经网络引擎与音色列表：
+     ```sh
+     node scripts/free-tts.mjs --list
+     ```
+   - **首选引擎 `qwen3`（`mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`，Apple Silicon MLX 1.7B 情感大模型，默认引擎）**：
+     - 内置 9 款真人级高表现力音色：`serena`（温暖沉静叙事女声）、`vivian`（清亮灵动女声）、`uncle_fu`（沉稳醇厚成熟男声）、`ryan`（阳光活力青年男声）、`aiden`（温和青年男声）、`ono_anna`（柔和女声）、`sohee`（温柔女声）、`eric`（地道四川话男声）、`dylan`（地道北京话男声），并支持 `--instruct` 语气/情感/风格控制：
+       ```sh
+       node scripts/free-tts.mjs --engine qwen3 --voice serena --instruct "温和沉静、自然清晰的叙事女声，带有黄昏校园的怀旧故事感" --speed 1.05 --text "放学铃后：校园通行证外撰。在黄昏的松谷小学，跟随纸飞机寻找线索。" --out /path/to/out.wav
+       ```
+     - 批量 Manifest 合成（单次加载 1.7B 模型连续合成全部段落，速度极快）：
+       ```sh
+       node scripts/free-tts.mjs --engine qwen3 --voice serena --instruct "自然清晰的叙事旁白" --manifest /path/to/segments.json --out /path/to/audio-dir
+       ```
+   - **次选轻量引擎 `kokoro`（`Kokoro-82M v1.1-zh` ONNX，共 103 款音色，含 45 款中文男声 `zm_009..zm_100`、55 款中文女声 `zf_001..zf_099`、3 款英文音色）**：
+     ```sh
+     node scripts/free-tts.mjs --engine kokoro --voice zm_010 --speed 1.05 --text "百将星谱收录一百二十七位三国名将，自由搭配四象灵潮与瑞兽灵宠。" --out /path/to/out.wav
+     ```
+2. **底层独立命令**：
+   - `~/.local/bin/qwen3-tts`：基于 `/Users/ryan/Zero/train-lora-sft/.venv/bin/python`（`mlx-audio`）与本地 HuggingFace 缓存 `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`，支持 `--voice`、`--instruct`、`--lang`、`--speed` 与 `--manifest` 单次加载批量合成。
+   - `~/.local/bin/kokoro-tts`：基于 `~/.local/share/kokoro-env` Python 3.12 环境与 `~/.local/share/kokoro-models/kokoro-v1.1-zh.onnx`，支持 103 种音色 24kHz 离线合成。
+
 ## 分享与安装
 
 分享整个 `paean-tts/` 文件夹或它的 ZIP，不分享自己的凭据、生成音频或任务输出。接收者将对应版本放入自己的 skills 目录（Claude Code：`~/.claude/skills/`；Zero CLI：`~/.zero/skills/`；Codex：`~/.agents/skills/`，已有客户端使用的 `~/.codex/skills/` 可原地更新），或直接引用本文件。使用接收者自己的 Paean 登录，在能发现新 skill 的会话中调用 `paean tts`。

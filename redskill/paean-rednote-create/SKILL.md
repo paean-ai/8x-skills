@@ -45,6 +45,8 @@ description: 为小红书创作可直接体验的网页小游戏和互动小工�
 
 默认面向手机竖屏设计并兼顾横屏和桌面。让首屏展示真实用途，用户第一次操作就得到有意义的反馈。小游戏采用无需点击的干净玩法演示，实用工具直接展示可操作的输入和可信示例，避免强制登录或展示无法工作的按钮。
 
+从创作阶段读取[事件处理与交互所有权](workflows/paean-game-create/references/input-reliability.md)：同一手势只执行一次，兼容事件共用状态；取消/滚动不提交，菜单不操作底层玩法，摇杆不同时控制镜头。保留键盘与普通按钮行为，音频失败不能阻断入口；转换后再按目标宿主验证实际事件链。
+
 未来新上架的**游戏**在适配时读取内置转换工作流的 [RedNote 上架呈现标准](workflows/paean-convert-to-rednote/reference/rednote-release-standard.md)：自动玩法演示与入口 UI 保留不遮挡操作的真实版权／来源署名；适合横屏的游戏提供可操作的虚拟横屏按钮，并在桌面鼠标模拟手机与触屏环境实测。`© paean.ai` 只在原作权利声明支持时使用，不替其他作者冒领版权。旧作品仅在用户另行要求时修改。
 
 保留一份可维护的 HTML/CSS/JavaScript 源码，素材本地化且有权使用。生成的新游戏按内置创作标准制作 `favicon.svg`、800×400 `banner.jpg`、512×512 `icon.jpg`；这些是 8x 素材规格，不是 Red Skill 封面规格。小红书封面依据当前发布界面单独制作。
@@ -53,10 +55,20 @@ description: 为小红书创作可直接体验的网页小游戏和互动小工�
 
 按 `references/targets.md` 隔离输出，再使用包内转换流程。转换器只完成机械打包与兼容处理，中文文案、SDK 调用替换、核心功能完整性仍需在适配源码中完成。
 
+## 官方规范、小红书专用平台能力与可选笔记奖励
+
+官方构建基线更新为 [minitool-zip-builder 1.9.0-beta.20261023.1](https://fe-static.xhscdn.com/minitool/test/20261023/dist/minitool-zip-builder-1.9.0-beta.20261023.1.skill) 与 [redapp-cli](https://fe-video-qc.xhscdn.com/fe-platform-file/104101b8326rqruuj5006b6titltg00000000038l066g4)（可安全解压更新本地技能），配合[小工具在线文档](https://miniapp-sandbox.xiaohongshu.com/minitool/doc)使用；以后按上传页当时提供的口令选择版本。读取随包 API 基线与高消耗能力标记规范（在 `dist/` 根目录生成一字段 `mini_tool.json`：`{"is_high_consumption_scene": false}` 或 `true`）后获取在线文档，比较并播报新增公开能力，再按在线契约实现。
+
+需要接入小红书专用排行榜（`submitScore` / `getRankList` / `getMyRank`）、专用云存储（`addCloudStorage` / `updateCloudStorage` / `queryCloudStorage` / `removeCloudStorage`）、本地缓存（`setStorage` / `getStorage`）、首页/顶栏引导关注创作者（`followAuthor` / `getFollowStatus`）或视频/实况/图文笔记发布（`postNote` + `writeTempFile`）时，读[小红书专用平台能力与预览兜底指南](workflows/paean-convert-to-rednote/reference/xhs-platform-apis.md)。在未注入 9.51+ 白名单的审核预览环境、真机审核容器 `window.xhs.miniTool` 异步回调挂起或 0 分新档下，排行榜「提交成绩」、首页「关注创作者」、暂停页「云端备份」与结算页「发布笔记」按钮严禁设为 `disabled` 或等待异步回调，必须在 **`t = 0ms` 同步完成乐观 UI 与本地状态更新**，并将普通查询 `callXhs()` 超时收敛至 `<= 450ms`。发布动态视频笔记（`pageType: "video_publish"`）时，`writeTempFile` 须使用独立文件 I/O 超时（`5000ms`），`video_resources.cover_url` 仅传 `writeTempFile` 返回的 `filePath`（禁传原始 `data:` URI），**严禁在 `postNote({ pageType: "video_publish" })` 超时 `catch` 中回退调用 `photo_publish`**（否则 400ms 后图文发布页会直接覆盖已拉起的原生视频编辑器），并提供纯 JS H.264 Constrained Baseline（`avc1.42C01E` `I_PCM` + `faststart` MP4）编码兜底以兼容 `MediaRecorder` 仅支持 `video/webm` 的 Android WebView。支持软件横屏（`body.xhs-virtual-landscape`）时，安全区别名变量（`--top`、`--left` 等）必须同时声明在 `:root, #app, [data-xhs-orientation-root]` 上，确保软件横屏后顶部 UI 不往下避让（`--top: 0px`）、左侧 UI 往右避让（`--left: 86px`）以避开横屏左手边的小红书系统按钮。遇到「内容未通过平台综合审核」或涉及梦核/RPG/肉鸽战斗题材时，读[内容与代码双端机审净化指南](workflows/paean-convert-to-rednote/reference/content-audit-sanitization.md)。
+
+用户希望将 IAP/IAA 转成发笔记获得道具时，读[笔记与可选奖励设计](workflows/paean-convert-to-rednote/reference/note-rewards.md)。它是按游戏选择的试验选项：保留免费玩法，预览真实画面，允许取消，限定低价值奖励并去重；**严禁在分享降级分支调用被容器审计禁止的 `navigator.clipboard`**；`postNote:ok` 不代表最终审核通过或付费收据。品牌/游戏话题写入可编辑正文，不虚构话题参数。平台是否允许该激励须单独核对，不自动发布测试笔记。
+
 ## 验收与交付
 
 - **小游戏创作源 / 8x 版**：用内置 `paean-game-create/scripts/validate-game.mjs` 验证对应作品目录，且实际完成开始、游玩、结束和重开。不要拿它检查转换产物或实用小工具：它包含 8x 游戏素材和结构要求。
 - **小红书产物**：构建器自检后，对 `dist/` 和最终 ZIP 运行 `audit-minitool.mjs` 做体积检查；运行 `check-host-chrome.mjs` 与适用的 `check-pointer-parity.mjs`，再用浏览器操作最终产物。体积检查通过不代表能力、交互或审核通过。
+- **功能验收不可跳步**：每次转换/返修按[功能完整性清单](workflows/paean-convert-to-rednote/reference/input-reliability.md)从最终ZIP正常URL和新档开始，覆盖首次引导/对白及出口、短屏按钮可见、主要功能和存档重开；验证取消手势不提交、双指取消后的恢复。QA跳步和定位器自动滚动仅为辅助证据。
+- **操作可靠性**：涉及摇杆、按住类动作、演示入口或无法点击的反馈时，先读[交互根因与整包回归](workflows/paean-convert-to-rednote/reference/input-reliability.md)。区分启动失败、控件显隐、混合事件/释放、坐标转换和玩法限制；检查完整兼容桥，避免重复注入。最终ZIP验证真实鼠标与触屏的世界位移、松手归零、连续操作和缩放预览；通用探针超时/未进入玩法不算通过，固定92px检测不作为当前宿主的通用规则。
 - **运行检查**：阻断外部网络，检查中文、手机竖/横屏、桌面窄窗鼠标操作、结果与弹层关闭；验证存储被拒、WebGL 不可用时不会成为无响应页面。现代 Chromium 的模拟检查不能证明真实 Chrome 61 全兼容，报告实际覆盖环境。
 - **素材**：新游戏的上架交付按内置转换工作流准备 14 字简介候选、与作品一致的 512×512 图标，以及从最终 ZIP 录制的 30 秒高清 MP4 和封面；单纯原型或实用工具按用户实际需求准备展示素材。无 ffmpeg 时如实说明现有格式，不把 WebM 改后缀充当 MP4。
 - **交付说明**：列出实际文件、对应上传入口、功能差异与已测/未测项目。按 [交付与发布说明](references/delivery.md) 给出可直接用于笔记的草稿；发布笔记和上传作品属于独立外部操作，须在用户授权范围内执行。
