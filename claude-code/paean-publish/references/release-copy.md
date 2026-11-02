@@ -57,6 +57,16 @@ Example for a game that actually has these features:
 
 ## The work's README
 
+Start with the release title as the H1, then a blank line and a standalone player-facing paragraph
+in plain text. Supply this during creation, even before a publish request. Keep the paragraph to
+2–4 sentences and at most 600 characters so it can be reused as a listing summary. State concrete
+player actions, the goal and genre, and a distinctive setting or visual hook; a slogan alone is
+not a description. Do not put Markdown emphasis, code spans, links, local paths, commands, or
+technical terms such as shell, Node, localhost, Python, or SDK in this paragraph. Put attribution
+links in a separate credits section. An otherwise detailed README consisting only of headings,
+tables, technical plans, or lists still lacks this release paragraph. If `clide.json` exists,
+keep its title and summary consistent; metadata alone does not serve README-only publishers.
+
 Write a player-facing README using the same language, title, description, and tag vocabulary as
 the release. Include the premise, core actions and goal, actual controls, distinctive design
 features, visual style and setting, plus factual creator/source credits where applicable.

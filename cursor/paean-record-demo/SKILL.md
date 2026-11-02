@@ -210,11 +210,27 @@ Without it the script says so, reports the lead-in it measured, and leaves you a
 node <skill>/scripts/encode.mjs demo/orbit-demo.webm demo/orbit-demo --start 0.9 --duration 25
 ```
 
-## Optional Paean TTS narration
+## Optional Paean TTS & Local Free Neural Narration
 
-When the requested reel includes voiceover, use [paean-tts](../paean-tts/SKILL.md) to synthesize
-the script by scene using the creator's Paean login. Save the original WAVs, measure actual
-durations, and align them with the same moments as the captions. Keep captions legible on mute.
+When the requested reel includes voiceover:
+1. **Local Free Offline Neural TTS (Preferred zero-cost & offline path)**:
+   - Use `~/.local/bin/free-tts` (or `tools/free-tts.mjs` / `paean-tts/scripts/free-tts.mjs`) which drives two local offline neural engines:
+     - **Primary (Default): `Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` (`--engine qwen3`, `~/.local/bin/qwen3-tts`)** running on Apple Silicon MLX (`/Users/ryan/Zero/train-lora-sft/.venv/bin/python` + `mlx_audio`). Provides 9 studio human-grade speakers (`serena`, `vivian`, `uncle_fu`, `ryan`, `aiden`, `ono_anna`, `sohee`, `eric` [四川话], `dylan` [北京话]) plus `--instruct` emotion/style control and single-pass `--manifest` batch synthesis.
+     - **Secondary: `Kokoro-82M v1.1-zh` (`--engine kokoro`, `~/.local/bin/kokoro-tts`)** 24kHz ONNX model with 45 Chinese male voices (`zm_010`, `zm_009`, …), 55 Chinese female voices (`zf_001`, …), and English voices (`af_maple`, `af_sol`, `bf_vale`).
+   - Examples:
+     ```bash
+     # Studio human-grade Qwen3-TTS 1.7B (single segment or --manifest batch):
+     ~/.local/bin/free-tts --engine qwen3 --voice serena --instruct "温和沉静的叙事女声，带有黄昏校园的怀旧故事感" --speed 1.05 --text "放学铃后：校园通行证外撰。在黄昏的松谷小学，跟随纸飞机寻找线索。" --out demo/seg1.wav
+     ~/.local/bin/free-tts --engine qwen3 --voice serena --instruct "自然清晰的实机解说旁白" --manifest demo/segments.json --out demo/audio/
+
+     # Lightweight Kokoro-82M ONNX:
+     ~/.local/bin/free-tts --engine kokoro --voice zm_010 --speed 1.05 --text "天命，赤壁战纪。踏入五对五赤壁水陆战场，铁索连舟，名将交锋。" --out demo/seg1.wav
+     ```
+   - Never fall back to mechanical `say -v Tingting` or robotic system voices, and never call paid `gcloud` / Vertex AI endpoints unless explicitly requested.
+2. **Cloud Paean TTS**:
+   - Or use [paean-tts](../paean-tts/SKILL.md) to synthesize the script by scene using the creator's Paean login when online.
+
+Save the original WAVs, measure actual durations, and align them with the same moments as the captions. Keep captions legible on mute.
 The recorder does not synthesize speech or capture game audio automatically.
 
 Prepare a separate audio bed with narration, any BGM ducked under it, and silence padded to the
