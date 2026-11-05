@@ -6,6 +6,9 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { gunzipSync } from 'node:zlib'
+import { prepare, prepareText, uploadFileBundle } from './creation-upload.mjs'
+import { readFileBundle } from './multi-file.mjs'
+import { buildSessionBundle, locateSessions, reviewBundle, reviewFile } from './session-tools.mjs'
 
 export const MAX_BYTES = 20 * 1024 * 1024
 const sha256 = value => createHash('sha256').update(value).digest('hex')
@@ -164,31 +167,94 @@ export async function submitSession({ prepared, appHash, sourceKey, ...options }
   }
 }
 
-const HELP = `Usage: sessions.mjs prepare --file source.jsonl[.gz] --out prepared.jsonl
+/** Validates a prepared bundle directory without any network access. */
+export function loadSessionBundle(directory) {
+  const { manifest, manifestDigest } = readFileBundle(directory, prepare, prepareText)
+  return {
+    directory, digest: manifestDigest, bytes: manifest.files.reduce((n, f) => n + f.bytes, 0), files: manifest.files.length,
+    streams: manifest.streams.length, scripts: manifest.files.filter(f => f.kind === 'script').length,
+  }
+}
+
+function sessionsClient({ apiBase, token }) {
+  return async (endpoint, method = 'GET', body) => {
+    validateBase(apiBase)
+    if (!token) fail('paean_login_required')
+    let response
+    try {
+      response = await fetch(apiBase + '/sessions/' + endpoint, {
+        method, redirect: 'error', signal: AbortSignal.timeout(120000),
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+    } catch { fail('session_api_network_error') }
+    if (!response.ok) fail('session_api_http_' + response.status)
+    return (await response.json()).data
+  }
+}
+
+export async function submitSessionBundle({ directory, digest, appHash, put, ...options }) {
+  let assetId
+  let stage = 'upload'
+  try {
+    // A content-derived key makes retries of the same prepared bundle resume, as submitSession does.
+    const asset = await uploadFileBundle(directory, 'creation:' + digest, { json: sessionsClient(options), ...(put ? { put } : {}) })
+    assetId = asset.id
+    if (!assetId || asset.state !== 'ready') fail('session_not_ready')
+    stage = 'bind'
+    if (appHash) return await bindSession(options, assetId, appHash)
+    return { status: 'backed-up', assetId, assurance: 'none' }
+  } catch (error) {
+    // Uploader messages name only limits and file IDs, never signed URLs or transcript text.
+    return { status: 'pending', stage, ...(assetId ? { assetId } : {}), reason: error.code || 'bundle_upload_failed', ...(error.code ? {} : { detail: error.message }) }
+  }
+}
+
+const HELP = `Usage: sessions.mjs locate [--project <directory>] [--client claude-code|codex|cursor|gemini|zero]
+       sessions.mjs prepare-bundle --file source.jsonl --out new-directory [--no-children]
+       sessions.mjs review --file prepared.jsonl | --dir bundle-directory [--project <directory>]
+       sessions.mjs submit-bundle --dir bundle-directory [--app <owned-app-hash>]
+       sessions.mjs prepare --file source.jsonl[.gz] --out prepared.jsonl
        sessions.mjs submit --file prepared.jsonl [--app <owned-app-hash>] [--source-key <stable-id>] [--dry-run]
        sessions.mjs bind --asset <asset-id> --app <owned-app-hash>
        sessions.mjs status --asset <asset-id>
        sessions.mjs evidence --app <app-hash>
 Private backup and current-release linking only; no sharing, training or reward consent.
+locate, prepare-bundle and review are local: they upload nothing and print no transcript text.
 prepare preserves the original, writes a new 0600 file and refuses to overwrite.
 submit retries reuse the prepared content identity; --dry-run makes no API calls or writes.`
 
 export async function submissionMain(argvInput = process.argv.slice(2)) {
   const [command, ...argv] = argvInput
   if (!command || command === '--help' || command === '-h') { console.log(HELP); return }
-  const allowed = { prepare: ['file', 'out'], submit: ['file', 'app', 'source-key', 'dry-run'], bind: ['asset', 'app'], status: ['asset'], evidence: ['app'] }
+  const allowed = { prepare: ['file', 'out'], submit: ['file', 'app', 'source-key', 'dry-run'], bind: ['asset', 'app'], status: ['asset'], evidence: ['app'],
+    locate: ['project', 'client'], 'prepare-bundle': ['file', 'out', 'no-children'], review: ['file', 'dir', 'project'], 'submit-bundle': ['dir', 'app'] }
   if (!allowed[command]) fail('unknown_session_command')
   const args = {}
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i].slice(2)
     if (!argv[i].startsWith('--') || !allowed[command].includes(key) || key in args) fail('invalid_session_option')
-    if (key === 'dry-run') args[key] = true
+    if (key === 'dry-run' || key === 'no-children') args[key] = true
     else { const value = argv[++i]; if (!value || value.startsWith('--')) fail('session_option_needs_value'); args[key] = value }
   }
-  const required = { prepare: ['file', 'out'], submit: ['file'], bind: ['asset', 'app'], status: ['asset'], evidence: ['app'] }
+  const required = { prepare: ['file', 'out'], submit: ['file'], bind: ['asset', 'app'], status: ['asset'], evidence: ['app'],
+    locate: [], 'prepare-bundle': ['file', 'out'], review: [], 'submit-bundle': ['dir'] }
   for (const key of required[command]) if (!args[key]) fail('missing_' + key)
   if (args.app && !/^[A-Za-z0-9_-]{1,32}$/.test(args.app)) fail('invalid_app_hash')
   if (args['source-key'] && args['source-key'].length > 200) fail('source_key_too_long')
+  if (command === 'locate') return locateSessions({ project: args.project, client: args.client })
+  if (command === 'prepare-bundle') return buildSessionBundle({ file: path.resolve(args.file), out: path.resolve(args.out), children: !args['no-children'] })
+  if (command === 'review') {
+    if (!args.file === !args.dir) fail('review_needs_file_or_dir')
+    const options = args.project ? { project: args.project } : {}
+    return args.dir ? reviewBundle(path.resolve(args.dir), options) : reviewFile(path.resolve(args.file), options)
+  }
+  if (command === 'submit-bundle') {
+    const bundle = loadSessionBundle(path.resolve(args.dir))
+    const result = await submitSessionBundle({ apiBase: sessionApiBase(), token: sessionToken(), directory: bundle.directory, digest: bundle.digest, appHash: args.app })
+    if (result.status === 'pending') process.exitCode = 1
+    return result
+  }
   let result
   const prepared = args.file ? readSession(path.resolve(args.file)) : undefined
   if (command === 'prepare') {
@@ -209,7 +275,7 @@ export async function submissionMain(argvInput = process.argv.slice(2)) {
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   submissionMain().then(result => { if (result !== undefined) console.log(JSON.stringify(result, null, 2)) }).catch(error => {
-    console.error(JSON.stringify({ status: 'failed', reason: error.code || 'session_operation_failed' }))
+    console.error(JSON.stringify({ status: 'failed', reason: error.code || 'session_operation_failed', ...(error.code ? {} : { detail: error.message }) }))
     process.exitCode = 1
   })
 }

@@ -764,7 +764,7 @@ test('default project snapshot is private, linked after each publish, and opt-ou
     assert.equal(JSON.parse(dry.stdout).creationSession.status, 'prepared')
     assert.equal(api.requests.length, 0)
     for (let i = 1; i <= 2; i++) {
-      const result = await runPublish(root, ['--yes', '--allow-secrets'], env)
+      const result = await runPublish(root, ['--yes', '--allow-secrets', '--session-reviewed'], env)
       assert.equal(result.code, 0, result.stderr)
       const output = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
       assert.equal(output.creationSession.status, 'linked')
@@ -773,7 +773,7 @@ test('default project snapshot is private, linked after each publish, and opt-ou
       assert.equal(JSON.parse(await readFile(path.join(root, '.clide/publish.json'))).creationSession.status, 'linked')
     }
     disabled = true
-    const partial = await runPublish(root, ['--yes'], env)
+    const partial = await runPublish(root, ['--yes', '--session-reviewed'], env)
     assert.equal(partial.code, 0, partial.stderr)
     const output = JSON.parse(partial.stdout.slice(partial.stdout.indexOf('{')))
     assert.equal(output.url, 'https://www.8x.gg/apps/app-1')
@@ -793,10 +793,109 @@ test('default project snapshot is private, linked after each publish, and opt-ou
   }
 })
 
+const helperScript = path.join(repoRoot, 'codex/paean-publish/scripts/sessions.mjs')
+
+function sessionPublishApi(root, state) {
+  return mockApi(async (request, res) => {
+    res.setHeader('content-type', 'application/json')
+    const data = value => res.end(JSON.stringify({ data: value }))
+    if (request.url === '/v2/workspace') return res.end(JSON.stringify({ success: true, workspace: { hashKey: 'workspace-1' } }))
+    if (request.url === '/v2/workspace/workspace-1/files/zip') {
+      const start = request.body.indexOf(Buffer.from('PK\x03\x04', 'binary'))
+      const end = request.body.indexOf(Buffer.from('PK\x05\x06', 'binary')) + 22
+      assert.deepEqual(listZip(request.body.subarray(start, end)).sort(), ['app.js', 'index.html'])
+      return res.end(JSON.stringify({ success: true, fileCount: 2, totalBytes: 64 }))
+    }
+    if (request.url === '/square/publish') return data({ hashKey: 'app-1', playUrl: 'https://random123.clide.app/', publishedSiteHandle: 'random123', status: 'listed' })
+    if (request.url === '/sessions/config') return data({ enabled: state.enabled !== false, maxBytes: 64 * 1024 * 1024, creationBundleVersions: [1, 2], portableCreationManifest: true, chunkedCreationStreams: true, creationLimits: { maxRecordBytes: 16 * 1024 * 1024 }, multiFileLimits: { maxBytes: 100 * 1024 ** 3, maxFileBytes: 32 * 1024 * 1024 } })
+    if (request.url === '/sessions/bundle-uploads') return data({ asset: { id: 'asset-1', state: 'ready' } })
+    if (request.url === '/sessions/assets/asset-1/app-evidence') return data({ assurance: 'linked', release_id: 'release-1' })
+    assert.equal(request.url, '/session-evidence/app-1')
+    data({ assurance: 'linked', releaseId: 'release-1', label: 'Creation session linked' })
+  })
+}
+
+async function runHelper(cwd, args) {
+  return runPublish(cwd, args, {}, helperScript)
+}
+
+test('a bundle is reviewed offline in dry-run and uploads only after --session-reviewed', async () => {
+  const root = await fixture()
+  const log = path.join(root, 'log.jsonl')
+  const large = JSON.stringify({ type: 'user', cwd: root, image: 'x'.repeat(2 * 1024 * 1024), text: 'contact a@corp.io' }) + '\n'
+  await writeFile(log, large.repeat(11))
+  const built = await runHelper(root, ['prepare-bundle', '--file', log, '--out', '.clide/creation-session'])
+  assert.equal(built.code, 0, built.stderr)
+  const api = await sessionPublishApi(root, {})
+  const env = { PAEAN_API_BASE: api.baseUrl, PAEAN_AUTH_TOKEN: 'test-token' }
+  const parse = result => JSON.parse(result.stdout.slice(result.stdout.indexOf('{')))
+  try {
+    const dry = await runPublish(root, ['--dry-run', '--dir', 'dist'], env)
+    assert.equal(dry.code, 0, dry.stderr)
+    const plan = JSON.parse(dry.stdout).creationSession
+    assert.equal(api.requests.length, 0)
+    assert.equal(plan.status, 'prepared')
+    assert.equal(plan.format, 'bundle')
+    assert.equal(plan.uploadRequires, '--session-reviewed')
+    assert.equal(plan.review.records, 11)
+    assert.deepEqual(plan.review.needsAttention, [])
+    assert.deepEqual(plan.review.emails.samples, ['a***@c***.io'])
+    assert.doesNotMatch(dry.stdout, /a@corp\.io/)
+
+    const unreviewed = await runPublish(root, ['--yes', '--dir', 'dist'], env)
+    assert.equal(unreviewed.code, 0, unreviewed.stderr)
+    const held = parse(unreviewed)
+    assert.equal(held.success, true)
+    assert.equal(held.url, 'https://www.8x.gg/apps/app-1')
+    assert.equal(held.creationSession.reason, 'session-review-required')
+    assert.equal(held.workflowComplete, false)
+    assert.equal(api.requests.some(r => r.url.startsWith('/sessions/')), false)
+
+    const reviewed = await runPublish(root, ['--yes', '--dir', 'dist', '--session-reviewed'], env)
+    assert.equal(reviewed.code, 0, reviewed.stderr)
+    const linked = parse(reviewed)
+    assert.equal(linked.creationSession.status, 'linked')
+    assert.equal(linked.creationSession.format, 'bundle')
+    assert.equal(linked.creationSession.streams, 1)
+    assert.equal(linked.workflowComplete, true)
+  } finally {
+    await api.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('an unusable single-file session stops before public upload and points to prepare-bundle', async () => {
+  const root = await fixture()
+  const record = JSON.stringify({ type: 'user', image: 'x'.repeat(1024 * 1024) }) + '\n'
+  await writeFile(path.join(root, 'huge.jsonl'), record.repeat(21))
+  await writeFile(path.join(root, 'bigrecord.jsonl'), record)
+  try {
+    for (const file of ['huge.jsonl', 'bigrecord.jsonl']) {
+      const result = await runPublish(root, ['--yes', '--session-jsonl', file], { PAEAN_API_BASE: 'http://127.0.0.1:1', PAEAN_AUTH_TOKEN: 'test-token' })
+      assert.equal(result.code, 1)
+      assert.match(result.stderr, /prepare-bundle/)
+      assert.match(result.stderr, /--no-session/)
+      assert.doesNotMatch(result.stdout, /Uploading|Creating Paean/)
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('a session bundle inside the public directory is refused', async () => {
+  const root = await fixture()
+  await writeFile(path.join(root, 'log.jsonl'), '{"type":"user"}\n')
+  try {
+    const built = await runHelper(root, ['prepare-bundle', '--file', path.join(root, 'log.jsonl'), '--out', 'dist/session'])
+    assert.equal(built.code, 0, built.stderr)
+    const result = await runPublish(root, ['--dry-run', '--dir', 'dist', '--session-bundle', 'dist/session'])
+    assert.equal(result.code, 1)
+    assert.match(result.stderr, /inside the public site/)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test('invalid explicit session paths and conflicting options fail before public upload', async () => {
   const root = await fixture()
   try {
-    for (const args of [['--session-jsonl'], ['--session-jsonl', 'missing.jsonl'], ['--session-jsonl', 'a.jsonl', '--no-session'], ['--delete', '--no-session']]) {
+    for (const args of [['--session-jsonl'], ['--session-bundle'], ['--session-jsonl', 'missing.jsonl'], ['--session-bundle', 'missing'], ['--session-jsonl', 'a.jsonl', '--no-session'], ['--session-bundle', 'a', '--no-session'], ['--session-jsonl', 'a.jsonl', '--session-bundle', 'b'], ['--delete', '--no-session'], ['--delete', '--session-reviewed']]) {
       const result = await runPublish(root, [...args, ...(args.includes('--delete') ? [] : ['--yes'])], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
       assert.equal(result.code, 1)
       assert.doesNotMatch(result.stdout, /Uploading|Creating Paean/)

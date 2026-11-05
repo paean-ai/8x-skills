@@ -86,8 +86,8 @@ with `paean-publish --price <credits>` and gated in the app with `PaeanSDK.acces
 see `paean-sdk` and its offline mock host `reference/paean-mock.js`.
 
 Standard publishing now defaults to a **server-assigned random handle**, a **public Square listing**,
-and **private JSONL creation-session backup and release linking**. Prepare the current work's real
-record as `.clide/creation-session.jsonl` or pass `--session-jsonl <path>`; explicit `--no-session`,
+and **private creation-session backup and release linking**. Prepare the current work's real
+record in `.clide/creation-session/`, then publish with `--session-reviewed`; explicit `--no-session`,
 `--hosting-only`, and custom-handle requests override the relevant defaults. See the
 [publishing workflow](claude-code/paean-publish/references/creation-session.md).
 Missing records or unavailable APIs are reported as pending, never as completed proof. The current
@@ -278,13 +278,14 @@ the project's `clide.json`, and check the dry-run's resolved metadata against it
 From the project you want to publish:
 
 ```bash
-# Prepare and locally review this work’s real creation record; keep it private
-mkdir -p .clide
-node <skill-dir>/scripts/sessions.mjs prepare --file /path/to/actual-session.jsonl --out .clide/creation-session.jsonl
+# Find this work’s real session log and prepare a private copy
+node <skill-dir>/scripts/sessions.mjs locate
+node <skill-dir>/scripts/sessions.mjs prepare-bundle --file /path/to/actual-session.jsonl --out .clide/creation-session
 
-# Preview, then publish publicly with a random first handle and private session linking
+# Preview (includes a local review of that copy), then publish publicly with a random first handle
+# and private session linking. Use --no-session instead of --session-reviewed to skip the backup.
 node <skill-dir>/scripts/publish.mjs --dry-run
-node <skill-dir>/scripts/publish.mjs --yes
+node <skill-dir>/scripts/publish.mjs --yes --session-reviewed
 
 # Preview, then deploy to Clide hosting without an Apps Square listing
 node <skill-dir>/scripts/publish.mjs --dry-run --hosting-only --dir dist
@@ -302,7 +303,8 @@ Use `paean-sessions` for “提交这个作品的 JSONL 创作记录做原创认
 It can upload a new private record or link an already ready asset without republishing:
 
 ```bash
-node <paean-sessions-dir>/scripts/sessions.mjs submit --file /private/path/creation-session.jsonl --app OWNED_APP_HASH
+node <paean-sessions-dir>/scripts/sessions.mjs prepare-bundle --file /path/to/actual-session.jsonl --out /private/path/creation-session
+node <paean-sessions-dir>/scripts/sessions.mjs submit-bundle --dir /private/path/creation-session --app OWNED_APP_HASH
 node <paean-sessions-dir>/scripts/sessions.mjs bind --asset ASSET_ID --app OWNED_APP_HASH
 ```
 

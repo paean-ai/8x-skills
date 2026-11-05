@@ -124,16 +124,25 @@ function transformSkill(md, variant, skill, prior) {
 }
 
 let changed = 0
-// Publish must also work when installed alone. Bundle the sessions helper from
-// its canonical submission module before generating any client mirrors.
-// The bundle CLI has additional offline-parser dependencies that publish does not need.
-const sessionsSource = path.join(SRC, 'paean-sessions/scripts/submission.mjs')
-if ((!selected || selected === 'paean-publish' || selected === 'paean-sessions') && existsSync(sessionsSource)) {
-  const bundled = path.join(SRC, 'paean-publish/scripts/sessions.mjs')
-  if (!existsSync(bundled) || !readFileSync(bundled).equals(readFileSync(sessionsSource))) {
+// Publish must also work when installed alone. Bundle the session helper and the modules it
+// needs from their canonical sources before generating any client mirrors. The full bundle CLI
+// has additional offline-parser dependencies that publish does not need.
+const PUBLISH_HELPERS = [
+  ['submission.mjs', 'sessions.mjs'],
+  ['creation-upload.mjs', 'creation-upload.mjs'],
+  ['session-tools.mjs', 'session-tools.mjs'],
+  ['multi-file.mjs', 'multi-file.mjs'],
+  ['creation-index.mjs', 'creation-index.mjs'],
+]
+if (!selected || selected === 'paean-publish' || selected === 'paean-sessions') {
+  for (const [from, to] of PUBLISH_HELPERS) {
+    const source = path.join(SRC, 'paean-sessions/scripts', from)
+    const bundled = path.join(SRC, 'paean-publish/scripts', to)
+    if (!existsSync(source)) continue
+    if (existsSync(bundled) && readFileSync(bundled).equals(readFileSync(source))) continue
     changed++
-    if (check) console.log('would update claude-code/paean-publish/scripts/sessions.mjs')
-    else { mkdirSync(path.dirname(bundled), { recursive: true }); cpSync(sessionsSource, bundled) }
+    if (check) console.log(`would update claude-code/paean-publish/scripts/${to}`)
+    else { mkdirSync(path.dirname(bundled), { recursive: true }); cpSync(source, bundled) }
   }
 }
 for (const skill of readdirSync(SRC).filter((d) => (!selected || d === selected) && statSync(path.join(SRC, d)).isDirectory())) {

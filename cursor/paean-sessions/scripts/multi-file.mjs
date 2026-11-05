@@ -55,7 +55,7 @@ export function validateFileManifest(m) {
 }
 
 /** A bounded UTF-8 line reader: neither input file size nor history size determines memory use. */
-function* linesFromFile(path) {
+export function* linesFromFile(path) {
   const fd=openSync(path,'r');let pending=[],length=0;
   try {
     if(!statSync(path).isFile())throw Error('Select regular session files');
