@@ -25,6 +25,9 @@ yarn-error.log
 *.key
 credentials.json
 
+# Local git worktrees
+/.worktrees/
+
 # Runtime artifacts produced when test-running the skills in this repo
 .clide/
 .remix-sources/

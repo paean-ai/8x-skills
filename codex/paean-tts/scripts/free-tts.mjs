@@ -8,7 +8,11 @@
  *                 + `--instruct` emotion/style control). Studio human-grade prosody, zero cost, 100% offline.
  *   2. `kokoro` — Kokoro-82M v1.1-zh 24kHz (`kokoro-tts` ONNX: 45 Chinese male `zm_009..zm_100` + 55 Chinese female
  *                 `zf_001..zf_099` + English `af_maple`, `af_sol`, `bf_vale`). Ultra-fast CPU/ONNX, zero cost, 100% offline.
- *   3. `paean`  — Cloud Paean TTS (`paean_tts.mjs` using creator's local Paean JWT when online & explicitly requested).
+ *   3. `paean`  — Cloud Paean TTS (`paean_tts.mjs` using creator's local Paean JWT). Only with an explicit `--engine paean`;
+ *                 `auto` never falls through to it, because synthesis may use account quota.
+ *
+ * Local engines are not bundled: `qwen3-tts` / `kokoro-tts` must already be installed in ~/.local/bin.
+ * See ../references/local-tts.md.
  *
  * Usage:
  *   free-tts --list
@@ -19,11 +23,19 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const HOME = os.homedir();
 const QWEN3_BIN = path.join(HOME, '.local', 'bin', 'qwen3-tts');
 const KOKORO_BIN = path.join(HOME, '.local', 'bin', 'kokoro-tts');
-const PAEAN_SCRIPT = path.join(HOME, '.gemini', 'config', 'skills', 'paean-tts', 'scripts', 'paean_tts.mjs');
+const PAEAN_SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'paean_tts.mjs');
+const NO_ENGINE = 'No local TTS engine found (expected ~/.local/bin/qwen3-tts or ~/.local/bin/kokoro-tts). '
+  + 'This tool does not install engines. Use --engine paean to call Paean cloud TTS explicitly; it may use account quota.';
+
+function fail(message) {
+  console.error(`Error: ${message}`);
+  process.exit(1);
+}
 
 function parseArgs(argv) {
   const flag = (names, def = null) => {
@@ -50,14 +62,21 @@ function parseArgs(argv) {
 
 function chooseEngine(engine, voice, instruct) {
   const e = (engine || 'auto').toLowerCase();
-  if (e === 'qwen3' || e === 'qwen' || e === 'mlx') return 'qwen3';
-  if (e === 'kokoro' || e === 'paean') return e;
+  if (e === 'paean') return e;
+  if (e === 'qwen3' || e === 'qwen' || e === 'mlx') {
+    if (!fs.existsSync(QWEN3_BIN)) fail(`qwen3-tts is not installed at ${QWEN3_BIN}`);
+    return 'qwen3';
+  }
+  if (e === 'kokoro') {
+    if (!fs.existsSync(KOKORO_BIN)) fail(`kokoro-tts is not installed at ${KOKORO_BIN}`);
+    return 'kokoro';
+  }
   // Auto-route Kokoro voice IDs (zm_010, zf_001, af_maple, bf_vale) to kokoro
   if (voice && /^(zm_|zf_|af_|bf_)/i.test(voice) && fs.existsSync(KOKORO_BIN)) return 'kokoro';
   // Prefer Qwen3-TTS 1.7B MLX model by default for superior human-like prosody & emotion
   if (fs.existsSync(QWEN3_BIN)) return 'qwen3';
   if (fs.existsSync(KOKORO_BIN)) return 'kokoro';
-  return 'paean';
+  fail(NO_ENGINE);
 }
 
 function synthesizeSegment({ engine, voice, instruct, lang, text, outPath, speed }) {
@@ -88,7 +107,7 @@ function synthesizeSegment({ engine, voice, instruct, lang, text, outPath, speed
     return;
   }
 
-  // Fallback to Paean TTS
+  // Explicit --engine paean only
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paean-tts-'));
   const txtFile = path.join(tmpDir, 'input.txt');
   fs.writeFileSync(txtFile, text, 'utf8');
@@ -107,12 +126,13 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(
-      'Usage: free-tts --text "文本" --out output.wav [--engine auto|qwen3|kokoro] [--voice serena|vivian|uncle_fu|ryan|zm_010|zf_001] [--instruct "语气风格描述"] [--speed 1.0] [--list]'
+      'Usage: free-tts --text "文本" --out output.wav [--engine auto|qwen3|kokoro|paean] [--voice serena|vivian|uncle_fu|ryan|zm_010|zf_001] [--instruct "语气风格描述"] [--speed 1.0] [--list]'
     );
     return;
   }
 
   if (args.list) {
+    if (!fs.existsSync(QWEN3_BIN) && !fs.existsSync(KOKORO_BIN)) console.log(NO_ENGINE);
     if (fs.existsSync(QWEN3_BIN)) {
       console.log('=== [1] Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16 (qwen3-tts, Apple Silicon MLX, 100% Offline, Default) ===');
       execFileSync(QWEN3_BIN, ['--list'], { stdio: 'inherit' });
@@ -180,4 +200,10 @@ function main() {
   });
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  // A failed engine has already reported through inherited stdio; keep its exit code, skip the stack.
+  if (typeof e.status !== 'number') throw e;
+  process.exit(e.status);
+}

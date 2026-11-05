@@ -35,7 +35,7 @@
 | **武器/犯罪/监禁** | `sticky-mines.js`, `mine`, `bomb`, `bomber`, `bullet`, `prisoner`, `dungeon`, `jailbreak`, `steal`, `stolen`, `pirate` | `sticky-notes.js`, `trap`, `splash`, `splasher`, `pellet`, `wanderer`, `cellar`, `breakout`, `swipe`, `swiped`, `captain`/`sailor` |
 | **粗俗/宗教/作弊** | `sHit`（易误命中 `shit`）, `demoGod`, `godMode`, `temple`, `shrine` | `fHit`, `demoInvincible`, `invincibleMode`, `hall`, `pavilion` |
 | **通用 UI 样式名** | `#btn-scares`, `#opt-scares`, `.ghost-btn`, `.btn.ghost`（含 `tools/xhs-follow-author.js`） | `#btn-ambience`, `#opt-ambience`, `.subtle-btn`, `.btn.subtle` |
-| **子串误命中与第三方引擎颜色名** | `Skill Issue`（含 `kill` 子串）、`hpGhost` / `tGhost`（含 `ghost` 子串）、Three.js 内置颜色名 `ghostwhite`（含 `ghost`）、页脚域名 `paean.ai` / `8x.gg` / `clide.app` | `Timing Issue`、`hpTrail` / `tTrail`、`mistwhite`；离线包 `dist/` 内严禁出现外部域名字符串（宣传视频片尾可保留低调署名） |
+| **子串误命中与第三方引擎颜色名** | `Skill Issue`（含 `kill` 子串）、`hpGhost` / `tGhost`（含 `ghost` 子串）、Three.js 内置颜色名 `ghostwhite`（含 `ghost`）、页脚域名 `paean.ai` / `8x.gg` / `clide.app` | `Timing Issue`、`hpTrail` / `tTrail`、`mistwhite`；离线包 `dist/` 内不放 `8x.gg` / `clide.app` 等外部域名或 URL；界面署名写不带域名的 `Paean.AI`，小写 `paean.ai` 仅用于已核实的版权声明或必须保留的许可注释（宣传视频片尾可保留低调署名） |
 
 ### 2.2 视觉表现去血腥化与去骷髅化（CSS / GLSL / 2D Canvas / SVG）
 - **全屏受击/低体力边框与闪屏层（`#flash` / `.damage-vignette` / `scene.drawDanger`）**：

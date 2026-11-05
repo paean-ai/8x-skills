@@ -54,8 +54,9 @@ status 当前提示上限 512 tokens；token 不等于字符。以语义句群/�
 ```
 
 ```sh
-node scripts/paean_tts.mjs synthesize --manifest /path/to/segments.json --out /path/to/audio --dry-run
-node scripts/paean_tts.mjs synthesize --manifest /path/to/segments.json --out /path/to/audio --speed 1.18
+# $SKILL_DIR 是 paean-tts 技能目录
+node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --manifest /path/to/segments.json --out /path/to/audio --dry-run
+node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --manifest /path/to/segments.json --out /path/to/audio --speed 1.18
 ```
 
 每个输出 id 仅允许字母、数字、短横线、下划线，唯一且不能是路径。单文本模式固定 id `speech`；不同文本用不同输出目录。批处理中每段明确写 voice，不根据语言自动猜选音色。全批次使用同一后处理倍率；中文、英文需要不同倍率时分成两份 manifest、各自独立输出目录。

@@ -38,7 +38,8 @@ The two audit scripts here check the artifact for all of this. They are a gate, 
 
 ### TTS during creation and for demo videos
 
-Speech synthesis is available to the creator through [paean-tts](../paean-tts/SKILL.md) and the local offline neural runner `~/.local/bin/free-tts` (which defaults to **Apple Silicon MLX `Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`** via `--engine qwen3` / `~/.local/bin/qwen3-tts` with 9 studio speakers `serena`, `vivian`, `uncle_fu`, `ryan`, `aiden`, `ono_anna`, `sohee`, `eric`, `dylan` + `--instruct` emotion control, and falls back to **Kokoro-82M v1.1-zh** via `--engine kokoro` / `~/.local/bin/kokoro-tts`).
+Speech synthesis is available to the creator through [paean-tts](../paean-tts/SKILL.md), including its optional
+[local engines](../paean-tts/references/local-tts.md) when the user already has them installed.
 Use it when making narration for a separate demo/promo video or speech assets for an accompanying 8x
 version. This does not permit runtime REST/SDK TTS in the offline mini-tool, and the current file
 whitelist excludes both WAV and MP3. Preserve visible text and remove unavailable speech controls
@@ -304,11 +305,13 @@ Some works cannot become a mini-tool without a rewrite. Check before investing:
 
 ## Run it
 
+Let `$SKILL_DIR` be the directory containing this SKILL.md.
+
 ```bash
 npm i -D esbuild        # the pipeline's one dependency
-node <skill>/scripts/build-minitool.mjs [--config rednote.config.json]
-node <skill>/scripts/audit-minitool.mjs dist
-node <skill>/scripts/audit-minitool.mjs <name>-minitool.zip
+node "$SKILL_DIR/scripts/build-minitool.mjs" [--config rednote.config.json]
+node "$SKILL_DIR/scripts/audit-minitool.mjs" dist
+node "$SKILL_DIR/scripts/audit-minitool.mjs" <name>-minitool.zip
 ```
 
 The Node auditor reads the zip's own directory, so it needs nothing but Node and works the
@@ -522,8 +525,8 @@ Require **0 console errors, 0 pageerror, 0 failed requests** and no leftover Eng
 - **Check physical host overlap with `scripts/check-host-chrome.mjs <dist>`**. Example:
 
   ```sh
-  node <skill>/scripts/check-host-chrome.mjs dist --viewport 390,844 --safe-area 41,0,0,0
-  node <skill>/scripts/check-host-chrome.mjs dist --viewport 844,390 --safe-area 0,0,0,44 --host-edge left
+  node "$SKILL_DIR/scripts/check-host-chrome.mjs" dist --viewport 390,844 --safe-area 41,0,0,0
+  node "$SKILL_DIR/scripts/check-host-chrome.mjs" dist --viewport 844,390 --safe-area 0,0,0,44 --host-edge left
   ```
 
   `--safe-area` is top,right,bottom,left in CSS pixels. Defaults are a configurable local mock,
@@ -576,7 +579,7 @@ teaches the player the product is broken.
 
 Xiaohongshu's automated review agent inspects **both** the shipped bundle (`dist/index.html`, `dist/assets/*.js`, `dist/assets/*.css`) and runtime visuals/copy. Even non-horror cartoon/RPG/roguelike games can be rejected when `minifyIdentifiers: false` or module header comments expose sensitive filenames and identifiers. When converting liminal, dreamcore, Poolrooms, stealth, RPG, or combat works — or when a submission is rejected with `内容未通过平台综合审核` — follow [content-audit-sanitization.md](reference/content-audit-sanitization.md):
 
-1. **Sanitize JS filenames, identifiers, class names, DOM IDs, and substring matches**: Strip `/* ---- js/... ---- */` module header comments in `tools/minitool.mjs`. Rename `ghost.js` → `faded.js`, `evo-abyss.js` → `evo-vortex.js`, `sticky-mines.js` → `sticky-notes.js`, `ScareDirector` → `RippleDirector`, `scare` → `ripple`/`ambience`, `kills`/`kill` → `erased`/`erase`, `Skill Issue` → `Timing Issue` (avoids `kill` substring), `dead`/`onDeath` → `gone`/`onGone`, `skull` → `badge`, `mummy`/`wraith` → `tapewrap`/`whitedrift`, `hpGhost`/`tGhost` → `hpTrail`/`tTrail` (avoids `ghost` substring), Three.js `ghostwhite` → `mistwhite`, `prisoner`/`dungeon`/`jailbreak` → `wanderer`/`cellar`/`breakout`, `wizard`/`wand` → `starpainter`/`brush`, `sHit` → `fHit`, `demoGod` → `demoInvincible`, `#btn-scares` → `#btn-ambience`, `.ghost-btn`/`.btn.ghost` → `.subtle-btn`/`.btn.subtle`. Keep `paean.ai` / `clide.app` / `8x.gg` out of `dist/` (use creator attribution in-app and put `版权归属 paean.ai & 8x.gg & creator` on the promo video ending card).
+1. **Sanitize JS filenames, identifiers, class names, DOM IDs, and substring matches**: Strip `/* ---- js/... ---- */` module header comments in `tools/minitool.mjs`. Rename `ghost.js` → `faded.js`, `evo-abyss.js` → `evo-vortex.js`, `sticky-mines.js` → `sticky-notes.js`, `ScareDirector` → `RippleDirector`, `scare` → `ripple`/`ambience`, `kills`/`kill` → `erased`/`erase`, `Skill Issue` → `Timing Issue` (avoids `kill` substring), `dead`/`onDeath` → `gone`/`onGone`, `skull` → `badge`, `mummy`/`wraith` → `tapewrap`/`whitedrift`, `hpGhost`/`tGhost` → `hpTrail`/`tTrail` (avoids `ghost` substring), Three.js `ghostwhite` → `mistwhite`, `prisoner`/`dungeon`/`jailbreak` → `wanderer`/`cellar`/`breakout`, `wizard`/`wand` → `starpainter`/`brush`, `sHit` → `fHit`, `demoGod` → `demoInvincible`, `#btn-scares` → `#btn-ambience`, `.ghost-btn`/`.btn.ghost` → `.subtle-btn`/`.btn.subtle`. Keep `clide.app` / `8x.gg` and URLs out of `dist/`. In-app credit follows [the release presentation standard](reference/rednote-release-standard.md): name `Paean.AI` without a domain, and use lowercase `paean.ai` only in a verified rights notice or a required licence comment. Put `版权归属 paean.ai & 8x.gg & creator` on the promo video ending card.
 2. **Sanitize GLSL shaders, CSS overlays, and 2D Canvas/SVG icons**: Rename `uScare` → `uRipple`, `abyssCol`/`abyssMaterial` → `deepCol`/`deepVaultMaterial`. Replace blood-red damage/low-HP borders and flashes (`rgba(120, 10, 10, 0.55)`, `scene.drawDanger`) with soft aqua/ink-blue mist (`rgba(160, 235, 248, 0.28)` / `rgba(91, 149, 209, 0.42)`). Replace skull/crossbones/X-eye icons (`I.skull`, `P.kill`, pirate hat skulls) with gold star badges (`I.badge`), erasers (`P.erased`), or compass stars.
 3. **Replace Jump-Scare 3D entities & harsh audio**: Replace close-up lunge faces/skulls (`buildLifeguard`, `buildBust`, `buildPoolFace`) and sawtooth shriek synthesis with serene environmental cues (skylight breathing, water ripples, pentatonic crystal chimes).
 4. **Sanitize BOTH `zh` and `en` i18n dictionaries + listing title/slogan**: Bundled English and Chinese strings for supernatural (`幽灵`, `幽魂`, `木乃伊`, `深渊`, `巫师`, `魔杖`, `神庙`), violence/crime (`死`, `血`, `击杀`, `地雷`, `炸弹`, `地牢`, `囚犯`, `越狱`, `偷`, `海盗`), and monetization (`内购`, `广告`, `看广告`) are scanned even if unused or phrased as disclaimers (`本版本不含内购与广告奖励` → `本版本全部内容免费开放，无需额外解锁`). Use gentle titles/slogans (`用纸把涂鸦精灵画进图鉴当伙伴` instead of `用纸把涂鸦怪物画进图鉴当伙伴`) and verify `dist/` with the sensitive-keyword grep gate before packaging.

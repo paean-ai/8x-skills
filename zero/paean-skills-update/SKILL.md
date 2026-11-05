@@ -14,10 +14,8 @@ Update the local `8x-skills` checkout and reinstall the Paean skills into the ta
 
 ## Locate the skills repo
 
-Prefer the current repo if it contains `claude-code/`, `codex/`, and `zero/`. Otherwise look
-for the user's checkout (ask where it lives, or check common spots such as
-`~/Zero/opensource/8x-skills` or `~/a8e/paean-opensource/8x-skills`). If there is no
-checkout, clone it:
+Prefer the current repo if it contains `claude-code/`, `codex/`, and `zero/`. Otherwise ask
+the user where their checkout lives. If there is no checkout, clone it:
 
 ```bash
 git clone https://github.com/paean-ai/8x-skills

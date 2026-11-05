@@ -32,16 +32,16 @@ description: Generate speech assets and narration through Paean TTS using the cr
 
 ## 快速流程
 
-脚本在本 skill 的 `scripts/paean_tts.mjs`；下列命令以该 skill 目录为工作目录。需要 Node.js 20+；只有 `--speed` 不为 1 时需要 FFmpeg。
+把 `$SKILL_DIR` 设为此 `SKILL.md` 所在目录，脚本为 `$SKILL_DIR/scripts/paean_tts.mjs`。需要 Node.js 20+；只有 `--speed` 不为 1 时需要 FFmpeg。
 
-1. `node scripts/paean_tts.mjs credentials`：仅查看凭据保存位置、字段名、存在与过期状态。不会输出值。默认优先环境变量 `PAEAN_AUTH_TOKEN`（与 publish/remix 一致），兼容 `PAEAN_TOKEN`，其次当前用户目录的 `.paean/credentials.json`（`paean_token` / `token`），再其次 `.zero/credentials.json`（`token`）。如需指定来源，用 `--credentials FILE --token-field FIELD`，不要传 token 内容。
-2. `node scripts/paean_tts.mjs status`：不带认证读取实时服务状态与音色列表。`configured: false` 时停止合成并报告服务未配置；`true` 并不证明用户登录有效或有额度。没有登录时请用户通过自己的 Paean/Zero 客户端登录；不要寻找其他人的凭据或绕过鉴权。
+1. `node "$SKILL_DIR/scripts/paean_tts.mjs" credentials`：仅查看凭据保存位置、字段名、存在与过期状态。不会输出值。默认优先环境变量 `PAEAN_AUTH_TOKEN`（与 publish/remix 一致），兼容 `PAEAN_TOKEN`，其次当前用户目录的 `.paean/credentials.json`（`paean_token` / `token`），再其次 `.zero/credentials.json`（`token`）。如需指定来源，用 `--credentials FILE --token-field FIELD`，不要传 token 内容。
+2. `node "$SKILL_DIR/scripts/paean_tts.mjs" status`：不带认证读取实时服务状态与音色列表。`configured: false` 时停止合成并报告服务未配置；`true` 并不证明用户登录有效或有额度。没有登录时请用户通过自己的 Paean/Zero 客户端登录；不要寻找其他人的凭据或绕过鉴权。
 3. 尊重用户选定的语言、音色和文案。未定音色时按作品选择合适起点；质量依赖音色选择时先做少量同文案短句试听，再批量。已确认音色时不必重复试音。所检后端列出 `Cherry`、`Serena`、`Ethan`、`Chelsie`，实际使用前以状态接口为准；它们不是自动语言路由，中文 Cherry / 英文 Chelsie 可作为试听起点。
 4. 在任务工作目录准备 UTF-8 文本，先 dry run，再实际合成：
 
    ```sh
-   node scripts/paean_tts.mjs synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output --dry-run
-   node scripts/paean_tts.mjs synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output
+   node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output --dry-run
+   node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output
    ```
 
 5. 多段、长旁白、语言切换、异常处理或接入其他代码时，先读 [references/api-and-production.md](references/api-and-production.md)。批处理按语义和镜头拆段，不把整个长脚本无条件塞进一个请求。
@@ -52,7 +52,7 @@ description: Generate speech assets and narration through Paean TTS using the cr
 `/dashscope/tts` 当前仅确认支持 `text` / `voice`。不要把语气、speed、instructions、模型选择等未经证实的字段伪装成生效参数，也不要把导演指令加进会被念出的文字。
 
 ```sh
-node scripts/paean_tts.mjs synthesize --text-file /path/to/vo.txt --voice Chelsie --speed 1.18 --out /path/to/voice-output
+node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --text-file /path/to/vo.txt --voice Chelsie --speed 1.18 --out /path/to/voice-output
 ```
 
 `--speed` 是本地 FFmpeg `atempo` 后处理，保持音高，保留原始 WAV。相同输出目录、文案和音色可以重跑并复用原音频；变更语速只渲染新速度，不重复请求云端。改变文字或音色时用新目录或新段落 id，脚本拒绝悄悄覆盖。
@@ -67,31 +67,9 @@ CLI 不自动重试 POST。遇 401/403 停止并让用户处理登录/权限，�
 
 CLI 会验证输出 WAV 和 SHA-256，断点续跑只跳过请求内容与文件校验都一致的段落。完成文件不会重复生成；遇不匹配或残留未知文件会停下，不删除用户内容。音频下载使用独立无认证请求，绝不转发 Paean JWT 给存储站点。
 
-## 本机免费离线神经网络 TTS 引擎（零费用、免网络、首选回退方案）
+## 可选：本机离线 TTS
 
-当 Paean 云端 `/dashscope/tts` 服务不可用（如返回 `500`）、离线创作、或用户希望完全免费且不消耗任何云端额度时，优先使用本机已安装配置的 **Apple Silicon MLX `Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` 本地大模型** 或 **Kokoro-82M v1.1-zh 本地 ONNX 引擎**（严禁调用 `gcloud` / Vertex AI 计费接口，也不要退回机械感强的传统 `say -v Tingting` 或 Siri TTS）：
-
-1. **统一调度脚本 `free-tts`**（已安装于 `~/.local/bin/free-tts`、本 skill 的 `scripts/free-tts.mjs` 及工作区 `tools/free-tts.mjs`）：
-   - 查看所有可用本地神经网络引擎与音色列表：
-     ```sh
-     node scripts/free-tts.mjs --list
-     ```
-   - **首选引擎 `qwen3`（`mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`，Apple Silicon MLX 1.7B 情感大模型，默认引擎）**：
-     - 内置 9 款真人级高表现力音色：`serena`（温暖沉静叙事女声）、`vivian`（清亮灵动女声）、`uncle_fu`（沉稳醇厚成熟男声）、`ryan`（阳光活力青年男声）、`aiden`（温和青年男声）、`ono_anna`（柔和女声）、`sohee`（温柔女声）、`eric`（地道四川话男声）、`dylan`（地道北京话男声），并支持 `--instruct` 语气/情感/风格控制：
-       ```sh
-       node scripts/free-tts.mjs --engine qwen3 --voice serena --instruct "温和沉静、自然清晰的叙事女声，带有黄昏校园的怀旧故事感" --speed 1.05 --text "放学铃后：校园通行证外撰。在黄昏的松谷小学，跟随纸飞机寻找线索。" --out /path/to/out.wav
-       ```
-     - 批量 Manifest 合成（单次加载 1.7B 模型连续合成全部段落，速度极快）：
-       ```sh
-       node scripts/free-tts.mjs --engine qwen3 --voice serena --instruct "自然清晰的叙事旁白" --manifest /path/to/segments.json --out /path/to/audio-dir
-       ```
-   - **次选轻量引擎 `kokoro`（`Kokoro-82M v1.1-zh` ONNX，共 103 款音色，含 45 款中文男声 `zm_009..zm_100`、55 款中文女声 `zf_001..zf_099`、3 款英文音色）**：
-     ```sh
-     node scripts/free-tts.mjs --engine kokoro --voice zm_010 --speed 1.05 --text "百将星谱收录一百二十七位三国名将，自由搭配四象灵潮与瑞兽灵宠。" --out /path/to/out.wav
-     ```
-2. **底层独立命令**：
-   - `~/.local/bin/qwen3-tts`：基于 `/Users/ryan/Zero/train-lora-sft/.venv/bin/python`（`mlx-audio`）与本地 HuggingFace 缓存 `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16`，支持 `--voice`、`--instruct`、`--lang`、`--speed` 与 `--manifest` 单次加载批量合成。
-   - `~/.local/bin/kokoro-tts`：基于 `~/.local/share/kokoro-env` Python 3.12 环境与 `~/.local/share/kokoro-models/kokoro-v1.1-zh.onnx`，支持 103 种音色 24kHz 离线合成。
+默认使用上面的 Paean 云端流程。只有用户要求免费或离线，或云端服务不可用且用户接受本地替代时，才考虑本机引擎。本 skill 不附带也不安装模型；`scripts/free-tts.mjs` 只是调度器，需要使用者已自行安装 `qwen3-tts` 或 `kokoro-tts`。先读 [references/local-tts.md](references/local-tts.md) 并运行其中的检查命令。没有可用引擎时如实说明，不要自行安装模型、改走 `gcloud` / Vertex AI 等计费接口，或未经同意退回系统语音。
 
 ## 分享与安装
 
@@ -100,5 +78,5 @@ CLI 会验证输出 WAV 和 SHA-256，断点续跑只跳过请求内容与文件
 离线自测（不读取真实凭据，不调用付费接口）：
 
 ```sh
-node --test scripts/paean_tts.test.mjs
+node --test "$SKILL_DIR/scripts/paean_tts.test.mjs"
 ```
