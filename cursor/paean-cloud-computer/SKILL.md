@@ -19,7 +19,7 @@ A computer for the user's existing Agent: create in the cloud, let the user obse
 ## Start
 
 1. Use the user's Paean identity. Reuse `zero login` credentials, or a securely configured `PAEAN_AUTH_TOKEN`. Never ask for a credential in chat, copy browser cookies, use an administrator account, or require Aliyun keys. An expired explicit credential must not cause an identity switch. See `paean-zero-setup` if sign-in is needed.
-2. Resolve this skill directory, then run `node <skill-dir>/scripts/cloud-computer.mjs --help`. Node.js 18+; no dependencies.
+2. Let `$SKILL_DIR` be the directory containing this SKILL.md, then run `node "$SKILL_DIR/scripts/cloud-computer.mjs" --help`. Node.js 18+; no dependencies.
 3. Choose the appropriate mode below. Inspect existing state before mutations. State claims must come from API results, not inferred from UI URLs or model prose.
 
 ## Choose the environment
@@ -34,13 +34,13 @@ A `*.pc.paean.ai` Harness hostname does not identify its region. Use the selecte
 ## Personal computer lifecycle
 
 ```bash
-node <skill-dir>/scripts/cloud-computer.mjs personal list --region beijing
-node <skill-dir>/scripts/cloud-computer.mjs personal backups --region beijing
-node <skill-dir>/scripts/cloud-computer.mjs personal create --region beijing
-node <skill-dir>/scripts/cloud-computer.mjs personal get --region beijing --id ws-RETURNED_ID
-node <skill-dir>/scripts/cloud-computer.mjs personal connect --region beijing --id ws-RETURNED_ID
-node <skill-dir>/scripts/cloud-computer.mjs personal pause --region beijing --id ws-RETURNED_ID
-node <skill-dir>/scripts/cloud-computer.mjs personal resume --region beijing --id ws-RETURNED_ID
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal list --region beijing
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal backups --region beijing
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal create --region beijing
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal get --region beijing --id ws-RETURNED_ID
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal connect --region beijing --id ws-RETURNED_ID
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal pause --region beijing --id ws-RETURNED_ID
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal resume --region beijing --id ws-RETURNED_ID
 ```
 
 - Use only returned IDs. A running computer incurs compute/model costs according to service billing; explain relevant costs when allocating work, without inventing a price.
@@ -49,9 +49,9 @@ node <skill-dir>/scripts/cloud-computer.mjs personal resume --region beijing --i
 - Deletion is destructive to the instance. Only do it when authorized by the user; `--confirm` records that authorization, it is not a reason to ask again when already given. The server backs up first. Poll `personal get`/`list`: `backing_up` is not deleted; `backup_failed` means the instance must remain. Do not retry via provider tools or bypass backup.
 
 ```bash
-node <skill-dir>/scripts/cloud-computer.mjs personal delete --region beijing --id ws-RETURNED_ID --confirm
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal delete --region beijing --id ws-RETURNED_ID --confirm
 # After deletion and a verified restore point:
-node <skill-dir>/scripts/cloud-computer.mjs personal create --region beijing --backup RETURNED_BACKUP_ID
+node "$SKILL_DIR/scripts/cloud-computer.mjs" personal create --region beijing --backup RETURNED_BACKUP_ID
 ```
 
 Let the user select the restore point when there are multiple plausible dates. Verify restoration through status and, when requested, Harness; never claim file recovery based only on a successful create response.
@@ -61,10 +61,10 @@ Let the user select the restore point when there are multiple plausible dates. V
 Prefer the already connected cloud MCP when available: `cloudTaskSubmit`, `cloudTasksList`, `cloudTaskGet`, `cloudTaskCancel`, `cloudTaskArtifacts`. Otherwise use the portable CLI:
 
 ```bash
-node <skill-dir>/scripts/cloud-computer.mjs tasks list
-node <skill-dir>/scripts/cloud-computer.mjs tasks submit --prompt-file brief.md --request-key a-stable-key-for-this-task
-node <skill-dir>/scripts/cloud-computer.mjs tasks get --id cr-RETURNED_ID
-node <skill-dir>/scripts/cloud-computer.mjs tasks artifacts --id cr-RETURNED_ID
+node "$SKILL_DIR/scripts/cloud-computer.mjs" tasks list
+node "$SKILL_DIR/scripts/cloud-computer.mjs" tasks submit --prompt-file brief.md --request-key a-stable-key-for-this-task
+node "$SKILL_DIR/scripts/cloud-computer.mjs" tasks get --id cr-RETURNED_ID
+node "$SKILL_DIR/scripts/cloud-computer.mjs" tasks artifacts --id cr-RETURNED_ID
 ```
 
 Before submission, write a self-contained brief with objective, inputs the remote Agent can actually access, output paths and verification criteria. Local files are not transferred automatically. Include only necessary data and never embed credentials in the brief. User requests to create locally do not automatically mean paid remote delegation; use the user's intended scope.

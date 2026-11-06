@@ -237,6 +237,36 @@ export function cssSafeArea(text) {
   return out + rewrite(text.slice(i));
 }
 
+/** Re-declare custom properties on `[data-xhs-orientation-root]` whenever `:root` or `html`
+ *  defines aliases (e.g. `--top`, `--left`, `--right`, `--bottom`) referencing `--paean-chrome-inset-*`,
+ *  `--paean-safe-*`, or `--safe-area-inset-*`. Without this, CSS resolves `var(...)` at `:root`
+ *  using portrait values and `[data-xhs-orientation-root]` inherits `--top: 86px, --left: 0px`
+ *  in software landscape instead of re-evaluating its inline `--paean-chrome-inset-top: 0px` and
+ *  `--paean-chrome-inset-left: 86px`. */
+export function cssStageInsetAliases(text) {
+  const aliases = new Map();
+  const re = /(@media[^{]+\{)|([^{}@]+)\{([^{}]*)\}|(\})/g;
+  const stack = [];
+  let m;
+  while ((m = re.exec(text))) {
+    if (m[1]) { stack.push(m[1]); continue; }
+    if (m[4]) { stack.pop(); continue; }
+    if (stack.length > 0) continue;
+    const sel = (m[2] || '').trim(), body = m[3] || '';
+    if (!/(?:^|,)\s*(?::root|html)\s*(?:,|$)/.test(sel)) continue;
+    for (const dm of body.matchAll(/(--[\w-]+)\s*:\s*([^;{}]+)/g)) {
+      const prop = dm[1].trim(), val = dm[2].trim();
+      if (/^--(?:paean-|xhs-|safe-area-inset-)/.test(prop)) continue;
+      if (/--(?:paean-chrome-inset-|paean-safe-|safe-area-inset-)|env\(\s*safe-area-inset-/.test(val)) {
+        aliases.set(prop, val);
+      }
+    }
+  }
+  if (!aliases.size) return text;
+  const decls = [...aliases.entries()].map(([k, v]) => `${k}:${v};`).join('');
+  return `${text}\n[data-xhs-orientation-root]{${decls}}\n`;
+}
+
 /** Scan a declaration value for a top-level min()/max()/clamp() that the flat matcher above
  *  cannot see (nested calc()/var()), and emit a static first value so Chrome 61 keeps something.
  *  clamp(a,b,c) → a · min/max(...) → the px argument, else the first one. */
@@ -705,7 +735,7 @@ export async function buildMinitool(opts) {
     styleText += f.text + '\n';
   }
   if (opts.cssFix) styleText = opts.cssFix(styleText);
-  styleText = cssSafeArea(cssMathFallbacks(styleText));
+  styleText = cssStageInsetAliases(cssSafeArea(cssMathFallbacks(styleText)));
   // grid-gap alias for every gap declaration (harmless on flex, needed by Chrome 61 grid)
   styleText = styleText.replace(/(^|[;{])\s*gap\s*:\s*([^;}]+)/g, (all, pre, v) => `${pre}grid-gap:${v};gap:${v}`);
   styleText += '\n/* ---- Chrome 61 baseline: flex-gap fallback (enabled by config.js behaviour detection) ---- */\n' + gapFallbacks(styleText) + '\n';
@@ -834,6 +864,11 @@ export async function buildMinitool(opts) {
     console.log(`third-party licenses inlined into index.html: ${licFiles.map((f) => path.relative(SRC, f)).join(', ')}`);
   }
   fs.writeFileSync(path.join(DIST, 'index.html'), indexHtml);
+  fs.writeFileSync(
+    path.join(DIST, 'mini_tool.json'),
+    JSON.stringify({ is_high_consumption_scene: Boolean(opts.highConsumptionScene) }) + '\n',
+    'utf8'
+  );
 
   // 6. static self-check
   const problems = selfCheck(DIST);

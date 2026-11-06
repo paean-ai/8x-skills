@@ -120,8 +120,8 @@ is how you pick the primary and assign roles honestly.
    `index.html` (and assets) that combines the chosen aspects. Keep the remix standalone:
    no runtime imports from `.remix-sources/`, parent folders, or remote assets unless their
    license explicitly allows it and attribution is recorded. Keep `.remix-sources/` for
-   reference only; it is not published. Include top-level `favicon.svg` and `banner.jpg`;
-   `banner.jpg` should be exactly 800x400.
+   reference only; it is not published. Include top-level `favicon.svg`, an exactly 800x400
+   `banner.jpg` and an exactly 512x512 `icon.jpg`.
    Adapt the new work to both portrait and landscape using the production standard's responsive
    composition rules. Replace inherited orientation locks or blocking rotate prompts with adaptive
    camera, playfield, HUD, and control layouts that keep both orientations playable.
@@ -198,7 +198,7 @@ directly used them as sources.
   `Copyright (c) 2026 paean.ai and the game's creator(s).`
 - Keep a project `LICENSE`. Default to `MIT` only for original/local code. If upstream code or
   assets impose a stricter license, preserve that license and attribution.
-- Ship top-level `favicon.svg` and an 800x400 `banner.jpg` for Square presentation.
+- Ship top-level `favicon.svg`, an 800x400 `banner.jpg` and a 512x512 `icon.jpg` for Square presentation.
 - Add concise factual creator/source credits in the README when the remix materially keeps a
   parent loop, art direction, asset, or system. Keep required notices intact and technical lineage
   details in `clide.json.remix` or `DEVELOPING.md`; the listing summary remains player-facing.

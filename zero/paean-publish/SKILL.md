@@ -1,19 +1,18 @@
 ---
 name: paean-publish
-description: Publish a static frontend with a random handle, public Apps Square listing and private JSONL creation-session linking by default, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings.
+description: Publish a static frontend with a random handle, public Apps Square listing and private JSONL creation-session linking by default, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings. Runs from Zero CLI.
 ---
 
-# Paean Publish (Codex)
+# Paean Publish (Zero CLI)
 
 Publish a static frontend to a public `*.clide.app` URL using the bundled
 `scripts/publish.mjs`. The script needs Node 18+ and nothing else — the upload archive is
 built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
-> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
-> or the project's `.agents/skills/` for discovery. Existing clients that already load
-> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
-> You can also reference `8x-skills/codex/paean-publish/SKILL.md` directly.
-> Keep the bundled scripts and references beside this file; avoid duplicate installations.
+> **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
+> `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
+> `mkdir -p ~/.zero/skills && cp -R <8x-skills>/zero/paean-publish ~/.zero/skills/`. Any scripts and
+> reference files live next to this SKILL.md.
 
 ## Choose the mode from the user's intent
 
@@ -72,7 +71,8 @@ Use `paean-sessions` for standalone submission, verification or repair.
 
 ### Run and review the selected mode
 
-Run from the project root. Select the final mode during dry-run so the report describes the
+Let `$SKILL_DIR` be the directory containing this SKILL.md. Run from the project root.
+Select the final mode during dry-run so the report describes the
 same destination that will be used for the real publish.
 
 Here "project root" means the directory containing the intended `clide.json`

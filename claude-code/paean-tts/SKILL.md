@@ -32,16 +32,16 @@ description: Generate speech assets and narration through Paean TTS using the cr
 
 ## 快速流程
 
-脚本在本 skill 的 `scripts/paean_tts.mjs`；下列命令以该 skill 目录为工作目录。需要 Node.js 20+；只有 `--speed` 不为 1 时需要 FFmpeg。
+把 `$SKILL_DIR` 设为此 `SKILL.md` 所在目录，脚本为 `$SKILL_DIR/scripts/paean_tts.mjs`。需要 Node.js 20+；只有 `--speed` 不为 1 时需要 FFmpeg。
 
-1. `node scripts/paean_tts.mjs credentials`：仅查看凭据保存位置、字段名、存在与过期状态。不会输出值。默认优先环境变量 `PAEAN_AUTH_TOKEN`（与 publish/remix 一致），兼容 `PAEAN_TOKEN`，其次当前用户目录的 `.paean/credentials.json`（`paean_token` / `token`），再其次 `.zero/credentials.json`（`token`）。如需指定来源，用 `--credentials FILE --token-field FIELD`，不要传 token 内容。
-2. `node scripts/paean_tts.mjs status`：不带认证读取实时服务状态与音色列表。`configured: false` 时停止合成并报告服务未配置；`true` 并不证明用户登录有效或有额度。没有登录时请用户通过自己的 Paean/Zero 客户端登录；不要寻找其他人的凭据或绕过鉴权。
+1. `node "$SKILL_DIR/scripts/paean_tts.mjs" credentials`：仅查看凭据保存位置、字段名、存在与过期状态。不会输出值。默认优先环境变量 `PAEAN_AUTH_TOKEN`（与 publish/remix 一致），兼容 `PAEAN_TOKEN`，其次当前用户目录的 `.paean/credentials.json`（`paean_token` / `token`），再其次 `.zero/credentials.json`（`token`）。如需指定来源，用 `--credentials FILE --token-field FIELD`，不要传 token 内容。
+2. `node "$SKILL_DIR/scripts/paean_tts.mjs" status`：不带认证读取实时服务状态与音色列表。`configured: false` 时停止合成并报告服务未配置；`true` 并不证明用户登录有效或有额度。没有登录时请用户通过自己的 Paean/Zero 客户端登录；不要寻找其他人的凭据或绕过鉴权。
 3. 尊重用户选定的语言、音色和文案。未定音色时按作品选择合适起点；质量依赖音色选择时先做少量同文案短句试听，再批量。已确认音色时不必重复试音。所检后端列出 `Cherry`、`Serena`、`Ethan`、`Chelsie`，实际使用前以状态接口为准；它们不是自动语言路由，中文 Cherry / 英文 Chelsie 可作为试听起点。
 4. 在任务工作目录准备 UTF-8 文本，先 dry run，再实际合成：
 
    ```sh
-   node scripts/paean_tts.mjs synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output --dry-run
-   node scripts/paean_tts.mjs synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output
+   node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output --dry-run
+   node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --text-file /path/to/vo.txt --voice Cherry --out /path/to/voice-output
    ```
 
 5. 多段、长旁白、语言切换、异常处理或接入其他代码时，先读 [references/api-and-production.md](references/api-and-production.md)。批处理按语义和镜头拆段，不把整个长脚本无条件塞进一个请求。
@@ -52,7 +52,7 @@ description: Generate speech assets and narration through Paean TTS using the cr
 `/dashscope/tts` 当前仅确认支持 `text` / `voice`。不要把语气、speed、instructions、模型选择等未经证实的字段伪装成生效参数，也不要把导演指令加进会被念出的文字。
 
 ```sh
-node scripts/paean_tts.mjs synthesize --text-file /path/to/vo.txt --voice Chelsie --speed 1.18 --out /path/to/voice-output
+node "$SKILL_DIR/scripts/paean_tts.mjs" synthesize --text-file /path/to/vo.txt --voice Chelsie --speed 1.18 --out /path/to/voice-output
 ```
 
 `--speed` 是本地 FFmpeg `atempo` 后处理，保持音高，保留原始 WAV。相同输出目录、文案和音色可以重跑并复用原音频；变更语速只渲染新速度，不重复请求云端。改变文字或音色时用新目录或新段落 id，脚本拒绝悄悄覆盖。
@@ -67,6 +67,10 @@ CLI 不自动重试 POST。遇 401/403 停止并让用户处理登录/权限，�
 
 CLI 会验证输出 WAV 和 SHA-256，断点续跑只跳过请求内容与文件校验都一致的段落。完成文件不会重复生成；遇不匹配或残留未知文件会停下，不删除用户内容。音频下载使用独立无认证请求，绝不转发 Paean JWT 给存储站点。
 
+## 可选：本机离线 TTS
+
+默认使用上面的 Paean 云端流程。只有用户要求免费或离线，或云端服务不可用且用户接受本地替代时，才考虑本机引擎。本 skill 不附带也不安装模型；`scripts/free-tts.mjs` 只是调度器，需要使用者已自行安装 `qwen3-tts` 或 `kokoro-tts`。先读 [references/local-tts.md](references/local-tts.md) 并运行其中的检查命令。没有可用引擎时如实说明，不要自行安装模型、改走 `gcloud` / Vertex AI 等计费接口，或未经同意退回系统语音。
+
 ## 分享与安装
 
 分享整个 `paean-tts/` 文件夹或它的 ZIP，不分享自己的凭据、生成音频或任务输出。接收者将对应版本放入自己的 skills 目录（Claude Code：`~/.claude/skills/`；Zero CLI：`~/.zero/skills/`；Codex：`~/.agents/skills/`，已有客户端使用的 `~/.codex/skills/` 可原地更新），或直接引用本文件。使用接收者自己的 Paean 登录，在能发现新 skill 的会话中调用 `paean tts`。
@@ -74,5 +78,5 @@ CLI 会验证输出 WAV 和 SHA-256，断点续跑只跳过请求内容与文件
 离线自测（不读取真实凭据，不调用付费接口）：
 
 ```sh
-node --test scripts/paean_tts.test.mjs
+node --test "$SKILL_DIR/scripts/paean_tts.test.mjs"
 ```

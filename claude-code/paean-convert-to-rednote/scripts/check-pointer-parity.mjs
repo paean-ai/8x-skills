@@ -2,7 +2,7 @@
 /*
  * check-pointer-parity.mjs — is the work playable with a mouse at phone size?
  *
- *   node check-pointer-parity.mjs <dist-dir> [--start x,y] [--control <selector>] [--json]
+ *   node check-pointer-parity.mjs <dist-dir> [--start x,y] [--control <selector>] [--settle-ms 4500] [--timeout-ms 90000] [--json]
  *
  * The failure this catches is the one that keeps reaching the market as
  * 「小工具功能缺陷，可能是页面按钮无法点击」:
@@ -20,10 +20,11 @@
  *   2. BINDING   controls that stay visible but registered only touch* listeners.
  *                Visible and dead under a mouse — same symptom, different cause.
  *   3. RESPONSE  actually drag the control with the mouse and require the screen to
- *                change. Visibility is not usability; this is the only check that
- *                proves a mouse can play.
+ *                change. This is a visual hint only: automatic animation or the knob
+ *                itself can change pixels without moving the player.
  *
- * Exit code 0 when every check passes, 1 otherwise.
+ * Exit 1 reports findings; exit 2 means unverified/timeout. Screenshot
+ * response alone never proves gameplay; complete project-specific state tests.
  */
 import path from 'node:path'
 import fs from 'node:fs'
@@ -81,7 +82,21 @@ const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 && argv[i + 1]
 const DIST = path.resolve(argv[0] || 'dist')
 const JSON_OUT = argv.includes('--json')
 const CONTROL = flag('--control', '')
-const [SX, SY] = flag('--start', '').split(',').map(Number)
+const START = flag('--start', '')
+const [SX, SY] = START ? START.split(',').map(Number) : [NaN, NaN]
+if (START && (!Number.isFinite(SX) || !Number.isFinite(SY) || START.split(',').length !== 2)) throw Error('start requires x,y')
+const SETTLE = Number(flag('--settle-ms', '4500'))
+const TIMEOUT = Number(flag('--timeout-ms', '90000'))
+if (!Number.isFinite(SETTLE) || SETTLE < 0 || !Number.isFinite(TIMEOUT) || TIMEOUT <= 0) throw Error('Invalid time budget')
+const activeBrowsers = new Set()
+let watchdog, timedOut=false
+async function timeout() {
+  timedOut=true
+  console.log(JSON.stringify({dist:DIST, ok:false, inconclusive:true, reason:'probe timeout', timeoutMs:TIMEOUT}))
+  const force=setTimeout(()=>process.exit(2),2000)
+  await Promise.allSettled([...activeBrowsers].map(b=>b.close()))
+  clearTimeout(force);process.exit(2)
+}
 
 if (!existsSync(path.join(DIST, 'index.html'))) {
   console.error(`✗ ${DIST}/index.html not found`)
@@ -133,12 +148,12 @@ const SNAP = `(()=>{const out=[];
 const VIEWPORTS = {
   /* the review setup: phone-size layout driven by a mouse */
   'phone-mouse':   { viewport:{width:393,height:852}, hasTouch:false, isMobile:false },
-  'phone-touch':   { viewport:{width:393,height:852}, deviceScaleFactor:2, hasTouch:true, isMobile:true },
+  'phone-touch':   { viewport:{width:393,height:852}, hasTouch:true, isMobile:false },
   /* the reverse pair: a touchscreen laptop is wide AND touch-capable */
   'desktop-mouse': { viewport:{width:1280,height:800}, hasTouch:false, isMobile:false },
   'hybrid-touch':  { viewport:{width:1280,height:800}, hasTouch:true, isMobile:false },
   /* landscape phone, where a stick often collides with the HUD */
-  'land-touch':    { viewport:{width:852,height:393}, deviceScaleFactor:2, hasTouch:true, isMobile:true },
+  'land-touch':    { viewport:{width:852,height:393}, hasTouch:true, isMobile:false },
   'land-mouse':    { viewport:{width:852,height:393}, hasTouch:false, isMobile:false },
 }
 
@@ -146,12 +161,15 @@ async function open(cfg) {
   const browser = await chromium.launch({
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
   })
+  activeBrowsers.add(browser)
+  browser.on('disconnected',()=>activeBrowsers.delete(browser))
+  if (!watchdog) watchdog=setTimeout(timeout,TIMEOUT)
   const page = await (await browser.newContext(cfg)).newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message.split('\n')[0].slice(0, 90)))
   await page.addInitScript(SPY)
-  await page.goto('file://' + path.join(DIST, 'index.html'))
-  await page.waitForTimeout(4500)
+  await page.goto(pathToFileURL(path.join(DIST, 'index.html')).href)
+  await page.waitForTimeout(SETTLE)
   return { browser, page, errors }
 }
 
@@ -162,7 +180,7 @@ async function activate(page, cfg) {
   const y = Number.isFinite(SY) ? SY : height * 0.55
   if (cfg.hasTouch) await page.touchscreen.tap(x, y)
   else await page.mouse.click(x, y)
-  await page.waitForTimeout(2500)
+  await page.waitForTimeout(Math.min(2500,SETTLE))
 }
 
 async function sample(name) {
@@ -174,9 +192,8 @@ async function sample(name) {
   return { items, errors }
 }
 
-/* RESPONSE: drag the largest control with the mouse and require the screen to change.
-   Screenshots are the only device-agnostic evidence — these works draw on canvas, so a
-   DOM diff proves nothing. */
+/* RESPONSE is a visual sample, not a gameplay assertion. Auto-demo, camera,
+   particles and the knob itself can animate while player controls are broken. */
 async function responds(controlSel) {
   const cfg = VIEWPORTS['phone-mouse']
   const { browser, page } = await open(cfg)
@@ -237,10 +254,12 @@ async function responds(controlSel) {
   const dragged = (await page.screenshot()).toString('base64')
   await page.mouse.up()
   await browser.close()
-  /* 演示动画自己会变，所以只有"拖动后的画面"与"静置画面"不同才算有反应。 */
+  /* Record both idle and dragged changes; neither proves input-dependent world motion. */
   return { skipped: false, animated: before !== idle, changed: dragged !== idle, box, summoned: held }
 }
 
+let exitCode=2
+try {
 const out = { dist: DIST, checks: {}, ok: true }
 const fail = (k, detail) => { out.ok = false; out.checks[k] = detail }
 
@@ -319,7 +338,7 @@ for (const name of Object.keys(VIEWPORTS)) {
       touchOnly.push(`${name}: ${i.key} [${t.join(',')}]`)
   }
 }
-if (touchOnly.length) fail('binding', [...new Set(touchOnly)])
+if (touchOnly.length) out.checks.binding = [...new Set(touchOnly)] // candidates: delegated/global handlers or a bridge may serve them
 else out.checks.binding = 'ok'
 
 /* 3. RESPONSE */
@@ -331,8 +350,9 @@ else if (r.skipped)
   out.checks.response =
     'skipped (no draggable control on the screen the probe reached — if this work has a stick ' +
     'behind a menu, pass --start x,y so the probe reaches gameplay)'
-else if (!r.changed) fail('response', 'dragging the control with the mouse changed nothing on screen')
-else out.checks.response = `ok (control at ${r.box.w.toFixed(0)}x${r.box.h.toFixed(0)})`
+else out.checks.response = {visualChange:r.changed, idleAnimated:r.animated, box:r.box, summoned:r.summoned, gameplayVerified:false}
+out.inconclusive=true
+out.checks.gameplay='Project-specific input-dependent world movement and release-to-zero assertions required; screenshot differences are not proof.'
 
 /* 3b. VERDICT — 通过 / 失败 / 未验证，三态。
    上一轮正是栽在只有两态上：探针走不到玩法画面，parity 比较了两个空集合，
@@ -354,27 +374,23 @@ if (!sawControl) {
 }
 
 const errs = Object.entries(samples).flatMap(([n, s]) => s.errors.map((e) => `${n}: ${e}`))
-if (errs.length) out.checks.pageerror = [...new Set(errs)]
+if (errs.length) fail('pageerror', [...new Set(errs)])
 
 if (JSON_OUT) {
   console.log(JSON.stringify(out, null, 2))
 } else {
   console.log(`${!out.ok ? '✗' : out.inconclusive ? '?' : '✓'} pointer/touch parity — ${path.basename(path.dirname(DIST))}`)
   if (out.ok && out.inconclusive) {
-    console.log('   ? 未验证 —— 探针没走到玩法画面，上面的对比是在两个空集合之间做的，不能当作通过。')
-    console.log('     用 --start x,y 把探针送进玩法后重跑；菜单层级深的作品必须手动逐档验证。')
+    console.log('   ? 未验证 —— 通用显隐/截图探针不能证明玩家控制；另需实际世界位移、释放归零和业务状态断言。')
+    console.log('     未到玩法时用 --start x,y 或专用入口测试；检查完整委托监听和兼容桥。')
     console.log('     控件显隐只能按**布局**（max-width / max-height）决定，或者干脆常显 ——')
     console.log('     控件本来就是 pointer 事件驱动的，鼠标能用，按 (pointer:coarse) 藏掉它没有任何收益。')
   }
   if (out.checks.parity !== 'ok')
     for (const p of out.checks.parity) console.log(`   ✗ 门控：${p.pair} 下消失的控件 → ${p.lost.join(' ')}`)
   if (out.checks.binding !== 'ok')
-    for (const b of out.checks.binding) console.log(`   ✗ 只绑 touch：${b}`)
-  if (typeof out.checks.response === 'string' && out.checks.response.startsWith('ok'))
-    console.log(`   ✓ 鼠标拖动控件有反应 ${out.checks.response.slice(3)}`)
-  else if (out.checks.response && !String(out.checks.response).startsWith('skipped'))
-    console.log(`   ✗ 反应：${out.checks.response}`)
-  else if (out.checks.response) console.log(`   · ${out.checks.response}`)
+    for (const b of out.checks.binding) console.log(`   · touch-only candidate (inspect delegation/bridge): ${b}`)
+  if (out.checks.response) console.log('   · response: '+JSON.stringify(out.checks.response))
   if (out.checks.desktopInfo)
     for (const p of out.checks.desktopInfo)
       console.log(`   · 参考：${p.pair} 下 ${p.lost.join(' ')} 不显示（桌面宽度有键盘位，通常是对的）`)
@@ -386,5 +402,12 @@ if (JSON_OUT) {
   }
   if (out.checks.pageerror) for (const e of out.checks.pageerror) console.log(`   ! ${e}`)
 }
-/* 0 = 通过，1 = 查出问题，2 = 没测到（必须人工跟进，不能当通过） */
-process.exit(!out.ok ? 1 : out.inconclusive ? 2 : 0)
+exitCode=!out.ok?1:out.inconclusive?2:0
+} catch (error) {
+  if (timedOut) exitCode=2
+  else throw error
+} finally {
+  clearTimeout(watchdog)
+  await Promise.allSettled([...activeBrowsers].map(b=>b.close()))
+}
+process.exitCode=exitCode

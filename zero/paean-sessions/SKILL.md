@@ -5,7 +5,7 @@ description: Prepare and privately upload session JSONL or creation bundles with
 
 # Paean Sessions (Zero CLI)
 
-Use the bundled Node 20+ CLI at `scripts/sessions.mjs`. It reads existing Paean/Zero credentials locally and never prints them. It works without the Mac Agent.
+Let `$SKILL_DIR` be the directory containing this SKILL.md; use the bundled Node 20+ CLI at `$SKILL_DIR/scripts/sessions.mjs`. It reads existing Paean/Zero credentials locally and never prints them. It works without the Mac Agent.
 
 > **Installing in Zero CLI.** Zero discovers skills from a `skills/` directory — project
 > `.zero/skills/` or global `~/.zero/skills/`. Copy this skill directory there:
@@ -52,13 +52,13 @@ Additional runtime tool logs can be separate streams; explicit tool_call/tool_re
 records use `id`/`tool_use_id`, `name`, `input`/`content`.
 
 ```sh
-node <skill-directory>/scripts/sessions.mjs bundle --manifest inputs.json --project /path/to/project --out creation-directory
-node <skill-directory>/scripts/sessions.mjs upload-bundle --dir creation-directory --source codex:stable-session-id --reviewed
-node <skill-directory>/scripts/sessions.mjs creation --id <asset-id>
-node <skill-directory>/scripts/sessions.mjs creation --id <asset-id> --section issues --offset 0 --limit 50
-node <skill-directory>/scripts/sessions.mjs creation --id <asset-id> --section tools --offset 0 --limit 50
-node <skill-directory>/scripts/sessions.mjs download-bundle --id <asset-id> --out new-review-directory
-node <skill-directory>/scripts/sessions.mjs download-file --id <asset-id> --file-id build-v1 --out new-review-script.mjs
+node "$SKILL_DIR/scripts/sessions.mjs" bundle --manifest inputs.json --project /path/to/project --out creation-directory
+node "$SKILL_DIR/scripts/sessions.mjs" upload-bundle --dir creation-directory --source codex:stable-session-id --reviewed
+node "$SKILL_DIR/scripts/sessions.mjs" creation --id <asset-id>
+node "$SKILL_DIR/scripts/sessions.mjs" creation --id <asset-id> --section issues --offset 0 --limit 50
+node "$SKILL_DIR/scripts/sessions.mjs" creation --id <asset-id> --section tools --offset 0 --limit 50
+node "$SKILL_DIR/scripts/sessions.mjs" download-bundle --id <asset-id> --out new-review-directory
+node "$SKILL_DIR/scripts/sessions.mjs" download-file --id <asset-id> --file-id build-v1 --out new-review-script.mjs
 ```
 
 `bundle` creates a new directory containing `manifest.json`, separate session JSONL
@@ -106,11 +106,11 @@ Use a downloaded package or a copy of the contents of its R2 asset prefix. These
 require no login, API connection or database and never execute bundled scripts:
 
 ```sh
-node <skill-directory>/scripts/sessions.mjs verify-bundle --dir exported-package --digest <trusted-manifest-sha256>
-node <skill-directory>/scripts/sessions.mjs restore-bundle --dir exported-package --out new-restored-directory
-node <skill-directory>/scripts/sessions.mjs inspect-bundle --dir new-restored-directory --section summary
-node <skill-directory>/scripts/sessions.mjs inspect-bundle --dir new-restored-directory --section tools --offset 0 --limit 50
-node <skill-directory>/scripts/sessions.mjs inspect-bundle --dir new-restored-directory --section issues
+node "$SKILL_DIR/scripts/sessions.mjs" verify-bundle --dir exported-package --digest <trusted-manifest-sha256>
+node "$SKILL_DIR/scripts/sessions.mjs" restore-bundle --dir exported-package --out new-restored-directory
+node "$SKILL_DIR/scripts/sessions.mjs" inspect-bundle --dir new-restored-directory --section summary
+node "$SKILL_DIR/scripts/sessions.mjs" inspect-bundle --dir new-restored-directory --section tools --offset 0 --limit 50
+node "$SKILL_DIR/scripts/sessions.mjs" inspect-bundle --dir new-restored-directory --section issues
 ```
 
 All three support `--layout auto|local|storage` (default auto) and optional `--digest`.
@@ -131,7 +131,7 @@ Maintainers: the offline parser is generated from zero-api's creation.ts. From t
 8x-skills repository, run `node scripts/sync-session-creation-parser.mjs --api-dir <zero-api-checkout>`
 (add `--check` to verify without writing), then run `node scripts/sync-variants.mjs`.
 
-Use `node <skill-directory>/scripts/sessions.mjs help` for syntax. If authentication is missing, have the user sign in with Zero CLI or configure `PAEAN_AUTH_TOKEN` locally; never request a token in chat. The international API default is `https://api.paean.ai`. On 503 the feature is not enabled; stop uploading. On a failed/uncertain share, retry the identical offer or check `status`; do not change source IDs to obtain another reward.
+Use `node "$SKILL_DIR/scripts/sessions.mjs" help` for syntax. If authentication is missing, have the user sign in with Zero CLI or configure `PAEAN_AUTH_TOKEN` locally; never request a token in chat. The international API default is `https://api.paean.ai`. On 503 the feature is not enabled; stop uploading. On a failed/uncertain share, retry the identical offer or check `status`; do not change source IDs to obtain another reward.
 
 ### Large native histories
 
@@ -150,7 +150,7 @@ ID and bundle to retry. Downloads and offline restore process one file at a time
 To reconstruct a single prepared native JSONL stream from its parts:
 
 ```sh
-node <skill-directory>/scripts/sessions.mjs restore-stream --dir exported-package --stream main --out main.jsonl
+node "$SKILL_DIR/scripts/sessions.mjs" restore-stream --dir exported-package --stream main --out main.jsonl
 ```
 
 This verifies every part and returns the merged SHA-256. It requires neither network
@@ -166,9 +166,9 @@ creation histories and large uploads; after upload, link the ready bundle with
 `status` and `bind`. Binding verifies the current public release evidence.
 
 ```sh
-node <skill-directory>/scripts/sessions.mjs submit --file prepared.jsonl --app owned-app-hash --dry-run
-node <skill-directory>/scripts/sessions.mjs submit --file prepared.jsonl --app owned-app-hash
-node <skill-directory>/scripts/sessions.mjs evidence --app owned-app-hash
+node "$SKILL_DIR/scripts/sessions.mjs" submit --file prepared.jsonl --app owned-app-hash --dry-run
+node "$SKILL_DIR/scripts/sessions.mjs" submit --file prepared.jsonl --app owned-app-hash
+node "$SKILL_DIR/scripts/sessions.mjs" evidence --app owned-app-hash
 ```
 
 Resolve an owned Square app hash from `.clide/publish.json` or the canonical work URL; a handle
