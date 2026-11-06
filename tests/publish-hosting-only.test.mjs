@@ -902,3 +902,25 @@ test('invalid explicit session paths and conflicting options fail before public 
     }
   } finally { await rm(root, { recursive: true, force: true }) }
 })
+
+
+test('device declarations preserve omission, explicit false and manifest values', async () => {
+  const root = await fixture()
+  const run = args => runPublish(root, ['--dry-run', '--dir', 'dist', ...args], { PAEAN_API_BASE: 'http://127.0.0.1:1' })
+  try {
+    let result = await run([])
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(Object.hasOwn(JSON.parse(result.stdout).metadata, 'desktopOnly'), false)
+    result = await run(['--desktop-only'])
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(JSON.parse(result.stdout).metadata.desktopOnly, true)
+    await writeFile(path.join(root, 'clide.json'), JSON.stringify({ category: 'game', desktopOnly: true }))
+    result = await run([])
+    assert.equal(JSON.parse(result.stdout).metadata.desktopOnly, true)
+    result = await run(['--mobile-compatible'])
+    assert.equal(JSON.parse(result.stdout).metadata.desktopOnly, false)
+    assert.notEqual((await run(['--hosting-only', '--desktop-only'])).code, 0)
+    await writeFile(path.join(root, 'clide.json'), JSON.stringify({ desktopOnly: 'false' }))
+    assert.notEqual((await run([])).code, 0)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})

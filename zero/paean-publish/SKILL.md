@@ -236,7 +236,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
-`--session-bundle <dir>` / `--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--session-reviewed`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
+`--session-bundle <dir>` / `--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--session-reviewed`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, `--desktop-only` / `--mobile-compatible`, repeated `--tag`, `--license`,
 `--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
 `--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
 `--delete [--handle <handle>]`.
@@ -254,3 +254,13 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
   left by older versions that deleted hosting without unlisting Square.
 
 Deletion is destructive; resolve the exact saved app/hash/handle and obtain confirmation first.
+
+## Desktop-only distribution
+
+Keep the existing `category` unchanged. Gameplay subcategories are not part of this release.
+
+Set `desktopOnly: true` in `clide.json` or pass `--desktop-only` for works that should only appear on computers. The API excludes these listings from mobile feeds, search and other discovery responses. There is no mobile warning card or automatic-review dependency.
+
+Use `--mobile-compatible` to explicitly set `desktopOnly: false` after confirming mobile support. Omitting the declaration preserves an existing listing's value; a new listing defaults to false. The flag is persisted in `clide.json` for later publishes. These CLI options require Square mode, not `--hosting-only`.
+
+Do not infer desktop-only from resolution, asset size, 3D libraries or tags alone. Follow the creator's intended device support and verified behavior. A mobile Remix declares its own support after adaptation; lineage alone does not establish mobile compatibility.
