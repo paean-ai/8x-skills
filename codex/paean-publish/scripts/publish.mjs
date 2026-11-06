@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { createZipFromDir } from './zip.mjs'
-import { readSession, sessionSummary, submitSession } from './sessions.mjs'
+import { loadSessionBundle, readSession, sessionSummary, submitSession, submitSessionBundle } from './sessions.mjs'
+import { reviewBundle, reviewBytes } from './session-tools.mjs'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -80,15 +81,18 @@ function usage() {
     '                          [--desktop-only | --mobile-compatible]',
     '                          [--title <title>] [--summary <text>] [--category <category>] [--tag <tag>]',
     '                          [--handle <subdomain>]',
-    '                          [--session-jsonl <file.jsonl[.gz]> | --no-session]',
+    '                          [--session-bundle <dir> | --session-jsonl <file.jsonl[.gz]> | --no-session]',
+    '                          [--session-reviewed]',
     '                          [--price <credits> | --free] [--standalone allow|demo|shell]',
     '                          [--product <sku>=<title>:<credits>]...',
     '       publish-helper.mjs --delete [--handle <owned-handle>]',
     '',
     'Publishes a static frontend directory with top-level index.html to *.clide.app.',
     'Default mode also creates a Paean workspace and public Apps Square listing.',
-    'After Square publish, privately backs up and links --session-jsonl, PAEAN_SESSION_JSONL,',
-    '  or project .clide/creation-session.jsonl (in that order). Missing records are reported pending.',
+    'After Square publish, privately backs up and links --session-bundle, --session-jsonl, PAEAN_SESSION_JSONL,',
+    '  or project .clide/creation-session/ then .clide/creation-session.jsonl. Missing records are reported pending.',
+    '--dry-run reports a local review of that record. Add --session-reviewed once it has been reviewed;',
+    '  without it the site still publishes but the record is not uploaded (status pending).',
     '--no-session explicitly skips creation-session backup/linking. No platform sharing is enabled.',
     '--hosting-only uploads directly to Clide hosting without creating a workspace or Square listing.',
     '--dry-run validates and prints the publish directory, archive summary, and safety scan without API calls or local state writes.',
@@ -126,6 +130,9 @@ function parseArgs(argv) {
     else if (arg === '--no-session') out.noSession = true
     else if (arg === '--session-jsonl') out.sessionJsonl = argv[++i] ?? ''
     else if (arg.startsWith('--session-jsonl=')) out.sessionJsonl = arg.slice('--session-jsonl='.length)
+    else if (arg === '--session-bundle') out.sessionBundle = argv[++i] ?? ''
+    else if (arg.startsWith('--session-bundle=')) out.sessionBundle = arg.slice('--session-bundle='.length)
+    else if (arg === '--session-reviewed') out.sessionReviewed = true
     else if (arg === '--delete' || arg === '--unpublish') out.delete = true
     else if (arg === '--dir') out.dir = argv[++i]
     else if (arg.startsWith('--dir=')) out.dir = arg.slice('--dir='.length)
@@ -162,8 +169,10 @@ function parseArgs(argv) {
   // is passed through verbatim so older non-conforming handles stay deletable.
   if (!out.delete && out.handle !== undefined) out.handle = requireHandleValue(out.handle)
   if (out.sessionJsonl !== undefined && (!out.sessionJsonl || out.sessionJsonl.startsWith('--'))) throw new Error('--session-jsonl needs a JSONL file path.')
-  if (out.noSession && out.sessionJsonl !== undefined) throw new Error('--session-jsonl and --no-session are mutually exclusive.')
-  if (out.delete && (out.noSession || out.sessionJsonl !== undefined)) throw new Error('session options are only valid when publishing.')
+  if (out.sessionBundle !== undefined && (!out.sessionBundle || out.sessionBundle.startsWith('--'))) throw new Error('--session-bundle needs a directory path.')
+  if (out.noSession && (out.sessionJsonl !== undefined || out.sessionBundle !== undefined)) throw new Error('--session-jsonl, --session-bundle and --no-session are mutually exclusive.')
+  if (out.sessionJsonl !== undefined && out.sessionBundle !== undefined) throw new Error('--session-jsonl and --session-bundle are mutually exclusive.')
+  if (out.delete && (out.noSession || out.sessionReviewed || out.sessionJsonl !== undefined || out.sessionBundle !== undefined)) throw new Error('session options are only valid when publishing.')
   if (out.delete && out.dir) throw new Error('--dir is only valid when publishing, not deleting.')
   if (out.delete && out.dryRun) throw new Error('--dry-run is only valid when publishing, not deleting.')
   if (out.delete && out.hostingOnly) throw new Error('--hosting-only is only valid when publishing, not deleting.')
@@ -1141,6 +1150,15 @@ async function confirmPublicPublish(args, summary, publishDir, projectRoot, meta
   if (String(answer).trim().toLowerCase() !== 'publish') throw new Error('Publish cancelled.')
 }
 
+function loadCreationSession(sessionSource, bundleSource) {
+  try {
+    if (bundleSource) return { sessionBundle: loadSessionBundle(bundleSource) }
+    return sessionSource ? { preparedSession: readSession(sessionSource) } : {}
+  } catch (err) {
+    throw new Error('Creation session could not be used (' + (err.code || err.message) + '). Prepare it as a bundle, which handles large and image-heavy sessions: node <paean-publish>/scripts/sessions.mjs prepare-bundle --file <session.jsonl> --out .clide/creation-session. To publish without it, pass --no-session.')
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help) {
@@ -1237,20 +1255,40 @@ async function main() {
   const effectiveHandle = args.hostingOnly ? (args.handle || previousHostingHandle) : args.handle
   // Only use a caller-selected transcript or the project's reserved snapshot.
   // Never guess from the newest conversation in a user's global history.
-  const sessionFile = args.noSession ? undefined : args.sessionJsonl ?? (!args.hostingOnly ? process.env.PAEAN_SESSION_JSONL || undefined : undefined)
+  const sessionFile = args.noSession || args.sessionBundle !== undefined ? undefined : args.sessionJsonl ?? (!args.hostingOnly ? process.env.PAEAN_SESSION_JSONL || undefined : undefined)
+  const useDefaultSession = !args.noSession && !args.hostingOnly && sessionFile === undefined && args.sessionBundle === undefined
+  const defaultBundle = path.join(projectRoot, '.clide', 'creation-session')
   const defaultSession = path.join(projectRoot, '.clide', 'creation-session.jsonl')
+  const bundleSource = args.sessionBundle !== undefined ? path.resolve(projectRoot, args.sessionBundle)
+    : useDefaultSession && existsSync(path.join(defaultBundle, 'manifest.json')) ? defaultBundle : undefined
   const sessionSource = sessionFile !== undefined ? path.resolve(projectRoot, sessionFile)
-    : !args.noSession && !args.hostingOnly && existsSync(defaultSession) ? defaultSession : undefined
-  const preparedSession = sessionSource ? readSession(sessionSource) : undefined
-  const sessionPlan = preparedSession ? { status: 'prepared', private: true, ...sessionSummary(preparedSession) }
+    : useDefaultSession && !bundleSource && existsSync(defaultSession) ? defaultSession : undefined
+  const { preparedSession, sessionBundle } = loadCreationSession(sessionSource, bundleSource)
+  const hasSession = !!(preparedSession || sessionBundle)
+  const sessionCoverage = sessionBundle
+    ? { format: 'bundle', streams: sessionBundle.streams, scripts: sessionBundle.scripts, files: sessionBundle.files, digest: sessionBundle.digest, bytes: sessionBundle.bytes }
+    : preparedSession ? { format: 'jsonl', streams: 1, scripts: 0, ...sessionSummary(preparedSession) } : {}
+  const sessionPlan = hasSession ? { status: 'prepared', private: true, ...sessionCoverage }
     : args.noSession || args.hostingOnly ? { status: 'skipped', reason: args.noSession ? 'user-opt-out' : 'hosting-only' }
       : { status: 'pending', reason: 'missing-session-jsonl' }
+  // The site can ship without its record; the record never uploads without a completed review.
+  const submitCreationSession = async (token, appHash) => {
+    if (!hasSession) return sessionPlan
+    if (!args.sessionReviewed) return { status: 'pending', reason: 'session-review-required', private: true, ...sessionCoverage }
+    const result = sessionBundle
+      ? await submitSessionBundle({ apiBase: API_BASE, token, directory: sessionBundle.directory, digest: sessionBundle.digest, appHash })
+      : await submitSession({ apiBase: API_BASE, token, prepared: preparedSession, appHash })
+    return { format: sessionCoverage.format, streams: sessionCoverage.streams, scripts: sessionCoverage.scripts, ...result }
+  }
   const serverRuntime = detectServerRuntime(projectRoot)
   const compatibility = runtimeCompatibility(serverRuntime, args.allowStaticOnly)
   const patterns = getClideIgnorePatterns(projectRoot, !args.dryRun)
   const files = collectFiles(projectRoot, publishDir, patterns)
   if (!files.includes('index.html')) throw new Error('Publish archive must include top-level index.html after .clideignore filtering.')
   if (files.length === 0) throw new Error('Publish archive would contain no files.')
+  if (bundleSource && files.includes(relativeUnix(publishDir, path.join(bundleSource, 'manifest.json')))) {
+    throw new Error('Creation session bundle would ship inside the public site. Move it outside ' + (relativeUnix(projectRoot, publishDir) || 'the publish directory') + ', for example to .clide/creation-session.')
+  }
 
   const resolvedTitle = resolveTitle(projectRoot, publishDir, args)
   const metadata = {
@@ -1280,7 +1318,11 @@ async function main() {
       publishDir: relativeUnix(projectRoot, publishDir) || '.',
       mode: args.hostingOnly ? 'hosting-only' : 'square',
       destination: args.hostingOnly ? 'Clide hosting only (*.clide.app; no Apps Square listing)' : 'Paean Apps Square public listing + *.clide.app',
-      creationSession: sessionPlan,
+      creationSession: hasSession ? {
+        ...sessionPlan,
+        review: sessionBundle ? reviewBundle(sessionBundle.directory, { project: projectRoot }) : reviewBytes(preparedSession.bytes, { project: projectRoot }),
+        uploadRequires: '--session-reviewed',
+      } : sessionPlan,
       ignoredBy: CLIDE_IGNORE_FILE,
       writesLocalState: false,
       // null = let the server keep the current subdomain or assign a random
@@ -1327,7 +1369,7 @@ async function main() {
       const hosted = await publishHostingOnly(token, zip.data, effectiveHandle)
       saveState(projectRoot, {
         mode: 'hosting-only',
-        creationSession: preparedSession ? { status: 'pending', reason: 'session-submission-not-finished' } : sessionPlan,
+        creationSession: hasSession ? { status: 'pending', reason: 'session-submission-not-finished' } : sessionPlan,
         handle: hosted.handle,
         url: hosted.url,
         archiveUrl: hosted.archiveUrl,
@@ -1338,8 +1380,7 @@ async function main() {
         category: metadata.category,
         desktopOnly: metadata.desktopOnly,
       })
-      const creationSession = preparedSession
-        ? await submitSession({ apiBase: API_BASE, token, prepared: preparedSession }) : sessionPlan
+      const creationSession = await submitCreationSession(token)
       saveSessionResult(projectRoot, creationSession)
       console.log(JSON.stringify({
         success: true,
@@ -1404,10 +1445,9 @@ async function main() {
       desktopOnly: metadata.desktopOnly,
       remix: remix ? { parent: remix.parent, parents: remix.parents } : undefined,
       access: app.access || access || undefined,
-      creationSession: preparedSession ? { status: 'pending', reason: 'session-submission-not-finished' } : sessionPlan,
+      creationSession: hasSession ? { status: 'pending', reason: 'session-submission-not-finished' } : sessionPlan,
     })
-    const creationSession = preparedSession
-      ? await submitSession({ apiBase: API_BASE, token, prepared: preparedSession, appHash: app.hashKey }) : sessionPlan
+    const creationSession = await submitCreationSession(token, app.hashKey)
     saveSessionResult(projectRoot, creationSession)
     console.log(JSON.stringify({
       success: true,

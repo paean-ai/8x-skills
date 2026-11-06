@@ -23,10 +23,10 @@ below is not needed for these operations.
 
 Default to the full public publishing flow unless the user specifies otherwise. If they say
 “hosting only” or “do not list in the Square”, `--hosting-only` is mandatory. Both modes create
-a public site. A request to publish authorizes the stated destination and the default private
-creation-record submission for this work; do not ask for the same authorization again. A request
-for preview/dry-run alone does not authorize upload. Honor explicit session opt-out, privacy and
-custom-handle choices, and never silently change an explicitly selected mode.
+a public site. A request to publish authorizes the stated destination and, under the
+[consent rule](references/creation-session.md#consent-rule), private backup of this task's session.
+A request for preview/dry-run alone does not authorize upload. Honor explicit session opt-out,
+privacy and custom-handle choices, and never silently change an explicitly selected mode.
 
 ## Credentials
 
@@ -58,9 +58,9 @@ without requiring a Square manifest or listing assets.
 
 ### Prepare the creation record
 
-Read [the default creation-session workflow](references/creation-session.md). Select this task’s
-real JSONL export, prepare and review a private snapshot, and use `--session-jsonl <path>` or
-`.clide/creation-session.jsonl`. Never fabricate a transcript or collect unrelated chats.
+Read [the default creation-session workflow](references/creation-session.md). Use `sessions.mjs locate`
+to find this task's real log and `sessions.mjs prepare-bundle` to make a private copy in
+`.clide/creation-session/`. Never fabricate a transcript or collect unrelated chats.
 The default is private backup plus current-release linking, not research/training consent.
 Use `paean-sessions` for standalone submission, verification or repair.
 
@@ -78,8 +78,8 @@ and product list explicitly: `access: null` means "preserve server configuration
 not "discover the manifest inside the uploaded assets".
 
 ```bash
-# Standard: public Square + Clide + private JSONL; omit --handle for a random first handle
-node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist] [--session-jsonl /private/path/session.jsonl]
+# Standard: public Square + Clide + private session backup; omit --handle for a random first handle
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run [--dir dist]
 
 # Only when requested: hosting without a Square listing
 node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist]
@@ -87,13 +87,14 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --hosting-only [--dir dist]
 
 Review `metadata` against the release-copy standard, then `publishDir`, file/byte summary,
 `secretScan`, `runtimeCompatibility`, destination,
-requested/effective handle and `creationSession`. Once validated and authorized by the
-user’s publishing request, run the same command without `--dry-run` and add `--yes`.
+requested/effective handle and `creationSession`, including its `review`. Once validated and
+authorized by the user’s publishing request, and after following the consent rule, run the same
+command without `--dry-run` and add `--yes --session-reviewed`.
 Do not add `--handle` unless a custom handle was requested; updates retain their existing handle.
 
 Report the returned `url`, handle, file count, mode, and `.clide/publish.json`. Report
-workspace/Square hashes only in Square mode. Also report `creationSession.status` and
-`workflowComplete`. A published site with a pending backup/link is a partial completion:
+workspace/Square hashes only in Square mode. Also report `creationSession.status`, what it covered
+(`format`, `streams`, `scripts`) and `workflowComplete`. A published site with a pending backup/link is a partial completion:
 retry only the session step and explain what remains. The current API label is “已关联创作记录”,
 which confirms submission/linking. Explain that the shared data source is used by independent
 originality-certification and traffic-support systems; do not present linking as their final result.
@@ -230,7 +231,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
-`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, `--desktop-only` / `--mobile-compatible`, repeated `--tag`, `--license`,
+`--session-bundle <dir>` / `--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--session-reviewed`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, `--desktop-only` / `--mobile-compatible`, repeated `--tag`, `--license`,
 `--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
 `--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
 `--delete [--handle <handle>]`.
