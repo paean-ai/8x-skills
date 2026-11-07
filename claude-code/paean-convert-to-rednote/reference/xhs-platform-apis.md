@@ -46,10 +46,14 @@ rm -f "$TMP_SKILL"
 ### 2.1 客户端版本计算（`buildVersion`）
 
 `miniToolEnv.buildVersion` 的**末三位为编译序号**，版本比较时必须忽略末三位（除以 `1000` 向下取整）：
+- `9420` → 客户端 `9.42.0`（保存图片到相册 `saveImageToPhotosAlbum`）
+- `9430` → 客户端 `9.43.0`（实况笔记 `postNote({ pageType: "slides_edit" })`）
 - `9460` → 客户端 `9.46.0`（本地缓存 `setStorage` / `getStorage`）
 - `9490` → 客户端 `9.49.0`（文件系统、`getWindowInfo`、`getLocation`、`interactionOpenApi`）
 - `9500` → 客户端 `9.50.0`（振动 `vibrateShort` / `vibrateLong`、陀螺仪 `startGyroscope`）
 - `9510` → 客户端 `9.51.0`（关注作者 `followAuthor` / `getFollowStatus`、专用排行榜、专用云存储）
+- `9530` → 客户端 `9.53.0`（卡片/指定图片分享 `share`、包内 classic Dedicated `Worker`）
+- `9533` → 客户端 `9.53.3`（`assets/` 目录静态资源主包体积优化策略）
 
 ```js
 function readBuildVersion(launchOptions) {
@@ -176,28 +180,30 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
 
 ## 4. 小红书专用排行榜（`submitScore` / `getRankList` / `getMyRank`，9.51+）
 
-> 依据《小工具云存储 & 排行榜 JS API 接入说明》，排行榜能力要求客户端 **9.51+（`9510`）** 且需平台侧为 `appId` 开通内测白名单。
+> 依据小工具在线文档 §3.17 与《小工具云存储 & 排行榜 JS API 接入说明》，排行榜能力要求客户端 **9.51+（`9510`）** 且需平台侧为 `appId` 开通内测白名单。
+> **上传授权（`USER_PROFILE`）强制要求**：使用 `submitScore` 的小工具，上传/送审至创服平台时**必须勾选「用户头像昵称授权」**（`redapp submit` 的 `authorizations` 数组中必须包含 `"USER_PROFILE"`），榜单展示的用户昵称依赖该授权；未勾选时排行榜调用会按未授权失败处理（`errCode: 1005`）。
 
 ### 4.1 接口与参数速查
 
 | API | 关键入参 | 成功返回（`resolve`） | 说明 |
 |---|---|---|---|
-| `submitScore` | `{ board?: 1..5, score: number }` | `{ score, errMsg: "submitScore:ok" }` | `board` 默认 `1`；`score` 原值传入（不乘 100），须为有限数值且在配置区间内。一次提交自动同步总/月/周/日四榜，只保留各周期历史最高分；返回总榜历史最高分 |
-| `getRankList` | `{ board?: 1..5, period?: "all" \| "month" \| "week" \| "day" }` | `{ data: [{ rank, score, nickname, avatar }], errMsg: "getRankList:ok" }` | 返回前 100 名数组，按分数降序；同分先提交者靠前。`nickname` / `avatar` 可能为 `null`，渲染时兜底为 `"小红薯"`；**仅可使用平台返回的昵称头像，严禁自行采集用户资料** |
-| `getMyRank` | `{ board?: 1..5, period?: "all" \| "month" \| "week" \| "day" }` | `{ status, rank, score, errMsg: "getMyRank:ok" }` | **必须先判 `status` 再读 `rank`/`score`**：<br>• `"EXACT"`：前 10000 名内精确排名（`rank` 为正整数）<br>• `"OVER_LIMIT"`：10000 名外（`rank` 为 `null`，展示 `"10000+"`）<br>• `"NO_SCORE"`：本期无成绩（**属正常成功状态，不是报错**） |
+| `submitScore` | `{ board?: 1..5, score: number }` | `{ score, errMsg: "submitScore:ok" }` | `board` 默认 `1`；`score` 原值传入（不缩放、不取整），**须为有限数值且在 `-1,000,000 ~ 1,000,000` 区间内**（超出返回 `errCode: 1004`；数值量级大的挂机/养成/经营类游戏须先换算单位如以「万」计再提交）。一次提交在服务端事务内拆总/月/周/日四榜，只保留各周期最好成绩；返回总榜历史最高分 |
+| `getRankList` | `{ board?: 1..5, period?: "all" \| "month" \| "week" \| "day" }` | `{ data: [{ rank, score, nickname }], errMsg: "getRankList:ok" }` | 返回前 100 名数组（`limit` 不开放，固定返回 100 条），按分数降序；同分先写入者靠前，名次唯一不并列。`nickname` 在用户资料暂缺时可能为 `null`，渲染时自行兜底（如 `"小红薯"`）；**仅可使用平台返回的昵称，不得自行采集或存储用户小红书资料** |
+| `getMyRank` | `{ board?: 1..5, period?: "all" \| "month" \| "week" \| "day" }` | `{ status, rank, score, errMsg: "getMyRank:ok" }` | **必须先判 `status`（SDK 原样透传后端四态值，均为查询成功的业务状态，不是错误）再消费 `rank`/`score`**：<br>• `"EXACT"`：前 500 名内精确名次（`rank` 为 `1–500`，`score` 为本人最好成绩）<br>• `"OVER_LIMIT"`：有成绩但在 500 名外（`rank` 与 `score` 均为 `null`，建议展示 `"500+"`）<br>• `"NO_SCORE"`：已参与但本期无成绩（`rank` 与 `score` 均为 `null`）<br>• `"NOT_PARTICIPATING"`：未参与（`rank` 与 `score` 均为 `null`） |
 
-- **周期重置规则**：`day`（每日 0 点）、`week`（每周一 0 点）、`month`（每月 1 日 0 点）均按**北京时间**重置，新一期不沿用上期成绩。
+- **周期重置与限频规则**：`day`（每日 0 点）、`week`（每周一 0 点）、`month`（每月 1 日 0 点）均按**北京时间**重置，新一期不沿用上期成绩，不提供历史榜单查询。默认每个小工具每个接口限频 **150 QPS**（超限返回 `errCode: 2009`）；勿在游戏循环或高频定时器中调用，榜单结果建议做 `30s ~ 60s` 本地缓存后再展示。
 
 ### 4.2 错误码与未知状态对账（禁止盲目重发）
 
 | `errCode` | 含义 | 规范处理动作 |
 |---|---|---|
-| `1001` / `10001` | 参数不合法 | 修正 `board` 或 `score` 参数，不重试 |
-| `1004` | 分数超范围或非有限值 | 检查 `Number.isFinite(score)` 与榜单配置区间 |
-| `1005` / `10003` | 排行榜未授权 / 容器白名单拒绝 | 标记 `rankDenied = true`，平滑切换到本地排行榜兜底 |
-| `2002` | 榜单未就绪 | **绝不能当成空榜渲染**；显示加载态并做有限次退避重试（`500ms → 1000ms → 2000ms → 4000ms`） |
+| `1001` / `10001` | 参数不合法（后端 / 本地） | 修正 `board`（`1..5`）或 `period` 参数，重试无意义 |
+| `1004` | 分数超出 `±1,000,000` 或非有限值 | 检查 `Number.isFinite(score)` 并换算单位到 `[-1000000, 1000000]` 区间内 |
+| `1005` / `10003` | 排行榜未授权（含未勾选 `USER_PROFILE`） / 容器白名单拒绝 | 标记 `rankDenied = true`，平滑切换到本地排行榜兜底 |
+| `2002` | 榜单缓存未就绪 | **绝不能当成空榜或榜外渲染**（`data: []` 才是真实空榜）；显示加载态并做有限次退避重试（`500ms → 1000ms → 2000ms → 4000ms`） |
 | `2004` | 写入结果未知（含超时） | **严禁就地自动重发**；将本地状态标记为 `"unknown"`，下次进入排行榜时调用 `getMyRank` 对账（若 `myRank.score >= pendingScore` 则转为 `"submitted"`） |
-| `2008` / `2999` | 授权服务暂不可用 / 内部错误 | 延迟 `1000ms` 重试一次，仍失败则降级本地榜 |
+| `2008` / `2999` | 授权服务不可用 / 内部错误 | 延迟 `1000ms` 重试一次并控制频率，仍失败则降级本地榜 |
+| `2009` | 接口调用过于频繁（超 150 QPS 限频） | 降低调用频率，使用本地缓存（`30s ~ 60s`），勿密集轮询 |
 
 ### 4.3 页面功能完整性铁律：本地排行榜兜底与「提交成绩」按钮永不死锁
 
@@ -226,24 +232,27 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
 
 ### 5.2 专用云存储 `Cloud Storage` API（9.51+ / `9510` + 白名单）
 
-云存储按「**用户 × 小工具**」隔离在平台侧，同一小红书账号换设备打开工具即可恢复存档；用户关闭云存储时平台自动清空数据。
+云存储按「**用户 × 小工具**」隔离在平台侧，同一小红书账号换设备打开工具即可恢复存档，创作者不可见用户存储内容；用户关闭云存储时平台自动清空数据。
 
 | API | 关键入参 | 返回结构（`resolve`） | 核心规则 |
 |---|---|---|---|
-| `addCloudStorage` | `{ collection: string, items: [{ content: object }] }` | `{ data: [{ id, status }], errMsg }` | **注意 `content` 是对象而非 JSON 字符串**；`id` 由服务端生成；逐项 `status` 为 `"SUCCESS" \| "FAILED" \| "UNKNOWN"` |
-| `updateCloudStorage` | `{ collection: string, items: [{ id: string, content: object }] }` | `{ data: [{ id, status }], errMsg }` | **整行覆盖而非字段合并**！必须传入完整 `content` 对象；同一批次禁止重复 `id` |
-| `queryCloudStorage` | `{ collection?: string, ids?: string[], cursor?: string, limit?: number }` | `{ items: [{ id, collection, content }], nextCursor?, hasMore, errMsg }` | 支持三种查法：`collection + ids` 点查（不返回分页字段）、仅传 `collection` 分类分页（默认 `limit: 20`，末页 `hasMore: false` 时缺省 `nextCursor`）、都不传跨全部分类查询 |
-| `removeCloudStorage` | `{ collection: string, ids: string[] }` | `{ data: [{ id, status }], errMsg }` | 硬删不可恢复，但幂等（目标不存在也返回 `SUCCESS`）；删除前确保无在途写入 |
+| `addCloudStorage` | `{ collection: string, items: [{ content: object }] }` | `{ data: [{ id, status }], errMsg }` | **注意 `content` 必须为对象（传字符串会在本地报错）**；`id` 为服务端生成的 24 位十六进制字符串；**逐项结果按位置与输入一一对应**（不要用返回 `id` 做对应，`UNKNOWN` 且后端未返回 `id` 时 `id` 为 `""`）；`status` 为 `"SUCCESS" \| "FAILED" \| "UNKNOWN"` |
+| `updateCloudStorage` | `{ collection: string, items: [{ id: string, content: object }] }` | `{ data: [{ id, status }], errMsg }` | **批量整行覆盖（非字段合并）**！未提交字段不保留，要保留的字段必须一起提交；同一批次禁止重复 `id`；无版本校验（多端并发以后生效写入为准） |
+| `queryCloudStorage` | `{ collection?: string, ids?: string[], cursor?: string, limit?: number }` | `{ items: [{ id, collection, content }], nextCursor?, hasMore?, errMsg }` | 支持三种查法：`collection + ids`（非空不重复）点查（`collection` 必填，不返回分页字段）、仅传 `collection` 分类分页（默认 `limit: 20`，末页不返回 `nextCursor`）、都不传跨全部分类分页。读取失败整次 `reject`，`items: []` 才代表真实无数据 |
+| `removeCloudStorage` | `{ collection: string, ids: string[] }` | `{ data: [{ id, status }], errMsg }` | 按 `id` 批量硬删不可恢复，但幂等（目标不存在也成功）；**重复 `id` 在 SDK 本地直接拒绝（`errCode: 10001`，请求未发出）**；删除前确保无在途写入 |
 
-#### 云存储关键注意事项与预览兜底
+#### 云存储配额、限频、错误码与预览兜底
 
-1. **批量写非事务 & 未知状态对账**：
-   - 顶层 `resolve`（含 `errCode: 2003` 部分成功）不代表每一项都成功，必须检查 `res.data[i].status`。
-   - 遇到 `errCode: 2004` 或单条 `status === "UNKNOWN"` 时，**严禁盲目重发 `addCloudStorage`**（会产生重复记录），应先通过 `queryCloudStorage` 查询最新快照对账，已存在 `id` 则改走 `updateCloudStorage`。
-   - 单条超限（`errCode: 1003`）或批量条数超限（`errCode: 1002`）时，需精简存档结构或按 `chunk` + `complete` 清单分片写入。
-2. **非破坏性进度合并（Merge Highest Progress）**：
+1. **配额与限频上限**：
+   - **单批条数上限**：单批最多 **100 条**（`items` / `ids`，超限返回 `errCode: 1002`）。
+   - **单条大小上限**：单条 `content` 经 JSON 序列化（UTF-8）后不超过 **64KB（65536 字节）**（超限返回 `errCode: 1003`）。存档类数据只存必要字段、剔除静态配置；超大存档自行按主记录 + 分段记录拆分。
+   - **接口限频**：按「小工具 × 接口」维度限频，默认每个小工具每个接口 **150 QPS**（一次批量调用消耗一次额度，超限返回 `errCode: 2009` 且发生在鉴权之前）。写入须在本地节流合并，勿在游戏循环中直接调用。
+2. **批量写非事务 & 未知状态对账**：
+   - 顶层 `resolve`（含 `errCode: 2003` 部分成功）不代表每一项都成功，必须逐项检查 `res.data[i].status`。
+   - 遇到 `errCode: 2004` 或单条 `status === "UNKNOWN"` 时，**严禁盲目重发 `addCloudStorage`**（会产生重复记录），应先通过 `queryCloudStorage` 查询最新快照对账，已存在 `id` 则改走 `updateCloudStorage`；遇到 `errCode: 2001`（存储读写失败）或 `2005`（唯一键冲突）时不得伪装成「无数据」清空玩家本地进度。
+3. **非破坏性进度合并（Merge Highest Progress）**：
    - 从云端恢复进度时，推荐使用**最大值合并策略**（每关星级 `Math.max(localStar, cloudStar)`、最高解锁关卡 `Math.max(localUnlocked, cloudUnlocked)`、最高分 `Math.max(localBest, cloudBest)`），避免较早的云端备份意外抹掉玩家本机刚打出的新进度。
-3. **无白名单 / 审核预览环境兜底**：
+4. **无白名单 / 审核预览环境兜底**：
    - 当 `!hasXhsApi("addCloudStorage")`、未授权（`1006` / `10003`）或在浏览器预览时，「云端备份」弹窗中的「立即备份」与「合并恢复」按钮**不得禁用或报错**，应自动读写本机独立备份快照键（如 `<prefix>.cloud.backup.v1`），并给出清晰的成功 Toast 提示。
 
 ---
@@ -295,3 +304,29 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
 4. **绝对禁止调用 `navigator.clipboard`**：
    - **千万不要**在 `postNote` 不可用的浏览器降级分支里调用 `navigator.clipboard.writeText(...)` 或 `document.execCommand("copy")`！容器禁用剪贴板 API，且构建静态审计脚本 `audit-minitool.mjs` 会直接报错拦截（`PROBLEMS: - clipboard in assets/app.js`）。
    - 在无 `postNote` / `saveImageToPhotosAlbum` 的审核预览环境中，点击「发布小红书笔记」或「保存海报到相册」应直接完成预览闭环（发放预览态步数奖励 + 弹出 Toast 提示），保证按钮 100% 可点击、状态可验证。
+
+---
+
+## 7. 9.53+ 新增能力：卡片/图片分享（`share`）、包内 `Worker` 与 `assets/` 主包体积优化
+
+### 7.1 小工具卡片与指定图片分享（`window.xhs.miniTool.share`，客户端 `9.53+` / `9530`）
+
+- **接口与参数**：
+  - `await window.xhs.miniTool.share({ type: "card" })`：分享当前小工具卡片（小工具身份由容器自动绑定，无需传工具 ID）。
+  - `await window.xhs.miniTool.share({ type: "image", image_resource })`：分享小工具生成的指定图片（`image_resource` 必填，支持 `data:image/...` Base64 Data URI 或 `writeTempFile` 返回的本地文件路径；**仅用于站内私信**，站外渠道由容器使用当前页面截图生成的 H5 海报）。
+- **错误码与约束**：
+  - `10001`：参数错误（`type` 非法或 `type="image"` 未传字符串 `image_resource`）
+  - `15501`：图片解析/格式/路径权限/大小校验失败或来源不支持（含网络 URL）
+  - `15502`：面板展示失败、模拟器不支持、非全屏容器调用或分享流程未结束时重复调用
+  - `15503`：达到分享频次上限（每天每用户对同一小工具最多拉起 **10 次**分享）
+  - **注意**：仅全屏容器可用（半屏不展示分享面板）；用户触发分享行为即回调成功，不代表消息最终送达；低版本或模拟器不支持时可平滑回退至 `postNote` 或 `saveImageToPhotosAlbum` + 本地乐观反馈。
+
+### 7.2 包内 Dedicated `Worker`（客户端 `9.53+` / `9530`）与 `assets/` 主包体积优化（`9.53.3+` / `9533`）
+
+1. **Dedicated `Worker`（`9.53+`）**：
+   - 仅支持引用上传包内的 classic `.js` 脚本（`new Worker("./assets/worker.js")`），不支持 `type: "module"`、外部 URL、`blob:` / `data:`、SharedWorker 或 Service Worker。
+   - 每个页面同时最多 **1 个** Worker 实例（超出抛 `QuotaExceededError`）；页面连续隐藏 30 秒后平台自动回收 Worker（可通过 `worker.onTerminate(cb)` 监听回收通知，返回前台后重新创建）。
+   - **高消耗标记**：只要实际调用了 `new Worker(...)`，就必须在包根目录 `mini_tool.json` 中标记 `{"is_high_consumption_scene": true}`。
+2. **`assets/` 静态资源主包体积优化策略（`9.53.3+`）**：
+   - 将体积较大、非首屏或可延后加载的图片、字体等作为**独立文件**（不做 Base64 内联）放进 `assets/` 目录并使用本地路径（如 `./assets/...`）引用，完整打包上传后，平台在启用该策略的范围内会自动对 `assets/` 启用主包体积优化（减少打开小工具时随主包下载的内容）。
+   - 首屏强依赖且体积小的资源可放在 `assets/` 之外随主包下发；由于参与优化的资源不保证全部离线立即可用，页面应为资源加载失败准备占位渲染或重试兜底。

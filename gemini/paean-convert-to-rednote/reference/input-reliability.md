@@ -281,3 +281,71 @@ SKYBREAKER 旧包在 WebKit 原生触摸里复现了 click-only 入口无响应�
    - 横屏（`@media (max-height: 430px)` / `@media (orientation: landscape)`）下，将 `#xhs-top-dock` 并排放在 `#side` 左侧（`top: calc(12px + var(--top)); right: calc(106px + env(safe-area-inset-right, 0px))`），避免在横屏右侧往下偏移 `58px`。
 3. **Playwright 横屏几何必测断言**：
    - 点击 `#xhs-orientation-toggle` 进入 `body.xhs-virtual-landscape` 后，必须同时断言：`getComputedStyle(app).getPropertyValue('--top').trim() === '0px'`、左侧状态栏 `offsetLeft >= 86`（往右避让左手边的小红书系统按钮）、顶部左/中/右各组件 `offsetTop <= 16`（不往下避让）。
+
+## 2026-11-07 补充：真机 `pointerdown → touchstart` 两段式彻底锁死、伪横屏 3D 画幅压扁与 `XHSOrientation` 接口规范（欢谷打烊时 `Closing Time at Gaiety Hollow` v1.0.1 复盘）
+
+在《欢谷打烊时》（`Closing Time at Gaiety Hollow`，`appId: 6aedf2ba3894b300156fb6c9`）真机体验中，出现了三个典型症状：
+1. **「一开始进入，是不能移动，但是可以旋转屏幕，然后变成不能移动也不能旋转屏幕」**；
+2. **「横屏画面会被压扁」**；
+3. **「虚拟摇杆位置不对，而且不能移动，竖屏有时候也不能动」**。
+
+根因与标准修复方案如下：
+
+1. **严禁使用 `recentTouch()`（`performance.now() - _lastTouchTime < 800`）过滤 `PointerEvent`（两段式永久锁死根因）**：
+   - **错误反模式**：
+     ```js
+     // ❌ 致命错误写法：在真机 WebView 下会导致「第 1 次触摸左半屏变成转视角，第 2 次触摸后移动与视角双双永久锁死」！
+     const markTouch = () => { this._lastTouchTime = performance.now(); };
+     const recentTouch = () => performance.now() - this._lastTouchTime < 800;
+     surface.addEventListener('pointerdown', (e) => {
+       if (e.pointerType === 'touch' && recentTouch()) return;
+       this.downPoint(e.pointerId, e.clientX, e.clientY);
+     });
+     window.addEventListener('pointermove', (e) => {
+       if (e.pointerType === 'touch' && recentTouch()) return;
+       this.movePoint(e.pointerId, e.clientX, e.clientY);
+     });
+     window.addEventListener('pointerup', (e) => {
+       if (e.pointerType === 'touch' && recentTouch()) return;
+       this.upPoint(e.pointerId);
+     });
+     ```
+   - **为什么会触发两段式永久锁死**：
+     - 在 iOS / Android 真机 WebView（及标准 Chromium 触屏）中，单指按下时浏览器**先派发 `pointerdown (pointerType: 'touch')`，约 `0.5ms` 后再派发 `touchstart`**。
+     - **第 1 次触摸（开局或间隔 `> 800ms` 后，`recentTouch()` 为 `false`）**：
+       1. `pointerdown` 先到达左半屏（`x < w * 0.45`），此时 `recentTouch() === false`，通过检查并占用了摇杆槽 `this.stick = { id: e.pointerId }`；
+       2. `0.5ms` 后**同一根手指**的 `touchstart` 到达，调用 `markTouch()` 将 `recentTouch()` 置为 `true`，随后进入 `downPoint('t_0')`。由于 `this.stick` 已被 `e.pointerId` 占用，`downPoint('t_0')` 落入 `else if (!this.look)` 分支，将同一根手指分配给了视角槽 `this.look = { id: 't_0' }`！
+       3. 手指拖动期间：`pointermove`（`e.pointerId`）被 `if (e.pointerType === 'touch' && recentTouch()) return;` 拦截，导致 `this.stick` 纹丝不动；而 `touchmove`（`'t_0'`）驱动 `this.look`，**导致玩家明明按在左半屏摇杆上，却只能旋转镜头、不能移动**！
+       4. 手指抬起时：`pointerup`（`e.pointerId`）同样被 `recentTouch()` 拦截丢弃，`touchend`（`'t_0'`）只释放了 `this.look`，导致 **`this.stick` 永久卡死在 `{ id: e.pointerId }` 非空状态**！
+     - **第 2 次触摸（间隔 `> 800ms` 后，`recentTouch()` 再次变为 `false`）**：
+       1. `pointerdown` 先到达，因 `this.stick` 已永久卡死，落入 `else if (!this.look)` 占用了 `this.look = { id: e.pointerId }`；
+       2. `0.5ms` 后 `touchstart` 到达，将 `recentTouch()` 置为 `true`，此时 `!this.stick` 与 `!this.look` 均为 `false`，`'t_0'` 被直接丢弃；
+       3. 随后 `pointermove` 与 `pointerup` 被 `recentTouch()` 拦截，**`this.stick` 与 `this.look` 双双永久锁死，从此既不能移动也不能旋转镜头**！
+   - **修复规范（同指双向配对 + 捕获阶段释放 + `e.touches` 实时对账）**：
+     - 彻底废除 `recentTouch()` 时间窗拦截；
+     - 每个控制槽位（`this.stick`、`this.look`）同时记录 `{ touchId, pointerId, isMouse, x, y, startedAt }`；在 `onStart` 中，无论 `pointerdown → touchstart` 还是 `touchstart → pointerdown`，只要在 `350ms` 内且距离 `< 72px`，自动将后到的异族 ID 绑定到同一个槽位上；
+     - `window` 上的释放监听（`touchend`、`touchcancel`、`pointerup`、`pointercancel`）必须使用**捕获阶段 `{ capture: true, passive: true }`**，防止手指滑到调用了 `e.stopPropagation()` 的按钮上抬起时漏掉释放；
+     - 在 `pointercancel` 中，若对应槽位仍有活跃的 `touchId`（`!isMouse && slot.touchId`），只清空 `slot.pointerId = null`，**绝不能在浏览器取消并行 Pointer 流时误杀仍在继续的 Touch 手势**；
+     - 在每次 `touchstart` / `touchend` / `touchcancel` 时调用 `reconcileTouches(e.touches)`：当 `e.touches.length === 0` 时强制清空所有非鼠标槽位，从根源上杜绝僵尸触点残留。
+
+2. **伪横屏（`body.xhs-virtual-landscape`）3D 画幅压扁根因与 `stageSize()` 规范**：
+   - **根因**：点击旋转按钮进入伪横屏（`body.xhs-virtual-landscape`）时，CSS 将 `#app` 顺时针旋转 90° 并设为 `width: 100vh; height: 100vw`（如逻辑舞台 `844 × 390`，宽高比 `2.164`），但浏览器物理视口 `window.innerWidth × window.innerHeight` 依然是竖屏的 `390 × 844`（宽高比 `0.462`）！若 Three.js / Canvas 2D 的 `resize()` 直接读取 `window.innerWidth / window.innerHeight`，会把 `0.462` 的竖屏投影强行拉伸铺满 `2.164` 的横屏 `<canvas id="view">`，导致整个 3D 画面被严重横向拉宽、纵向压扁，且 `projectMarkers()` 等屏幕空间标记坐标全部错位。
+   - **修复规范**：
+     - 统一通过 `stageSize()` 获取逻辑舞台宽高（优先调用 `window.XHSOrientation.size()`，并兜底检查 `body.xhs-virtual-landscape` 互换 `innerHeight / innerWidth`）；
+     - 监听 `window.addEventListener('xhs:orientationchange', () => resize(true))`，并在每帧 `renderFrame()` 开头调用轻量级 `resize(false)`（对比上次 `stageSize()` 宽高，变化时立即更新 `renderer.setSize`、`post.setSize`、`camera.aspect` 与 `camera.updateProjectionMatrix()`）；
+     - 注意 CSS 媒体查询：物理视口下 `body.xhs-virtual-landscape` 的 `window.innerHeight` 仍是 `844px`，若未使用 `virtual-landscape.js` 的样式重写或自定义构建，需同时为 `@media (max-height: 460px)` 规则显式补齐 `body.xhs-virtual-landscape` 选择器。
+
+3. **`window.XHSOrientation` 真实方法名（`client` / `clientToStage`）与常驻可见虚拟摇杆（`#stick`）规范**：
+   - **根因 1（方法名不匹配导致横屏坐标未逆旋转）**：`tools/virtual-landscape.js` 原本导出的坐标转换方法名为 `window.XHSOrientation.client(clientX, clientY)`，而多部 3D 作品在 `input.js` 中误写成了 `window.XHSOrientation.clientToStage(clientX, clientY)`，导致条件判断为 `false`，回退到未旋转的物理坐标 `{ x: clientX, y: clientY }`！在伪横屏下摇杆位置跑到错误角落，且上下左右移动轴向旋转了 90°。
+   - **根因 2（摇杆默认隐藏与透明容器挡事件）**：`#stick` 默认 `opacity: 0` 导致玩家看不到摇杆位置；且首次按下把 `(ox, oy)` 设在指尖（位移 `d = 0`），按住摇杆边缘无法移动。同时 `#pads`、`#topbar` 容器若设为 `pointer-events: auto`，其按钮间的透明空白区会吞掉右半屏视角拖拽。
+   - **修复规范**：
+     - `tools/virtual-landscape.js` 已在 `window.XHSOrientation` 上同时暴露 `client` 与别名 `clientToStage`；业务代码 `stagePoint(clientX, clientY)` 应同时兼容 `XHSOrientation.client`、`XHSOrientation.clientToStage` 及 `body.xhs-virtual-landscape` 手动逆变换 `{ x: clientY, y: window.innerWidth - clientX }`；
+     - `#stick` 在局内 HUD 中必须**常驻可见**（`display: block; opacity: 0.78;`，激活时 `opacity: 1`，乘坐过场 `#hud.riding #stick` 时隐藏），默认锚定在左下舒适区（竖屏 `(90, h - 102)`，横屏 `(124, h - 82)`）；当触点落在可见底座内（`dist <= 68px`）时，以底座中心 `(rest.ox, rest.oy)` 为原点（点按底座边缘即可立即朝该方向移动），落在左下区底座外时再浮动原点；
+     - `#topbar`、`#pads`、`.attract-top-actions` 等 HUD 布局容器必须设 `pointer-events: none`，仅其内部实际 `<button>` / `.pad` 设 `pointer-events: auto`。
+
+4. **Playwright 自动化验证必测项（间隔 `> 850ms` 的多轮双事件流 + 横竖屏画幅断言）**：
+   - 测试脚本不能只测单次拖动或连续 `< 800ms` 的拖动（否则会掩盖 `_lastTouchTime < 800` 的两段式锁死）！必须模拟真机双事件序列 `pointerdown(touch) → touchstart → pointermove → touchmove → pointerup → touchend`：
+     1. 竖屏第 1 轮拖动摇杆 → 断言 `player.pos` 显著位移、`player.yaw` 不变、抬手后 `input.stick === null && input.look === null`；
+     2. **等待 `> 850ms`** 后，竖屏第 2 轮拖动右半屏 → 断言 `player.yaw / pitch` 旋转、抬手后 `input.stick === null && input.look === null`；
+     3. **再等待 `> 850ms`** 后，竖屏第 3 轮再次拖动摇杆 → 断言 `player.pos` 依然正常移动（证明零两段式锁死）；
+     4. 点击 `#xhs-orientation-toggle` 切换到 `body.xhs-virtual-landscape` → 断言 `camera.aspect > 1.8`（如 `844 / 390 ≈ 2.164`）、`canvas.width > canvas.height`、`#stick` 停靠在 `(124, 308)`，并用物理屏幕坐标测试伪横屏下的摇杆移动与视角旋转均正常生效。
