@@ -1,0 +1,14 @@
+import env from './external-env.js';
+export const window=env.window,document=env.document,navigator=env.navigator,screen=env.screen,location=env.location;
+export const Image=env.Image,HTMLImageElement=env.HTMLImageElement,HTMLCanvasElement=env.HTMLCanvasElement;
+export const AudioContext=env.AudioContext,webkitAudioContext=env.AudioContext;
+export const localStorage=env.localStorage,sessionStorage=env.sessionStorage;
+export const getComputedStyle=(...a)=>env.getComputedStyle(...a);
+export const requestAnimationFrame=(f)=>env.requestAnimationFrame(f),cancelAnimationFrame=(n)=>env.cancelAnimationFrame(n);
+export const addEventListener=(...a)=>env.window.addEventListener(...a),removeEventListener=(...a)=>env.window.removeEventListener(...a);
+export const matchMedia=(...a)=>env.window.matchMedia(...a);
+export const fetch=(...a)=>env.fetch(...a);
+export const performance=env.performance,AbortController=env.AbortController;
+export const URL=env.URL,URLSearchParams=env.URLSearchParams;
+export const btoa=(s)=>env.btoa(s),atob=(s)=>env.atob(s);
+export const createPaeanPlatform=(...a)=>env.window.createPaeanPlatform(...a);

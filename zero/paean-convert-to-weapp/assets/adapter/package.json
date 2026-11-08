@@ -1,0 +1,19 @@
+{
+  "name": "paean-weapp-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test runtime.test.mjs layout.test.mjs"
+  },
+  "dependencies": {
+    "abort-controller": "3.0.0",
+    "canvg": "4.0.3",
+    "core-js": "3.51.0",
+    "css-tree": "3.2.1",
+    "esbuild": "0.28.2",
+    "fast-text-encoding": "1.0.6",
+    "linkedom": "0.18.15",
+    "taffy-layout": "4.0.0"
+  }
+}

@@ -22,6 +22,7 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, secret scanning, and Worker/D1/R2 compatibility checks. Also guides tips (including self-tips), Express Boost, and creator content Boost for existing Square works. |
 | **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
 | **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline, compatibility and artifact audits, plus a release standard for source credit in automatic demos and entry UI, optional virtual landscape with mapped controls, 14-character listing copy, a game-specific icon and a 30-second HD video from the final ZIP. Requires `esbuild`. |
+| **[paean-convert-to-weapp](claude-code/paean-convert-to-weapp/SKILL.md)** | Port to native WeChat Mini Games through compatibility layers while preserving original gameplay, renderer, DOM/CSS UI and assets. Includes middleware evaluation, source-integrity checks, native runtime probes and two real source case studies. Full-game and device compatibility require verification; the helpers are not a universal HTML converter. |
 | **paean-record-demo** | Record a 20–30 s arcade attract demo reel from a finished work: drives the game into a real session through its own seam, draws an optional title card, timed captions and a CTA end card over it, and exports MP4/WebM/GIF plus a poster frame. Playwright required; ffmpeg optional. |
 | **paean-sessions** | Privately back up real JSONL creation records and link them to the current owned app release; standalone submission and recovery, without platform sharing or training consent. |
 | **paean-remix** | Remix one or more published games into a new one. Clones the primary source (full assets) into the user's workspace, reads secondary sources through the 8x.gg MCP server, and scaffolds a project with a multi-parent remix graph (e.g. *h1 gameplay + h2 art + h3 theme*) so every upstream creator is credited exactly once. |
@@ -63,16 +64,17 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-remix/
 │   ├── paean-record-demo/
 │   ├── paean-convert-to-ad/
-│   └── paean-convert-to-rednote/
-├── codex/                          # same twelve skills + Codex guidance
-├── zero/                           # same twelve skills + Zero CLI guidance
-├── gemini/                         # same twelve skills + Gemini CLI guidance
-└── cursor/                         # same twelve skills + Cursor guidance
+│   ├── paean-convert-to-rednote/
+│   └── paean-convert-to-weapp/
+├── codex/                          # same thirteen skills + Codex guidance
+├── zero/                           # same thirteen skills + Zero CLI guidance
+├── gemini/                         # same thirteen skills + Gemini CLI guidance
+└── cursor/                         # same thirteen skills + Cursor guidance
 ```
 
-All five source variants ship the **same** scripts and reference files; only the `SKILL.md`
+All five source variants ship the **same** scripts, reference files and assets; only the `SKILL.md`
 packaging differs. Each skill directory contains its entrypoint and any bundled `scripts/`,
-`reference/`, or `references/` resources. Every variant includes `name` and `description`
+`reference/`, `references/`, or `assets/` resources. Every variant includes `name` and `description`
 YAML frontmatter for discovery. Gemini and Cursor have native discovery/invocation notes;
 Antigravity and DeepSeek Harness install the portable `claude-code/` source.
 
