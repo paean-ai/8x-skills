@@ -1,0 +1,171 @@
+{
+  "checkedDate": "2026-11-08",
+  "coreProbes": {
+    "status": "pure-core-probes-passed",
+    "scope": "Node VM, no DOM, no GPU, no wx simulator or real device",
+    "sourceDigests": {
+      "snout": "b76a31e52231f2f063f34e1826f9842fd736a70933ace09d0993b338f1600cff",
+      "quillionaire": "d54b0fd81cdcbab6d9383042d44b264c0555667c31b33640b0541e0bf2b7bc27"
+    },
+    "snout": {
+      "browserGlobalsAvailable": false,
+      "results": [
+        {
+          "level": 1,
+          "accepted": 1,
+          "score": 2760,
+          "moves": 15,
+          "done": true
+        },
+        {
+          "level": 12,
+          "accepted": 9,
+          "score": 7305,
+          "moves": 8,
+          "done": true
+        },
+        {
+          "level": 30,
+          "accepted": 12,
+          "score": 2790,
+          "moves": 4,
+          "done": false
+        },
+        {
+          "level": 60,
+          "accepted": 12,
+          "score": 3105,
+          "moves": 4,
+          "done": false
+        }
+      ]
+    },
+    "quillionaire": {
+      "browserGlobalsAvailable": false,
+      "before": 3,
+      "after": 4,
+      "purchased": 1,
+      "owned": 4,
+      "money": 959.7776630294001,
+      "terrain": [
+        4.803780818971294,
+        -2.3,
+        23.999075572160397
+      ],
+      "threeModuleProbe": {
+        "status": "needs-platform-globals",
+        "error": "AbortController is not defined"
+      },
+      "three": [
+        {
+          "file": "vendor/three/three.core.min.js",
+          "revision": 180
+        }
+      ],
+      "rendererDeclaresWebGL1Unsupported": true,
+      "postUsesHalfFloat": true,
+      "postUsesGLSL3": true
+    }
+  },
+  "platformizeProbe": {
+    "scope": "mock API contract, not rendering or device validation",
+    "getElementById": "undefined",
+    "createsDiv": false,
+    "distinctAuxiliaryCanvas": false,
+    "AbortController": "undefined",
+    "audioCreateOscillator": "undefined",
+    "registersTouchCancel": false,
+    "pointerIdsFromTwoChangedTouches": [
+      0
+    ],
+    "conclusion": "Use as a reusable adapter base; observed missing surfaces must be implemented before either full game is compatible."
+  },
+  "platformizeCommit": "124af6a9ab8bfd89c173344d1ae04f0e9f0350bd",
+  "gameApiTypingsCommit": "4cae82af7f3c4339d1f11aea8e672fb16051d24a",
+  "validationScope": "Pure core/mock probes plus native full-game simulator boot and listed interactions; complete feature, hosted service and physical device parity not asserted",
+  "native": {
+    "date": "2026-11-07/08",
+    "devtools": "Stable 2.02.2608070",
+    "baseLibrary": "3.18.0",
+    "host": "macOS simulator",
+    "appIdMode": "logged-in GUI test account, no user AppID embedded",
+    "snout": {
+      "originalDemo": true,
+      "nativeEntry": true,
+      "nativeSwap": {
+        "movesBefore": 17,
+        "movesAfter": 16,
+        "turnsBefore": 0,
+        "turnsAfter": 1,
+        "scoreAfter": 180,
+        "errors": []
+      },
+      "pauseScrollAndLocale": true,
+      "relaunchLevelAndLocale": true,
+      "hideShow": {
+        "hiddenAudio": "suspended",
+        "shownAudio": "running",
+        "originalStatePreserved": true
+      },
+      "finalManualCheck": {
+        "status": "passed",
+        "date": "2026-11-08",
+        "source": "user manual WeChat DevTools simulator verification",
+        "userReply": "能消除，也有音效",
+        "matching": true,
+        "originalAudibleSound": true,
+        "scope": "Final debug build, original board interaction and audible original sound. Exact move/score values belong to the separate earlier native telemetry; this reply does not report them."
+      }
+    },
+    "quillionaire": {
+      "renderer": "unchanged Three r180 WebGL2",
+      "nativeEntry": true,
+      "nativeCamera": true,
+      "nativeAttack": "swing while held; released cleanly",
+      "manualJoystickAndAudio": {
+        "question": "Hold/drag left joystick, then THWACK; continuous movement and original sound?",
+        "answer": "能移动，也有音效"
+      },
+      "shopHorizontalAndWardrobeVerticalScroll": true,
+      "thirdPersonPersisted": true,
+      "cardFixture": "original Pull.show invoked with a sample gold card, no currency awarded; patterned back and timed flip/front observed",
+      "hideShow": {
+        "hiddenAudio": "suspended",
+        "shownAudio": "running",
+        "originalStatePreserved": true,
+        "heldControlsAfterResume": []
+      }
+    },
+    "remaining": [
+      "complete same-seed browser/native feature replay",
+      "all quality tiers, multiple simultaneous native touches and orientations",
+      "physical iOS/Android tests",
+      "authorized hosted service bridge and service parity",
+      "remaining browser CSS fidelity boundaries listed in actual-runtime.md"
+    ]
+  },
+  "adapterValidation": {
+    "unitAndActualLayoutTests": 16,
+    "repositoryTargetedTests": 8,
+    "builtRuntimeContracts": [
+      "empty native cancellation for simultaneous pointer IDs 0 and 9",
+      "three hide/show cycles, both old/new callback orders, one continuing RAF loop"
+    ],
+    "sourceIntegrity": "both original source digests unchanged",
+    "independentForwardTest": "debug and minified builds preserve original HTML/CSS/modules/assets; reported cancel and RAF defects fixed and tested against old negative control",
+    "releaseCandidates": {
+      "vgsP3t5lP448vjxa": {
+        "files": 13,
+        "bytes": 2618204,
+        "MiB": 2.497,
+        "nativeValidation": "build + DOM/WASM contract only; configure AppID and validate natively before release"
+      },
+      "BQDP7Zi1kLshfwCv": {
+        "files": 13,
+        "bytes": 1800866,
+        "MiB": 1.717,
+        "nativeValidation": "build + DOM/WASM contract only; configure AppID and validate natively before release"
+      }
+    }
+  }
+}

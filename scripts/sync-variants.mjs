@@ -3,7 +3,7 @@
  * sync-variants.mjs — regenerate the Codex, Zero, Gemini and Cursor mirrors from
  * the canonical `claude-code/` tree.
  *
- * Scripts and reference files are copied byte-for-byte (all variants
+ * Scripts, reference files and assets are copied byte-for-byte (all variants
  * must never diverge there — tests run against `codex/`). Each SKILL.md is
  * derived from the claude-code one with the variant's packaging:
  *
@@ -140,7 +140,7 @@ for (const skill of readdirSync(SRC).filter((d) => (!selected || d === selected)
   for (const variant of Object.keys(VARIANTS)) {
     const dst = path.join(root, variant, skill)
     if (!check) mkdirSync(dst, { recursive: true })
-    for (const sub of ['scripts', 'reference', 'references']) {
+    for (const sub of ['scripts', 'reference', 'references', 'assets']) {
       const from = path.join(SRC, skill, sub)
       if (!existsSync(from)) continue
       const to = path.join(dst, sub)

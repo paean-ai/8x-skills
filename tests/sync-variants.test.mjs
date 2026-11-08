@@ -19,6 +19,8 @@ test('sync generates all client variants, preserves resources, and detects drift
     'scripts/run.mjs': Buffer.from('console.log("example")\n'),
     'reference/data.bin': Buffer.from([0, 255, 13, 10]),
     'references/guide.md': Buffer.from('# Guide\n'),
+    'assets/adapter/runtime.js': Buffer.from('export const adapter = true\n'),
+    'assets/adapter/package-lock.json': Buffer.from('{"lockfileVersion":3}\n'),
   }
   mkdirSync(source, { recursive: true })
   const entry = '---\nname: paean-example\ndescription: A portable example\n---\n\n# Example — workflow\n\nDo the work.\n\n## Steps\n\nUse [the guide](references/guide.md).\n'
@@ -52,5 +54,12 @@ test('sync generates all client variants, preserves resources, and detects drift
   assert.equal(readFileSync(changed, 'utf8'), 'local drift\n')
   assert.equal(run().status, 0)
   assert.deepEqual(readFileSync(changed), resources['references/guide.md'])
+  assert.equal(run('--check').status, 0)
+  const adapter = path.join(root, 'codex/paean-example/assets/adapter/runtime.js')
+  writeFileSync(adapter, 'stale adapter\n')
+  assert.equal(run('--check').status, 1)
+  assert.equal(readFileSync(adapter, 'utf8'), 'stale adapter\n')
+  assert.equal(run().status, 0)
+  assert.deepEqual(readFileSync(adapter), resources['assets/adapter/runtime.js'])
   assert.equal(run('--check').status, 0)
 })
