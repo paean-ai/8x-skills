@@ -3,17 +3,19 @@ name: paean-publish
 description: Publish a static frontend with a random handle, public Apps Square listing and private JSONL creation-session linking by default, and guide one-off tips or boosts for published Square works, including your own. Use for clide.app deployment, Square listings, custom subdomains, tip/打赏, self-tip/给自己打赏, or boost/加热 requests. For in-game payment UI integration use paean-sdk. Does not deploy server-side Workers or provision D1/R2 bindings.
 ---
 
-# Paean Publish (Codex)
+# Paean Publish (Gemini CLI)
 
 Publish a static frontend to a public `*.clide.app` URL using the bundled
 `scripts/publish.mjs`. The script needs Node 18+ and nothing else — the upload archive is
 built in-process by `scripts/zip.mjs`, so it runs the same on macOS, Linux and Windows.
 
-> **Using this skill in Codex.** Install this directory under `~/.agents/skills/`
-> or the project's `.agents/skills/` for discovery. Existing clients that already load
-> `$CODEX_HOME/skills/` (default `~/.codex/skills/`) can update that directory in place.
-> You can also reference `8x-skills/codex/paean-publish/SKILL.md` directly.
-> Keep the bundled scripts and references beside this file; avoid duplicate installations.
+> **Using this skill in Gemini CLI.** Install this directory under `~/.gemini/skills/`
+> or the project's `.gemini/skills/`. A same-named skill in `.agents/skills/` takes
+> precedence within the same scope; update the copy your client actually discovers.
+> Ask Gemini to use `paean-publish`; inspect `gemini skills list` or `/skills list`,
+> and run `/skills reload` after an update. Keep scripts and references beside this file.
+> Resolve bundled paths from this skill directory; run commands in the project directory
+> when the workflow requires project files. Skill activation uses Gemini's normal consent UI.
 
 ## Choose the mode from the user's intent
 
@@ -61,6 +63,36 @@ replace existing manifest metadata for later runs. Review the dry-run's resolved
 that do not meet the standard. Keep the work's README consistent with the final metadata.
 Hosting-only releases follow the same copy rules for their public title, description, and README,
 without requiring a Square manifest or listing assets.
+
+### Choose the Square category
+
+Square categories are backend-defined keys, not free-form labels or tags. Use
+`GET /square/categories` on the configured Paean API to discover the supported keys.
+The publisher forwards the selected key; the backend validates it. Keep the key unchanged
+across languages: the localized display label is separate from `clide.json.category`.
+
+Use **`data_assets`** (Data Assets / 数据资产) for reusable datasets and data resources.
+Use `data_viz` when the primary experience is a visualization, or `dashboard` for a dashboard.
+Choose based on the work's main purpose. Spell the key `data_assets`, not `data_assests`.
+
+For a data-asset listing, describe its actual contents, coverage, source, reuse terms, and
+update cadence where known; do not invent gameplay or data-quality claims. This category
+still uses the static publishing flow and requires a top-level `index.html` landing page.
+
+Save the category in the project's `clide.json`, alongside its reviewed release metadata:
+
+```json
+{ "category": "data_assets" }
+```
+
+For a one-time override, preview the resolved metadata with:
+
+```bash
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --category data_assets
+```
+
+The flag takes precedence over the manifest; omitting both falls back to `custom`.
+Hosting-only publishing creates no Square listing, so it has no Square category.
 
 ### Prepare the creation record
 

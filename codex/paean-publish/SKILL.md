@@ -62,6 +62,36 @@ that do not meet the standard. Keep the work's README consistent with the final 
 Hosting-only releases follow the same copy rules for their public title, description, and README,
 without requiring a Square manifest or listing assets.
 
+### Choose the Square category
+
+Square categories are backend-defined keys, not free-form labels or tags. Use
+`GET /square/categories` on the configured Paean API to discover the supported keys.
+The publisher forwards the selected key; the backend validates it. Keep the key unchanged
+across languages: the localized display label is separate from `clide.json.category`.
+
+Use **`data_assets`** (Data Assets / 数据资产) for reusable datasets and data resources.
+Use `data_viz` when the primary experience is a visualization, or `dashboard` for a dashboard.
+Choose based on the work's main purpose. Spell the key `data_assets`, not `data_assests`.
+
+For a data-asset listing, describe its actual contents, coverage, source, reuse terms, and
+update cadence where known; do not invent gameplay or data-quality claims. This category
+still uses the static publishing flow and requires a top-level `index.html` landing page.
+
+Save the category in the project's `clide.json`, alongside its reviewed release metadata:
+
+```json
+{ "category": "data_assets" }
+```
+
+For a one-time override, preview the resolved metadata with:
+
+```bash
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --category data_assets
+```
+
+The flag takes precedence over the manifest; omitting both falls back to `custom`.
+Hosting-only publishing creates no Square listing, so it has no Square category.
+
 ### Prepare the creation record
 
 Read [the default creation-session workflow](references/creation-session.md). Select this task’s
