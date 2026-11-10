@@ -17,6 +17,7 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 | **[paean-cloud-computer](claude-code/paean-cloud-computer/SKILL.md)** | Give your Personal Agent a creative cloud computer: manage personal environments, delegate durable cloud tasks, retrieve private results, and open Harness for human observation. Portable CLI and remote MCP guide included. |
 | **paean-zero-setup** | Install Zero CLI and sign in to Paean so publish/remix scripts can read local credentials from Zero or a Paean token file. |
 | **paean-game-create** | Create or substantially upgrade a commercially polished, mobile-first Paean web game. Defines the production standard for art, gameplay, attract-mode previews, responsive UI, pure-JS architecture, compact assets, and Playwright release validation. |
+| **[paean-3d-create](claude-code/paean-3d-create/SKILL.md)** | Create editable 3D objects, scenes and game assets with pinned 3DCodeVerse build, geometry-check and render instruments. Loads only the selected language; optional Python, Node/Chrome or Blender setup stays outside the host application. |
 | **paean-tts** | Generate game dialogue, spoken tutorials, pronunciation samples, and demo-video narration through Paean TTS using the creator's login. Includes a local CLI, resumable WAV output, and optional pitch-preserving speed adjustment. |
 | **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, secret scanning, and Worker/D1/R2 compatibility checks. Also guides tips (including self-tips), Express Boost, and creator content Boost for existing Square works. |
@@ -57,6 +58,7 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-zero-setup/
 │   ├── paean-cloud-computer/
 │   ├── paean-game-create/
+│   ├── paean-3d-create/
 │   ├── paean-tts/
 │   ├── paean-sdk/
 │   ├── paean-publish/
