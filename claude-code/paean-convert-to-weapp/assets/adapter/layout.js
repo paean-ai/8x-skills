@@ -1,5 +1,5 @@
-import * as T from 'taffy-layout/wasm';
-import init from 'taffy-layout/wasm';
+import * as T from './vendor/taffy-wechat/taffy_wasm.js';
+import init from './vendor/taffy-wechat/taffy_wasm.js';
 import {Cascade,length,split} from './style.js';
 export async function initializeLayout(path){await init({module_or_path:path});}
 const pascal=s=>s.replace(/(^|-)(\w)/g,(_,a,b)=>b.toUpperCase());

@@ -6,7 +6,7 @@ import {Layout,initializeLayout} from './layout.js';
 import {measureText} from './text.js';
 import {invokeListeners} from './events.js';
 import {normalizeSVGMarkup} from './svg.js';
-await initializeLayout(await fs.readFile(new URL('./node_modules/taffy-layout/pkg/taffy_wasm_bg.wasm',import.meta.url)));
+await initializeLayout(await fs.readFile(new URL('./vendor/taffy-wechat/taffy_wasm_bg.wasm',import.meta.url)));
 const env={width:360,height:640};const measure={measureText:s=>({width:s.length*8})};
 const rule=(selector,values,order)=>({selector,media:[],declarations:Object.entries(values).map(([p,v])=>[p,v,false]),order});
 test('SVG gradients created via HTML innerHTML retain canonical XML element names',()=>{

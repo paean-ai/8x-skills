@@ -10,5 +10,6 @@ export const matchMedia=(...a)=>env.window.matchMedia(...a);
 export const fetch=(...a)=>env.fetch(...a);
 export const performance=env.performance,AbortController=env.AbortController;
 export const URL=env.URL,URLSearchParams=env.URLSearchParams;
+export const TextEncoder=env.TextEncoder,TextDecoder=env.TextDecoder;
 export const btoa=(s)=>env.btoa(s),atob=(s)=>env.atob(s);
 export const createPaeanPlatform=(...a)=>env.window.createPaeanPlatform(...a);

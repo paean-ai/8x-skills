@@ -1,4 +1,3 @@
-import 'fast-text-encoding';
 import 'core-js/web/url';
 import 'core-js/web/url-search-params';
 import {AbortController} from 'abort-controller/dist/abort-controller.mjs';
@@ -73,7 +72,7 @@ export async function initialize(wx,config){
   const url=new globalThis.URL(config.origin+'/');env.location=url;
   env.performance=typeof wx.getPerformance==='function'?wx.getPerformance():{now:()=>Date.now()};
   env.AbortController=AbortController;env.URL=globalThis.URL;env.URLSearchParams=globalThis.URLSearchParams;env.fetch=fetchResource;
-  env.btoa=btoa;env.atob=atob;
+  env.btoa=btoa;env.atob=atob;env.TextEncoder=TextEncoder;env.TextDecoder=TextDecoder;
   env.localStorage=storage(`paean.port.${config.id}.`);env.sessionStorage=memoryStorage();
   env.AudioContext=function AudioContext(){const a=wx.createWebAudioContext();env.audioContexts.push(a);const missing=['createConvolver','createDynamicsCompressor','createOscillator','createBiquadFilter'].filter(n=>typeof a[n]!=='function');if(missing.length)report('audio-capability',new Error('Missing native audio methods: '+missing.join(',')));return a;};
   env.HTMLCanvasElement=HTMLCanvasElement;env.HTMLImageElement=HTMLImageElement;

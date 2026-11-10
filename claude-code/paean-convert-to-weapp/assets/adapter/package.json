@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test runtime.test.mjs layout.test.mjs"
+    "test": "node --test runtime.test.mjs layout.test.mjs wasm-parity.test.mjs wasm-abi.test.mjs"
   },
   "dependencies": {
     "abort-controller": "3.0.0",
@@ -12,8 +12,8 @@
     "core-js": "3.51.0",
     "css-tree": "3.2.1",
     "esbuild": "0.28.2",
-    "fast-text-encoding": "1.0.6",
     "linkedom": "0.18.15",
-    "taffy-layout": "4.0.0"
+    "taffy-layout": "4.0.0",
+    "text-encoding-utf-8": "1.0.2"
   }
 }
