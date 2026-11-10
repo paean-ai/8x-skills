@@ -79,6 +79,9 @@ runtime and must not import code or assets from a parent, sibling, remix-source,
 external location.
 
 - Top-level `index.html` is the runtime entry and works from a static HTTP server without a build.
+- Ship a top-level `README.md` with the reviewed English release title and a standalone,
+  plain-text player description immediately below it, even when publishing is not requested.
+  This is a creation deliverable, not a task to leave for the publisher; see release copy below.
 - Implementation is browser JavaScript, HTML, and CSS only: no TypeScript and no Vite/build-only
   source whose usable result exists only in `dist/`.
 - Split gameplay, rendering, input, audio, data, level, character, monster, and ability definitions
@@ -151,6 +154,13 @@ UI and responsive-composition checks for small-screen controls, text, overlays, 
 
 ## Mobile, desktop, and runtime behavior
 
+Read [interaction ownership and event reliability](references/input-reliability.md) when implementing
+entry, menus or controls. A physical gesture has one owner and commits once: Pointer/Touch/Mouse
+fallbacks share state, cancellation does not submit, menu scrolling does not control the game,
+and a movement stick does not also rotate the camera. Preserve native keyboard/button behavior;
+optional audio cannot block entry. Verify these outcomes in the complete work, including host
+preview event translations, rather than assuming Pointer Events alone cover every environment.
+
 For every original work and remix, aim for a complete, comfortable experience in both portrait and
 landscape. Design mobile/touch first and recompose the camera, playfield, HUD, and controls for the
 available width and height rather than merely shrinking or rotating them. Do not make rotation a
@@ -181,6 +191,19 @@ keywords and tags. Describe the experience without technical implementation lang
 development commands, integration notes, and recording entry points in `DEVELOPING.md`.
 Prepare matching `clide.json` metadata for a requested Square release without publishing it early.
 
+The README must start with `# <release title>`, a blank line, and a self-contained plain prose
+paragraph describing the player's actions, goal, genre, and distinctive world or visual style.
+Use English by default, 2–4 sentences and at most 600 characters for this listing-ready paragraph.
+Do not use a tagline, bullet list, production brief, or technical report as its substitute. Keep
+Markdown markup, links, credits, commands, local paths, and development terms such as shell, Node,
+localhost, Python, or SDK out of this paragraph; place credits and other material separately.
+An English `clide.json.summary` alone does not replace it: some publishers extract only README
+paragraphs. When that metadata exists, keep its title and summary consistent with the README.
+Re-read the opening paragraph at handoff and check it against the implemented game. If a local
+publisher supplies a read-only metadata check, confirm the resolved title and summary pass it;
+never upload or create an account merely to test copy. The bundled game validator's runtime and
+asset checks do not establish release-copy quality.
+
 ### Verify play and presentation
 
 Let `$SKILL_DIR` be the directory containing this `SKILL.md`. Run the bundled validator from the
@@ -204,6 +227,9 @@ Completion requires all of the following:
   external/runtime paths, or viewport scrollbars;
 - loading → automatic UI-free attract highlight → play → result → restart works, and core
   interactions are verified rather than merely loaded;
+- [input reliability checks](references/input-reliability.md) cover narrow-screen mouse, native
+  touch, same-gesture event deduplication, cancellation, menu scroll/return and independent
+  movement/camera roles; the affected controls pass repeated-operation state/count assertions;
 - portrait and landscape phone, portrait and landscape tablet, and desktop screenshots and actual
   play meet the production standard, with reachable controls, no forced rotation, and no placeholder
   or half-finished state;
@@ -216,5 +242,6 @@ Completion requires all of the following:
   direction, with clear text, controls, and action hierarchy over the actual scene;
 - the game remains playable after reload and after background/foreground transitions;
 - release title, description, tags, and README meet the release-copy standard and describe only
-  features present in the finished work;
+  features present in the finished work; the README opening contains the standalone player
+  description (not just a slogan or development notes), and existing listing metadata agrees;
 - final project size and largest assets are reviewed, with obvious waste removed.

@@ -104,10 +104,10 @@ The recorder needs one expression that starts a real, playable session. It is th
 production standard's *Ad-conversion readiness* section asks every work to expose, in the same
 priority order — `window.__game` handle, event bus, module export, DOM click as a last resort.
 
-Start by looking rather than guessing:
+Start by looking rather than guessing (`$SKILL_DIR` is the directory containing this SKILL.md):
 
 ```bash
-node <skill>/scripts/record-demo.mjs --probe
+node "$SKILL_DIR/scripts/record-demo.mjs" --probe
 ```
 
 It loads the game and reports the global handles it found, the methods on them whose names look
@@ -125,7 +125,7 @@ demo run and record that, rather than scripting a worse one.
 ## Run it
 
 ```bash
-node <skill>/scripts/record-demo.mjs [--config demo.config.json] [--seconds 25]
+node "$SKILL_DIR/scripts/record-demo.mjs" [--config demo.config.json] [--seconds 25]
 ```
 
 `demo.config.json`, next to the project:
@@ -198,21 +198,24 @@ Without it the script says so, reports the lead-in it measured, and leaves you a
 `scripts/encode.mjs` can be run on its own later against any clip:
 
 ```bash
-node <skill>/scripts/encode.mjs demo/orbit-demo.webm demo/orbit-demo --start 0.9 --duration 25
+node "$SKILL_DIR/scripts/encode.mjs" demo/orbit-demo.webm demo/orbit-demo --start 0.9 --duration 25
 ```
 
-## Optional Paean TTS narration
+## Optional narration
 
-When the requested reel includes voiceover, use [paean-tts](../paean-tts/SKILL.md) to synthesize
-the script by scene using the creator's Paean login. Save the original WAVs, measure actual
-durations, and align them with the same moments as the captions. Keep captions legible on mute.
+When the requested reel includes voiceover, use [paean-tts](../paean-tts/SKILL.md) to synthesize the
+script by scene with the creator's Paean login. If the user wants free or offline narration and already
+has local engines installed, follow its [local TTS guide](../paean-tts/references/local-tts.md).
+Do not substitute system voices or other billed speech services unless the user asks.
+
+Save the original WAVs, measure actual durations, and align them with the same moments as the captions. Keep captions legible on mute.
 The recorder does not synthesize speech or capture game audio automatically.
 
 Prepare a separate audio bed with narration, any BGM ducked under it, and silence padded to the
 intended clip duration. Pass that file to the existing encoder:
 
 ```bash
-node <skill>/scripts/encode.mjs demo/orbit-demo.webm demo/orbit-vo --start 0.9 --duration 25 --audio demo/voice-bed.wav
+node "$SKILL_DIR/scripts/encode.mjs" demo/orbit-demo.webm demo/orbit-vo --start 0.9 --duration 25 --audio demo/voice-bed.wav
 ```
 
 `--audio` starts at the trimmed video's zero point; it does not place segments on a timeline or

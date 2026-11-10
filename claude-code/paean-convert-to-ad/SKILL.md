@@ -118,8 +118,10 @@ MRAID containers have a `loading → default` lifecycle; wait for `ready` before
 
 ## Run it
 
+Let `$SKILL_DIR` be the directory containing this SKILL.md.
+
 ```bash
-node <skill>/scripts/build-ad.mjs --config ad.config.json [--keep]
+node "$SKILL_DIR/scripts/build-ad.mjs" --config ad.config.json [--keep]
 ```
 
 `ad.config.json`, next to the project:

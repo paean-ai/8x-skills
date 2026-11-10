@@ -102,7 +102,8 @@ Use `paean-sessions` for standalone submission, verification or repair.
 
 ### Run and review the selected mode
 
-Run from the project root. Select the final mode during dry-run so the report describes the
+Let `$SKILL_DIR` be the directory containing this SKILL.md. Run from the project root.
+Select the final mode during dry-run so the report describes the
 same destination that will be used for the real publish.
 
 Here "project root" means the directory containing the intended `clide.json`
