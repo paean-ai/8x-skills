@@ -64,6 +64,36 @@ that do not meet the standard. Keep the work's README consistent with the final 
 Hosting-only releases follow the same copy rules for their public title, description, and README,
 without requiring a Square manifest or listing assets.
 
+### Choose the Square category
+
+Square categories are backend-defined keys, not free-form labels or tags. Use
+`GET /square/categories` on the configured Paean API to discover the supported keys.
+The publisher forwards the selected key; the backend validates it. Keep the key unchanged
+across languages: the localized display label is separate from `clide.json.category`.
+
+Use **`data_assets`** (Data Assets / 数据资产) for reusable datasets and data resources.
+Use `data_viz` when the primary experience is a visualization, or `dashboard` for a dashboard.
+Choose based on the work's main purpose. Spell the key `data_assets`, not `data_assests`.
+
+For a data-asset listing, describe its actual contents, coverage, source, reuse terms, and
+update cadence where known; do not invent gameplay or data-quality claims. This category
+still uses the static publishing flow and requires a top-level `index.html` landing page.
+
+Save the category in the project's `clide.json`, alongside its reviewed release metadata:
+
+```json
+{ "category": "data_assets" }
+```
+
+For a one-time override, preview the resolved metadata with:
+
+```bash
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --category data_assets
+```
+
+The flag takes precedence over the manifest; omitting both falls back to `custom`.
+Hosting-only publishing creates no Square listing, so it has no Square category.
+
 ### Prepare the creation record
 
 Read [the default creation-session workflow](references/creation-session.md). Select this task’s
@@ -237,7 +267,7 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
 ## Flags
 
 `--hosting-only` (alias `--no-square`), `--dry-run`, `--yes`, `--dir <dir>`,
-`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, repeated `--tag`, `--license`,
+`--session-jsonl <file.jsonl[.gz]>` / `--no-session`, `--handle <subdomain>`, `--title`, `--summary`, `--category`, `--desktop-only` / `--mobile-compatible`, repeated `--tag`, `--license`,
 `--price <credits>` / `--free`, `--standalone allow|demo|shell`, repeated
 `--product sku=Title:credits`, `--allow-secrets`, `--allow-static-only`, and
 `--delete [--handle <handle>]`.
@@ -255,3 +285,13 @@ letters, digits, and dashes, starting with a letter or digit; some names are res
   left by older versions that deleted hosting without unlisting Square.
 
 Deletion is destructive; resolve the exact saved app/hash/handle and obtain confirmation first.
+
+## Desktop-only distribution
+
+Keep the existing `category` unchanged. Gameplay subcategories are not part of this release.
+
+Set `desktopOnly: true` in `clide.json` or pass `--desktop-only` for works that should only appear on computers. The API excludes these listings from mobile feeds, search and other discovery responses. There is no mobile warning card or automatic-review dependency.
+
+Use `--mobile-compatible` to explicitly set `desktopOnly: false` after confirming mobile support. Omitting the declaration preserves an existing listing's value; a new listing defaults to false. The flag is persisted in `clide.json` for later publishes. These CLI options require Square mode, not `--hosting-only`.
+
+Do not infer desktop-only from resolution, asset size, 3D libraries or tags alone. Follow the creator's intended device support and verified behavior. A mobile Remix declares its own support after adaptation; lineage alone does not establish mobile compatibility.
