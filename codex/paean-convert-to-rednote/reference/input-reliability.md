@@ -230,7 +230,7 @@ SKYBREAKER 旧包在 WebKit 原生触摸里复现了 click-only 入口无响应�
 1. **真机容器 `window.xhs.miniTool` 异步回调挂起导致的 `6.5s–19.5s` 按钮假死（`0ms` 乐观更新 + `<= 450ms` 短超时）**：
    - **根因**：本地浏览器中 `window.xhs` 为 `undefined`，`hasXhsApi()` 在 `0ms` 直接返回本地兜底；但在小红书真机审核容器中 `window.xhs.miniTool` 各方法均存在，而在审核沙箱或未授权白名单下调用 `followAuthor`、`getRankList`、`getMyRank`、`submitScore`、`writeTempFile`、`postNote`、`queryCloudStorage`、`addCloudStorage` 可能**永不触发 `success`/`fail` 回调**。若 `callXhs()` 超时设为 `6500ms` 且串行 `await` 2–3 个调用后才更新 UI，真机点击关注会假死 `6.5s`、打开排行榜会空白卡死 `13s`、提交成绩会卡死 `19.5s`、分享/云备份会卡死 `13s`。
    - **修复规范**：
-     - 所有平台能力按钮必须在 **`t = 0ms` 同步更新本地状态与 DOM**（如 `openRankModal` 打开瞬间同步调用 `buildLeaderboardData()` 渲染完整榜单，点击 `#btn-rank-submit` 立即提升分数并刷新列表，点击 `#btn-top-follow` 立即变更为已关注状态）；
+     - 所有平台能力按钮必须在 **`t = 0ms` 同步更新本地状态与 DOM**（如 `openRankModal` 打开瞬间同步调用 `buildLeaderboardData()` 渲染完整榜单，点击 `#btn-rank-submit` 立即提升分数并刷新列表，点击关注只显示核对进度，平台确认关系后才更新权益）；
      - 将 `callXhs(name, opts, timeoutMs = 450)` 超时上限严格限制在 **`260–450ms`**，消除串行桥接调用；
      - 在 `verify-all.mjs` 中新增 **Hanging `window.xhs.miniTool` Mock 测试**（所有方法均为 `() => {}` 永不回调），断言所有按钮在 `0ms` 更新 DOM 并在 `< 650ms` 内完成 Toast 反馈。
 
