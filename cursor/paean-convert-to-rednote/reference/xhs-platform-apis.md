@@ -77,13 +77,21 @@ export async function getClientVersion() {
 }
 ```
 
+<a id="creator-tips"></a>
+
+### 自愿赞赏
+
+按照[小红书赞赏接口 §3.19](https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s3-19)核对作品发布配置和客户端版本（9.53.3+）。从点击事件中单次调用容器的 `window.xhs.miniTool.rewardAuthor()`，由平台确定收礼人和处理交易。在点击时先收起作品自己的引导与菜单，再调起礼物面板。页面恢复操作不依赖交易回调，玩家返回后可从局内入口主动重试。[启动提示与原生面板回归](optional-entry.md)
+
+赞赏不得关联游戏奖励。点击、等待、取消、失败、超时以及收到 `rewardAuthor:ok` 时，都不得发放道具或货币、回复体力、解锁内容、增加赞赏次数、标记已付款或写入相应的本地及云存档。该接口不返回是否付款。不要将失败归因于作者自赏或预览码。使用交付 ZIP 模拟正常返回、取消、拒绝和无接口场景，验证每次点击只调用一次，前后游戏资产、权益、计数均一致。
+
 ### 2.2 带短超时的双形态调用封装与 `t = 0ms` 乐观 UI 更新铁律
 
 在小红书真机审核容器或未开通内测白名单的沙箱中，`window.xhs.miniTool` 对象与各方法均存在，但调用 `followAuthor`、`getRankList`、`getMyRank`、`submitScore`、`writeTempFile`、`postNote`、`queryCloudStorage`、`addCloudStorage` 时可能**挂起（永不触发 `success`/`fail` 回调且 Promise 永不 settle）**。若 `timeoutMs` 设为 `6500–8000ms` 且串行 `await` 2–3 个桥接调用才更新 DOM，真机点击按钮会假死 `6.5s–20s`，直接被判「页面按钮无法点击」！
 
 **强制实现规范**：
-1. **`t = 0ms` 同步乐观更新**：点击关注作者、打开排行榜、切换榜单/周期、提交成绩、立即云备份、合并恢复、发布笔记、保存相册或 AI 润色文案时，必须在**点击同步帧（`t = 0ms`）立即更新本机存档与 DOM 状态**（发放礼遇/切换按钮文案/刷新排行榜/渲染海报），后台异步触发 `callXhs()` 并在成功时静默覆写或追加提示。
-2. **单次桥接超时收敛至 `<= 450ms`**：将 `callXhs` 默认 `timeoutMs` 设为 `420ms`（上限不超过 `450ms`），严禁串行阻塞 UI。
+1. **`t = 0ms` 同步乐观更新**：点击关注作者、打开排行榜、切换榜单/周期、提交成绩、立即云备份、合并恢复、发布笔记、保存相册或 AI 润色文案时，必须在**点击同步帧（`t = 0ms`）立即提供界面反馈**（显示关注核对进度、切换按钮文案、刷新排行榜或渲染海报），后台异步触发 `callXhs()` 并在成功时静默覆写或追加提示。
+2. 示例的短超时用于状态查询。需要用户确认的原生面板应单独传入足够的交互等待时间。主页面在发起调用时恢复操作，超时只结束本次结果监听。
 3. **Playwright 必测 Hanging Bridge Mock**：在自动化验收脚本中注入 `window.xhs.miniTool` 与 `window.xhs.AI` 全部方法返回 `new Promise(() => {})`（永不 resolve）的挂起 Mock，强制断言所有按钮在 `t = 0ms` 完成状态切换且无报错。
 
 ```js
@@ -103,44 +111,25 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
       return;
     }
     let settled = false;
+    function finish(handler, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      handler(value);
+    }
+    const success = value => finish(resolve, value);
+    const fail = error => finish(reject, error || { errCode: -1 });
     const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject({ errCode: 2004, timeout: true, errMsg: `${method}:timeout` });
-      }
+      fail({ errCode: 2004, timeout: true, errMsg: `${method}:timeout` });
     }, timeoutMs);
 
     try {
-      const fn = window.xhs.miniTool[method];
-      const ret = fn(params);
-      if (ret && typeof ret.then === "function") {
-        ret.then(
-          (res) => {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timer);
-              resolve(res);
-            }
-          },
-          (err) => {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timer);
-              reject(err || { errCode: -1 });
-            }
-          },
-        );
-      } else {
-        clearTimeout(timer);
-        settled = true;
-        resolve(ret || { errMsg: `${method}:ok` });
-      }
-    } catch (err) {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        reject(err || { errCode: -1 });
-      }
+      const options = Object.assign({}, params, { success, fail });
+      const result = window.xhs.miniTool[method](options);
+      if (result && typeof result.then === "function") result.then(success, fail);
+      // A callback-only host returns undefined and can reply after this frame.
+    } catch (error) {
+      fail(error);
     }
   });
 }
@@ -168,15 +157,25 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
 
 1. **双入口或首页显式入口**：
    - **首页/封面主入口**：在首页操作区提供清晰的「＋ 关注创作者」（可带一次性首局应援福利，如「＋关注创作者 · 领应援步数」）按钮，旁配状态标签或副标题。
-   - **左上角紧凑社交停靠栏（Social Dock）**：在左上角避让区（`left: calc(var(--xhs-physical-safe-left, 0px) + 88px); top: calc(var(--xhs-physical-safe-top, 0px) + 10px)`，紧邻 32×32 旋转按钮右侧）放置不随画面旋转的紧凑关注胶囊与排行榜快捷按钮。
+   - 游戏采用关注专属奖励时，在启动页和局内系统菜单或设置中都展示同一件道具或能力、具体效果及领取状态。玩家可跳过启动引导，稍后从设置领取。已有暂停入口时可将入口放在面板内，以保留主画面。
+   - 按作品布局选择局内菜单或已有的顶部操作区承载第二入口，实测与宿主和主操作的触控区互不遮挡。[启动引导与送审用例](optional-entry.md)
 2. **已关注状态收敛**：
    - 当 `follow_status === 1` 或 `2` 时，紧凑停靠栏中的关注按钮可自动隐藏（`hidden = true`）或显示 `已关注 ✓`，首页按钮切换为已确认状态（如 `已关注创作者 ✓` / `创作者本人 ✓`）。
    - 监听 `document.addEventListener("visibilitychange", ...)`，从宿主关注弹窗返回前台时自动重新调用 `getFollowStatus()` 刷新状态。
 3. **非真机 / 审核预览环境必做兜底**：
    - 审核员在 PC 预览器或未注入 9.51+ bridge 的环境中点击「关注创作者」按钮时，**绝不能让按钮毫无反应或直接 `disabled`**！
-   - 当检测到 `!hasXhsApi("followAuthor")` 或 `clientVersion < 9510` 时，点击按钮应执行**本地预览体验兜底**（例如发放一次性本地应援步数福利、将按钮文案更新为「已领应援礼 ✓」并弹出清晰 Toast 提示），确保该按钮在任何审核环境下点击都有可见的状态推进与反馈。
+   - 点击后立即显示确认进度。平台返回 `1` 或 `2` 时才装配专属配件，重复确认使用同一份能力。取消、未登录、超时或缺少接口时显示可继续游戏或重试的说明。依赖持续关注的能力在重新打开或返回前台时复查，查询明确返回 `0` 时停用。
+   - 验收要测奖励对玩法的实际影响。以 Ironbloom 的光合线圈为例，对照同一机体的行走、天气和时段，确认关注后白天行走每秒多回充 0.25 点电量，站立、夜间与重复领取的增量符合游戏说明。赞赏走独立入口，支付面板返回不触发装配。
 
 ---
+
+### 关注权益的核对与回收
+
+启动和返回前台时调用 `getFollowStatus()`。玩家点击领取时复查，多个入口共用同一个进行中的查询与确认流程。查询返回 `1`（已关注）或 `2`（作者本人）即激活权益并刷新首页、商店和游戏内效果。只有点击时查到 `0` 才调用 `followAuthor()`，成功后使用同一条发奖路径。
+
+查询明确返回 `0` 时停用持续关注能力、收回可识别的剩余专属资源，并立即保存。记录一次性发放和已消费数量，重新关注可以恢复剩余额度。用最近一次已确认关系合并本机与云档，避免旧存档重新激活权益。旧版只存布尔值时，应根据能证明的记录迁移，避免误扣正常收入。`-1`、缺少接口、超时、错误和关闭确认框均表示此次未取得新关系，保留最近确认结果并允许重试。
+
+验收覆盖已关注零弹窗、首次领取、快速连点、关闭确认框后保留最近已核对的权益、确认取消关注后停用持续能力、重新关注、旧云档恢复，以及查询挂起时继续游玩。核对确认框调用次数、游戏能力和奖励余额。
 
 ## 4. 小红书专用排行榜（`submitScore` / `getRankList` / `getMyRank`，9.51+）
 

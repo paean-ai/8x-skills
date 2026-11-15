@@ -56,6 +56,8 @@ node "$SKILL_DIR/workflows/paean-convert-to-rednote/scripts/check-pointer-parity
 
 体积审计只检查体积；禁用 API 和文件类型检查由构建器的 `selfCheck` 完成。动态检查仍要覆盖完整交互；鼠标拖拽探针不适用纯点击工具时，用实际点击→结果→重置的浏览器检查替代并记录原因。
 
+解压待提交的 ZIP，用 `redapp dev --dir <解压目录>` 核对首次操作和从原生面板返回后的操作。例如生成类工具可以在启动提示仍可见时直接生成结果，再从赞赏面板返回，更改输入并生成新的结果。[按作品入口选择复测用例](../workflows/paean-convert-to-rednote/reference/optional-entry.md#送审前复测)
+
 ## 小红书兼容基线
 
 以下采用 8x 当前转换器及已有小工具适配经验（2026-09-29），不是平台永久不变的承诺；用户给出更新规范或审核反馈时先核对差异。

@@ -113,7 +113,7 @@ documented in the current SDK (1.10). Do not add platform features as checkboxes
 let consent/monetization interrupt attract mode or core play. Keep graceful local fallback where
 applicable, and obtain user approval before enabling monetization.
 
-Every game ships the paid-app gate whether or not it is sold: the first intentional tap that
+For the 8x / Paean build, every game ships the paid-app gate whether or not it is sold: the first intentional tap that
 would start a real run calls `PaeanSDK.access.require()` (or the reference module's
 `platform.requireAccess()`) and only starts the run when it resolves `unlocked: true`. Free
 apps resolve instantly with no UI; a paid listing (declared later with `paean-publish
@@ -138,6 +138,13 @@ no start input required. Immediately stage a deterministic highlight of the core
 gameplay HUD, menus, controls, consent prompts, or platform UI. Let the scene read fully UI-free
 before any optional restrained `DEMO · TAP TO PLAY` cue fades in. The first intentional touch/click
 stops every demo process, reveals only essential play UI, and enters a deterministic fresh run.
+
+For a RedNote build with an optional creator invitation, keep the game's own start or resume
+control reachable. If the invitation appears during play, the first move or pickup outside the
+card should both dismiss it and perform that action once. Keep follow and tip entries available
+from the in-game menu. Close the game's overlay on activation so returning from the native panel
+leaves the next move available even if the host never sends a callback. Run the applicable
+[first-input and native-return checks on the final ZIP](../paean-convert-to-rednote/reference/optional-entry.md#送审前复测).
 
 ## Keep the UI compact and clear
 
