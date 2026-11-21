@@ -1,0 +1,261 @@
+{
+  "imports": [
+    {
+      "module": "wbg",
+      "name": "__wbindgen_cast_9ae0607507abb057",
+      "params": [
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "module": "wbg",
+      "name": "__wbindgen_cast_4625c577ab2ec9ee",
+      "params": [
+        "i64"
+      ],
+      "result": "other"
+    }
+  ],
+  "exports": [
+    {
+      "name": "taffytree_addChild",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_childCount",
+      "params": [
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_children",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_computeLayout",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_computeLayoutWithMeasure",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_detailedLayoutInfo",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_dirty",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_getChildAtIndex",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_getLayout",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_getNodeContext",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_getNodeContextMut",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_getStyle",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_insertChildAtIndex",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_markDirty",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_parent",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_printTree",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_remove",
+      "params": [
+        "i32",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_removeChild",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_removeChildAtIndex",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_removeChildrenRange",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_replaceChildAtIndex",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_setChildren",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_setNodeContext",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_setStyle",
+      "params": [
+        "i32",
+        "i32",
+        "i64",
+        "i32"
+      ],
+      "result": "other"
+    },
+    {
+      "name": "taffytree_unroundedLayout",
+      "params": [
+        "i32",
+        "i64"
+      ],
+      "result": "other"
+    }
+  ]
+}

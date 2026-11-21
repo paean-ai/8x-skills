@@ -77,13 +77,21 @@ export async function getClientVersion() {
 }
 ```
 
+<a id="creator-tips"></a>
+
+### 自愿赞赏
+
+按照[小红书赞赏接口 §3.19](https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s3-19)核对作品发布配置和客户端版本（9.53.3+）。从点击事件中单次调用容器的 `window.xhs.miniTool.rewardAuthor()`，由平台确定收礼人和处理交易。在点击时先收起作品自己的引导与菜单，再调起礼物面板。页面恢复操作不依赖交易回调，玩家返回后可从局内入口主动重试。[启动提示与原生面板回归](optional-entry.md)
+
+赞赏不得关联游戏奖励。点击、等待、取消、失败、超时以及收到 `rewardAuthor:ok` 时，都不得发放道具或货币、回复体力、解锁内容、增加赞赏次数、标记已付款或写入相应的本地及云存档。该接口不返回是否付款。不要将失败归因于作者自赏或预览码。使用交付 ZIP 模拟正常返回、取消、拒绝和无接口场景，验证每次点击只调用一次，前后游戏资产、权益、计数均一致。
+
 ### 2.2 带短超时的双形态调用封装与 `t = 0ms` 乐观 UI 更新铁律
 
 在小红书真机审核容器或未开通内测白名单的沙箱中，`window.xhs.miniTool` 对象与各方法均存在，但调用 `followAuthor`、`getRankList`、`getMyRank`、`submitScore`、`writeTempFile`、`postNote`、`queryCloudStorage`、`addCloudStorage` 时可能**挂起（永不触发 `success`/`fail` 回调且 Promise 永不 settle）**。若 `timeoutMs` 设为 `6500–8000ms` 且串行 `await` 2–3 个桥接调用才更新 DOM，真机点击按钮会假死 `6.5s–20s`，直接被判「页面按钮无法点击」！
 
 **强制实现规范**：
-1. **`t = 0ms` 同步乐观更新**：点击关注作者、打开排行榜、切换榜单/周期、提交成绩、立即云备份、合并恢复、发布笔记、保存相册或 AI 润色文案时，必须在**点击同步帧（`t = 0ms`）立即更新本机存档与 DOM 状态**（发放礼遇/切换按钮文案/刷新排行榜/渲染海报），后台异步触发 `callXhs()` 并在成功时静默覆写或追加提示。
-2. **单次桥接超时收敛至 `<= 450ms`**：将 `callXhs` 默认 `timeoutMs` 设为 `420ms`（上限不超过 `450ms`），严禁串行阻塞 UI。
+1. **`t = 0ms` 同步乐观更新**：点击关注作者、打开排行榜、切换榜单/周期、立即云备份、合并恢复、发布笔记、保存相册或 AI 润色文案时，必须在**点击同步帧（`t = 0ms`）立即提供界面反馈**（显示关注核对进度、切换按钮文案、刷新排行榜或渲染海报），后台异步触发 `callXhs()` 并在成功时静默覆写或追加提示。
+2. 示例的短超时只用于可选 UI 状态查询，不用于存档读写/读回校验。存档使用独立有界 I/O 等待与重试，超时不等于无旧档；即时反馈显示处理中，不提前宣称保存成功。需要用户确认的原生面板应单独传入足够的交互等待时间。主页面在发起调用时恢复操作，超时只结束本次结果监听，不代表宿主请求已取消。
 3. **Playwright 必测 Hanging Bridge Mock**：在自动化验收脚本中注入 `window.xhs.miniTool` 与 `window.xhs.AI` 全部方法返回 `new Promise(() => {})`（永不 resolve）的挂起 Mock，强制断言所有按钮在 `t = 0ms` 完成状态切换且无报错。
 
 ```js
@@ -103,44 +111,25 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
       return;
     }
     let settled = false;
+    function finish(handler, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      handler(value);
+    }
+    const success = value => finish(resolve, value);
+    const fail = error => finish(reject, error || { errCode: -1 });
     const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject({ errCode: 2004, timeout: true, errMsg: `${method}:timeout` });
-      }
+      fail({ errCode: 2004, timeout: true, errMsg: `${method}:timeout` });
     }, timeoutMs);
 
     try {
-      const fn = window.xhs.miniTool[method];
-      const ret = fn(params);
-      if (ret && typeof ret.then === "function") {
-        ret.then(
-          (res) => {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timer);
-              resolve(res);
-            }
-          },
-          (err) => {
-            if (!settled) {
-              settled = true;
-              clearTimeout(timer);
-              reject(err || { errCode: -1 });
-            }
-          },
-        );
-      } else {
-        clearTimeout(timer);
-        settled = true;
-        resolve(ret || { errMsg: `${method}:ok` });
-      }
-    } catch (err) {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        reject(err || { errCode: -1 });
-      }
+      const options = Object.assign({}, params, { success, fail });
+      const result = window.xhs.miniTool[method](options);
+      if (result && typeof result.then === "function") result.then(success, fail);
+      // A callback-only host returns undefined and can reply after this frame.
+    } catch (error) {
+      fail(error);
     }
   });
 }
@@ -168,15 +157,25 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
 
 1. **双入口或首页显式入口**：
    - **首页/封面主入口**：在首页操作区提供清晰的「＋ 关注创作者」（可带一次性首局应援福利，如「＋关注创作者 · 领应援步数」）按钮，旁配状态标签或副标题。
-   - **左上角紧凑社交停靠栏（Social Dock）**：在左上角避让区（`left: calc(var(--xhs-physical-safe-left, 0px) + 88px); top: calc(var(--xhs-physical-safe-top, 0px) + 10px)`，紧邻 32×32 旋转按钮右侧）放置不随画面旋转的紧凑关注胶囊与排行榜快捷按钮。
+   - 游戏采用关注专属奖励时，在启动页和局内系统菜单或设置中都展示同一件道具或能力、具体效果及领取状态。玩家可跳过启动引导，稍后从设置领取。已有暂停入口时可将入口放在面板内，以保留主画面。
+   - 按作品布局选择局内菜单或已有的顶部操作区承载第二入口，实测与宿主和主操作的触控区互不遮挡。[启动引导与送审用例](optional-entry.md)
 2. **已关注状态收敛**：
    - 当 `follow_status === 1` 或 `2` 时，紧凑停靠栏中的关注按钮可自动隐藏（`hidden = true`）或显示 `已关注 ✓`，首页按钮切换为已确认状态（如 `已关注创作者 ✓` / `创作者本人 ✓`）。
    - 监听 `document.addEventListener("visibilitychange", ...)`，从宿主关注弹窗返回前台时自动重新调用 `getFollowStatus()` 刷新状态。
 3. **非真机 / 审核预览环境必做兜底**：
    - 审核员在 PC 预览器或未注入 9.51+ bridge 的环境中点击「关注创作者」按钮时，**绝不能让按钮毫无反应或直接 `disabled`**！
-   - 当检测到 `!hasXhsApi("followAuthor")` 或 `clientVersion < 9510` 时，点击按钮应执行**本地预览体验兜底**（例如发放一次性本地应援步数福利、将按钮文案更新为「已领应援礼 ✓」并弹出清晰 Toast 提示），确保该按钮在任何审核环境下点击都有可见的状态推进与反馈。
+   - 点击后立即显示确认进度。平台返回 `1` 或 `2` 时才装配专属配件，重复确认使用同一份能力。取消、未登录、超时或缺少接口时显示可继续游戏或重试的说明。依赖持续关注的能力在重新打开或返回前台时复查，查询明确返回 `0` 时停用。
+   - 验收要测奖励对玩法的实际影响。以 Ironbloom 的光合线圈为例，对照同一机体的行走、天气和时段，确认关注后白天行走每秒多回充 0.25 点电量，站立、夜间与重复领取的增量符合游戏说明。赞赏走独立入口，支付面板返回不触发装配。
 
 ---
+
+### 关注权益的核对与回收
+
+启动和返回前台时调用 `getFollowStatus()`。玩家点击领取时复查，多个入口共用同一个进行中的查询与确认流程。查询返回 `1`（已关注）或 `2`（作者本人）即激活权益并刷新首页、商店和游戏内效果。只有点击时查到 `0` 才调用 `followAuthor()`，成功后使用同一条发奖路径。
+
+查询明确返回 `0` 时停用持续关注能力、收回可识别的剩余专属资源，并立即保存。记录一次性发放和已消费数量，重新关注可以恢复剩余额度。用最近一次已确认关系合并本机与云档，避免旧存档重新激活权益。旧版只存布尔值时，应根据能证明的记录迁移，避免误扣正常收入。`-1`、缺少接口、超时、错误和关闭确认框均表示此次未取得新关系，保留最近确认结果并允许重试。
+
+验收覆盖已关注零弹窗、首次领取、快速连点、关闭确认框后保留最近已核对的权益、确认取消关注后停用持续能力、重新关注、旧云档恢复，以及查询挂起时继续游玩。核对确认框调用次数、游戏能力和奖励余额。
 
 ## 4. 小红书专用排行榜（`submitScore` / `getRankList` / `getMyRank`，9.51+）
 
@@ -191,7 +190,7 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
 | `getRankList` | `{ board?: 1..5, period?: "all" \| "month" \| "week" \| "day" }` | `{ data: [{ rank, score, nickname }], errMsg: "getRankList:ok" }` | 返回前 100 名数组（`limit` 不开放，固定返回 100 条），按分数降序；同分先写入者靠前，名次唯一不并列。`nickname` 在用户资料暂缺时可能为 `null`，渲染时自行兜底（如 `"小红薯"`）；**仅可使用平台返回的昵称，不得自行采集或存储用户小红书资料** |
 | `getMyRank` | `{ board?: 1..5, period?: "all" \| "month" \| "week" \| "day" }` | `{ status, rank, score, errMsg: "getMyRank:ok" }` | **必须先判 `status`（SDK 原样透传后端四态值，均为查询成功的业务状态，不是错误）再消费 `rank`/`score`**：<br>• `"EXACT"`：前 500 名内精确名次（`rank` 为 `1–500`，`score` 为本人最好成绩）<br>• `"OVER_LIMIT"`：有成绩但在 500 名外（`rank` 与 `score` 均为 `null`，建议展示 `"500+"`）<br>• `"NO_SCORE"`：已参与但本期无成绩（`rank` 与 `score` 均为 `null`）<br>• `"NOT_PARTICIPATING"`：未参与（`rank` 与 `score` 均为 `null`） |
 
-- **周期重置与限频规则**：`day`（每日 0 点）、`week`（每周一 0 点）、`month`（每月 1 日 0 点）均按**北京时间**重置，新一期不沿用上期成绩，不提供历史榜单查询。默认每个小工具每个接口限频 **150 QPS**（超限返回 `errCode: 2009`）；勿在游戏循环或高频定时器中调用，榜单结果建议做 `30s ~ 60s` 本地缓存后再展示。
+- **周期重置与限频规则**：`day`（每日 0 点）、`week`（每周一 0 点）、`month`（每月 1 日 0 点）均按**北京时间**重置，新一期不沿用上期成绩，不提供历史榜单查询。默认每个小工具每个接口限频 **150 QPS**（超限返回 `errCode: 2009`）；勿在游戏循环或高频定时器中调用，允许先显示上次结果，再按 §4.3 刷新。
 
 ### 4.2 错误码与未知状态对账（禁止盲目重发）
 
@@ -205,34 +204,34 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
 | `2008` / `2999` | 授权服务不可用 / 内部错误 | 延迟 `1000ms` 重试一次并控制频率，仍失败则降级本地榜 |
 | `2009` | 接口调用过于频繁（超 150 QPS 限频） | 降低调用频率，使用本地缓存（`30s ~ 60s`），勿密集轮询 |
 
-### 4.3 页面功能完整性铁律：本地排行榜兜底与「提交成绩」按钮永不死锁
+### 4.3 打开排行榜时自动提交与刷新
 
-在历次「小工具功能缺陷，可能是页面按钮无法点击」审核退回排查中，排行榜面板有两类高发陷阱：
-1. **陷阱 A（空面板）**：未开通白名单或浏览器预览下打开排行榜，只显示一行“当前环境暂未开放排行榜”，列表为空。
-2. **陷阱 B（禁用按钮）**：新档玩家 0 星 / 0 分时点开首页「排行榜」，面板底部的「提交成绩」按钮因为 `score === 0` 或 `!isRankNativeAvailable()` 被设为 `disabled`，审核员点击毫无反应，直接判定「按钮无法点击」。
+首页、暂停菜单和结算页等入口共用同一段打开逻辑。玩家只需点一次「排行榜」，面板立即显示本机成绩或上次榜单，并标明正在刷新。
 
-**强制实现规范**：
-- **内置丰富本地排行榜数据**：当 `!isRankNativeAvailable()` 或原生接口返回未授权/网络异常时，使用预置的本地好友/NPC 基准榜（随 `all` / `month` / `week` / `day` 周期与 `board` 维度动态换算合理分值）与玩家本机成绩合并排序，确保切换任意榜单 Tab 与周期 Tab 都有即时的列表变化。
-- **「提交成绩」按钮始终可点**：
-  - 不要把 `#rankSubmitBtn` 设为 `disabled`（除非正处于单次异步请求飛行中）。
-  - 若玩家在 0 分新档状态下直接点击「提交成绩」，在本地/预览模式下赋予合理的体验基础分（如星星榜 `1 ★`、挑战榜基础分 `120 分`）或记录当前最高分，立即将玩家行插入榜单并高亮（`class="mine"`，显示 `我（本机）` 及精确名次 `第 N 名`），同时弹出 Toast 提示，形成完整的点击→入榜→高亮闭环。
+1. 有待同步的真实成绩时，自动调用 `submitScore({ board, score })`。同一条成绩正在提交时复用该请求，已确认的成绩跳过写入。按实际游玩记录判断是否有成绩，保留合法的零分。周期切换时不要把往期最高分重新计入本期。
+2. 等本次提交返回或超时后，自动调用 `getRankList({ board, period })` 和 `getMyRank({ board, period })`，分别更新榜单与个人名次。每次重新打开、切换榜单或周期都刷新当前视图，即使没有新成绩或写入失败也继续查询可用的读接口。忽略已经关闭的面板或上一个页签的迟到回包。
+3. 离线或平台不可用时显示标明来源的本机纪录、上次榜单或空状态。保留待同步成绩，写入结果未知时按 §4.2 对账。手动重试可用于故障恢复，正常流程无需再点「上报」或「刷新」。
+
+**验收**：用有待同步成绩的存档，只点一次「排行榜」，检查接口调用顺序和画面上的分数、本人名次。关闭后让模拟服务端改变排名，再打开应显示新名次，且同一条成绩只写一次。新档没有成绩时也应能查看榜单，打开页面本身不会产生分数。
+
+**触屏回归**：让查榜延迟返回。手指按住「返回」或「关闭」期间，将加载状态替换为 100 条记录，再松手。竖屏、软件横屏和原生横屏均应一次退出。用稳定高度的排行面板承载可滚动列表，回包只更新内容区，避免居中弹窗长高时移走按住的按钮。另测结算上报尚未返回时打开排行榜，有更新成绩时应先完成该次同步再查榜。
 
 ---
 
 ## 5. 小红书专用云存储与本地存储（9.46+ / 9.51+）
 
-### 5.1 本地缓存 `Storage` API（9.46+ / `9460`）与 `localStorage` 安全包装
+### 5.1 原生设备存档、一次性迁移与恢复（9.46+ / `9460`）
 
-1. **禁止裸读 `window.localStorage`**：
-   - 在部分严格 WebView 策略下，**访问 `window.localStorage` 属性 getter 本身就会抛出 `SecurityError`**。若出现在模块顶层，整条启动链直接中断，页面停留在“有样式但所有按钮点不动”的假死状态。
-   - 所有浏览器存储读写必须经 `try/catch` 包装，失败时无缝退回内存字典（`memStore`）。
-2. **9.46+ 原生 `setStorage` / `getStorage` 同步与串行写入**：
-   - 客户端 `9.46+`（`clientVersion >= 9460`）优先使用 `window.xhs.miniTool.getStorage({ key })` 与 `setStorage({ key, data: JSON.stringify(...) })`（单 key 上限 1MB，总上限 10MB）。
-   - 启动时先完成原生 `getStorage` 读取并合并进度，**严禁用短超时直接拿空新档覆盖老存档**；写入必须串行排队，并在 `visibilitychange`、`pagehide` 以及调用会离开页面的 `postNote` / `interactionOpenApi` 前主动 flush。
+读取 [save-recovery.md](save-recovery.md) 后实现或合并上游。2026-11-18 契约：单 key 最大 1 MB、总计 10 MB，`data` 为 JSON 字符串，读写加密选项一致；`getStorageInfo()` 的 `usedBytes` / `limitBytes` 用于容量预检。
+
+- 使用已验证版本和方法的原生 Storage。禁止以浏览器存储替代容器接口；旧浏览器档只在一次性迁移时读取，getter 和 JSON 解析均保护。未知版本、缺 SDK 或低版本显示真实能力状态，不伪称内存已持久化。
+- 首次读取核对当前 key、已知旧 key 及缓存云档；区分有效档、确认空与读取错误。首页可先操作，后台读取继续，未完成读取前不能写默认档覆盖旧进度；迟到恢复在安全时机应用。
+- 写入合并最新脏数据，但不让挂起请求堵死队列；超时后读回对账，失败有界退避重试，使用不可变快照避免迟到旧请求覆盖新档。新快照校验成功后才确认迁移及清理旧快照，至少保留一份完整备份。
+- 超单键上限用分段 + 最后提交主记录；总容量不足不能用清空全部存档解决。离页前尽量 flush，`pagehide` 单次异步请求不是落盘保证。
 
 ### 5.2 专用云存储 `Cloud Storage` API（9.51+ / `9510` + 白名单）
 
-云存储按「**用户 × 小工具**」隔离在平台侧，同一小红书账号换设备打开工具即可恢复存档，创作者不可见用户存储内容；用户关闭云存储时平台自动清空数据。
+云存储按「**用户 × 小工具**」隔离在平台侧，同一小红书账号换设备打开工具即可恢复存档，创作者不可见用户存储内容。云存储仍为内测能力，不能作为唯一存档后端。
 
 | API | 关键入参 | 返回结构（`resolve`） | 核心规则 |
 |---|---|---|---|
@@ -249,11 +248,11 @@ export function callXhs(method, params = {}, timeoutMs = 420) {
    - **接口限频**：按「小工具 × 接口」维度限频，默认每个小工具每个接口 **150 QPS**（一次批量调用消耗一次额度，超限返回 `errCode: 2009` 且发生在鉴权之前）。写入须在本地节流合并，勿在游戏循环中直接调用。
 2. **批量写非事务 & 未知状态对账**：
    - 顶层 `resolve`（含 `errCode: 2003` 部分成功）不代表每一项都成功，必须逐项检查 `res.data[i].status`。
-   - 遇到 `errCode: 2004` 或单条 `status === "UNKNOWN"` 时，**严禁盲目重发 `addCloudStorage`**（会产生重复记录），应先通过 `queryCloudStorage` 查询最新快照对账，已存在 `id` 则改走 `updateCloudStorage`；遇到 `errCode: 2001`（存储读写失败）或 `2005`（唯一键冲突）时不得伪装成「无数据」清空玩家本地进度。
+   - 遇到 `errCode: 2004` 或单条 `status === "UNKNOWN"` 时，**严禁盲目重发 `addCloudStorage`**（会产生重复记录），应先通过 `queryCloudStorage` 对账并复用已确认的同一份快照/分段；不因拿到 `id` 就覆盖旧行。对账计划不能随着玩家继续游戏而不断换新，确认结果必须对应实际提交内容；遇到 `errCode: 2001`（存储读写失败）或 `2005`（唯一键冲突）时不得伪装成「无数据」清空玩家本地进度。
 3. **非破坏性进度合并（Merge Highest Progress）**：
-   - 从云端恢复进度时，推荐使用**最大值合并策略**（每关星级 `Math.max(localStar, cloudStar)`、最高解锁关卡 `Math.max(localUnlocked, cloudUnlocked)`、最高分 `Math.max(localBest, cloudBest)`），避免较早的云端备份意外抹掉玩家本机刚打出的新进度。
+   - 遍历完整分页后，按业务语义合并：永久解锁/收藏/最高分可取最大值或并集；钱包、消耗品、当前局跟随胜出档。先考虑转生代数和长期进度，同进度再比较保存时间；保留关卡种子/生成版本与前沿/重访/支线状态，取消关注不能被旧档重新激活。空列表不删除本机已确认云档；读失败或分页不完整时不写新档。
 4. **无白名单 / 审核预览环境兜底**：
-   - 当 `!hasXhsApi("addCloudStorage")`、未授权（`1006` / `10003`）或在浏览器预览时，「云端备份」弹窗中的「立即备份」与「合并恢复」按钮**不得禁用或报错**，应自动读写本机独立备份快照键（如 `<prefix>.cloud.backup.v1`），并给出清晰的成功 Toast 提示。
+   - 未授权（`1006`）时隐藏云端入口，设备存档独立工作；缺方法或版本不满足时如实说明能力不可用。只有原生设备保存已确认才提示「已保存在本机」；内存、挂起请求、部分写入和失败都不算保存成功，不自动创建空备份覆盖旧数据。恢复、容量分段与合并上游检查见 [save-recovery.md](save-recovery.md)。
 
 ---
 

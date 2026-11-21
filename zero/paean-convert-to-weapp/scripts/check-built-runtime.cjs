@@ -86,7 +86,9 @@ async function check() {
     const absent = ['Buffer', 'atob', 'btoa', 'TextEncoder', 'TextDecoder', 'window', 'global', 'process', 'URL'];
     for (const name of absent) assert.equal(vm.runInContext('typeof ' + name, context), 'undefined', name + ' must be absent before boot');
     const file = path.join(root, 'environment.js');
-    new vm.Script(fs.readFileSync(file, 'utf8'), {filename: file}).runInContext(context, {timeout: 5000});
+    // WeChat require() evaluates each CommonJS module in its own scope.
+    const wrapped = '(function(module, exports) {\n' + fs.readFileSync(file, 'utf8') + '\n})(module, module.exports);';
+    new vm.Script(wrapped, {filename: file}).runInContext(context, {timeout: 5000});
     const runtime = context.module.exports;
     const env = await runtime.initialize(h.wx, {id: 'host-api-regression', origin: 'https://example.invalid',
       html: '<html><body><div id="entities">&amp; &copy; &#x1F43E; 中文</div></body></html>', rules: [], keyframes: {}});

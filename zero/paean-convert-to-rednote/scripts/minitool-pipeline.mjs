@@ -244,27 +244,31 @@ export function cssSafeArea(text) {
  *  in software landscape instead of re-evaluating its inline `--paean-chrome-inset-top: 0px` and
  *  `--paean-chrome-inset-left: 86px`. */
 export function cssStageInsetAliases(text) {
-  const aliases = new Map();
-  const re = /(@media[^{]+\{)|([^{}@]+)\{([^{}]*)\}|(\})/g;
-  const stack = [];
-  let m;
-  while ((m = re.exec(text))) {
-    if (m[1]) { stack.push(m[1]); continue; }
-    if (m[4]) { stack.pop(); continue; }
-    if (stack.length > 0) continue;
-    const sel = (m[2] || '').trim(), body = m[3] || '';
-    if (!/(?:^|,)\s*(?::root|html)\s*(?:,|$)/.test(sel)) continue;
-    for (const dm of body.matchAll(/(--[\w-]+)\s*:\s*([^;{}]+)/g)) {
-      const prop = dm[1].trim(), val = dm[2].trim();
-      if (/^--(?:paean-|xhs-|safe-area-inset-)/.test(prop)) continue;
-      if (/--(?:paean-chrome-inset-|paean-safe-|safe-area-inset-)|env\(\s*safe-area-inset-/.test(val)) {
-        aliases.set(prop, val);
+  const rootRules = /([^{}]+)\{([^{}]*)\}/g;
+  const declarations = /(?:^|;)\s*(--[\w-]+)\s*:\s*([^;{}]+)/g;
+  const aliases = new Set();
+  function hasRoot(selector) {
+    return selector.replace(/\/\*[\s\S]*?\*\//g, '').split(',').some(s => /^(?:html|:root)$/.test(s.trim()));
+  }
+  for (const [, selector, body] of text.matchAll(rootRules)) {
+    if (!hasRoot(selector)) continue;
+    for (const [, prop, value] of body.matchAll(declarations)) {
+      if (!/^--(?:paean-|xhs-|safe-area-inset-)/.test(prop) &&
+          /--(?:paean-chrome-inset-|paean-safe-|safe-area-inset-)|env\(\s*safe-area-inset-/.test(value)) {
+        aliases.add(prop);
       }
     }
   }
   if (!aliases.size) return text;
-  const decls = [...aliases.entries()].map(([k, v]) => `${k}:${v};`).join('');
-  return `${text}\n[data-xhs-orientation-root]{${decls}}\n`;
+  // Insert beside each source rule so comments and conditional overrides
+  // retain their original cascade, including a later literal (e.g. 0px).
+  return text.replace(rootRules, (rule, selector, body) => {
+    if (!hasRoot(selector)) return rule;
+    const props = [...body.matchAll(declarations)]
+      .filter(([, prop]) => aliases.has(prop))
+      .map(([, prop, value]) => prop + ':' + value + ';');
+    return props.length ? rule + '\n[data-xhs-orientation-root]{' + props.join('') + '}' : rule;
+  });
 }
 
 /** Scan a declaration value for a top-level min()/max()/clamp() that the flat matcher above

@@ -171,13 +171,13 @@ SKYBREAKER 旧包在 WebKit 原生触摸里复现了 click-only 入口无响应�
 
 4. **消除选关地图与排行榜中的 `disabled` 死按钮陷阱**：
    - **选关地图**：新档默认只解锁第 1 关时，如果地图上第 2–20 关全部渲染为 `disabled`，审核员打开地图看到满屏灰锁点不动，极易判为「页面按钮无法点击」；第 1 章的 `<` 上一章按钮若设为 `disabled` 同样像死按钮。应支持章节首尾循环切换（`<` / `>` 永不禁用），并允许点击任意关卡节点直接进入试玩/挑战。
-   - **排行榜「提交成绩」、首页「关注创作者」、暂停页「云端备份」、结算页「发笔记/存相册」**：在未注入 9.51+ 原生白名单的审核预览环境或 0 分新档下，**严禁将这些按钮设为 `disabled` 或点击无响应**（详见 [小红书平台能力与预览兜底指南](xhs-platform-apis.md)）。
+   - **「查看排行」入口、首页「关注创作者」、暂停页「云端备份」、结算页「发笔记/存相册」**：在未注入 9.51+ 原生白名单的审核预览环境或 0 分新档下，**严禁将这些按钮设为 `disabled` 或点击无响应**（详见 [小红书平台能力与预览兜底指南](xhs-platform-apis.md)）。
 
 5. **短屏（`320×568`）与横屏（`844×390`、虚拟横屏）模态弹窗按钮 100% 首屏可见**：
-   - **缺陷**：排行榜弹窗、分享发笔记预览弹窗、暂停菜单在 `320×568` 短屏或 `844×390` 横屏下内容过高，导致底部的 `#rankSubmitBtn`、`#confirmPostNote`、`#savePosterAlbum` 被挤出 `.panel` 可视区（`rect.bottom > viewport.height`），不滚动就点不到。
+   - **缺陷**：排行榜弹窗、分享发笔记预览弹窗、暂停菜单在 `320×568` 短屏或 `844×390` 横屏下内容过高，导致底部的排行页返回键、`#confirmPostNote`、`#savePosterAlbum` 被挤出 `.panel` 可视区（`rect.bottom > viewport.height`），不滚动就点不到。
    - **修复规范**：
      - 分享预览弹窗采用「左侧缩略海报 + 右侧文案输入框」紧凑并排布局（`.share-preview-wrap`）；
-     - 排行榜列表 `#ranking` 设定紧凑 `max-height` 独立内滚，确保顶部分榜/周期 Tab 与底部的「提交成绩 / 刷新 / 返回」按钮 100% 留在首屏视口内；
+     - 排行榜列表 `#ranking` 设定紧凑 `max-height` 独立内滚，确保顶部分榜/周期 Tab 与底部的「返回」按钮 100% 留在首屏视口内；
      - 暂停菜单 `.menu-links` 改为 2 列（横屏 3 列）CSS Grid 紧凑网格（同时避免 `flex-wrap: wrap` + `gap` 触发 Chrome 61 基线告警）。
 
 6. **JS 读取安全区 CSS 变量 `calc(...)` 返回 `NaN` 的陷阱**：
@@ -230,8 +230,8 @@ SKYBREAKER 旧包在 WebKit 原生触摸里复现了 click-only 入口无响应�
 1. **真机容器 `window.xhs.miniTool` 异步回调挂起导致的 `6.5s–19.5s` 按钮假死（`0ms` 乐观更新 + `<= 450ms` 短超时）**：
    - **根因**：本地浏览器中 `window.xhs` 为 `undefined`，`hasXhsApi()` 在 `0ms` 直接返回本地兜底；但在小红书真机审核容器中 `window.xhs.miniTool` 各方法均存在，而在审核沙箱或未授权白名单下调用 `followAuthor`、`getRankList`、`getMyRank`、`submitScore`、`writeTempFile`、`postNote`、`queryCloudStorage`、`addCloudStorage` 可能**永不触发 `success`/`fail` 回调**。若 `callXhs()` 超时设为 `6500ms` 且串行 `await` 2–3 个调用后才更新 UI，真机点击关注会假死 `6.5s`、打开排行榜会空白卡死 `13s`、提交成绩会卡死 `19.5s`、分享/云备份会卡死 `13s`。
    - **修复规范**：
-     - 所有平台能力按钮必须在 **`t = 0ms` 同步更新本地状态与 DOM**（如 `openRankModal` 打开瞬间同步调用 `buildLeaderboardData()` 渲染完整榜单，点击 `#btn-rank-submit` 立即提升分数并刷新列表，点击 `#btn-top-follow` 立即变更为已关注状态）；
-     - 将 `callXhs(name, opts, timeoutMs = 450)` 超时上限严格限制在 **`260–450ms`**，消除串行桥接调用；
+     - 所有平台能力按钮必须在 **`t = 0ms` 同步更新本地状态与 DOM**（如 `openRankModal` 打开即显示本机成绩，自动提交待同步成绩并刷新榜单和本人名次，点击关注入口立即显示「正在核对」，由平台确认关系后更新权益）；
+     - 状态读取和原生交互分别设置有限等待时间，页面在核对期间仍可操作和返回。用户确认框需留出实际操作时间；
      - 在 `verify-all.mjs` 中新增 **Hanging `window.xhs.miniTool` Mock 测试**（所有方法均为 `() => {}` 永不回调），断言所有按钮在 `0ms` 更新 DOM 并在 `< 650ms` 内完成 Toast 反馈。
 
 2. **首屏 `window.load` 前 `ui.*` 回调为空导致的早点击丢弃与 `enterAttract()` 重置弹窗**：
@@ -349,3 +349,7 @@ SKYBREAKER 旧包在 WebKit 原生触摸里复现了 click-only 入口无响应�
      2. **等待 `> 850ms`** 后，竖屏第 2 轮拖动右半屏 → 断言 `player.yaw / pitch` 旋转、抬手后 `input.stick === null && input.look === null`；
      3. **再等待 `> 850ms`** 后，竖屏第 3 轮再次拖动摇杆 → 断言 `player.pos` 依然正常移动（证明零两段式锁死）；
      4. 点击 `#xhs-orientation-toggle` 切换到 `body.xhs-virtual-landscape` → 断言 `camera.aspect > 1.8`（如 `844 / 390 ≈ 2.164`）、`canvas.width > canvas.height`、`#stick` 停靠在 `(124, 308)`，并用物理屏幕坐标测试伪横屏下的摇杆移动与视角旋转均正常生效。
+
+### 存档调用与界面响应分开验证
+
+存档读写及读回校验不套用 UI 状态的短超时；立即显示处理中，不提前写默认档或宣称保存成功。合并新版上游时保留旧档恢复、写入重试和安全接续，按 [save-recovery.md](save-recovery.md) 做最终 ZIP 回归。

@@ -7,6 +7,10 @@ description: 为小红书创作可直接体验的网页小游戏和互动小工�
 
 把创意或已有作品做成能在小红书体验的成品。默认交付简体中文的本地可用作品与小工具 ZIP；只有用户需要时才增加 8x 服务、公开部署或宣传素材。先完成当前请求，不要求用户走完整套创作流程。
 
+### 自愿赞赏
+
+作品接入小红书赞赏时，按[在线文档 §3.19](https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s3-19)核对发布配置、9.53.3+ 客户端与方法可用性。用户主动点击后单次调用 `window.xhs.miniTool.rewardAuthor()`。礼物、支付及交易结果由客户端处理。点击、等待、取消、失败、超时或返回 `rewardAuthor:ok` 均不得用于发奖、解锁、回补资源、增加赞赏次数或标记付款。页面只提示正在打开、已返回或暂不可用。不得将失败归因于自赏或预览码。最终 ZIP 应模拟正常返回、取消、拒绝及无接口，检查游戏资产与进度未因赞赏变化。
+
 ## 两种包、两个运行环境
 
 - **本技能包**：根目录是 `SKILL.md`，供用户自己的 Agent 安装。脚本在用户机器运行。
@@ -45,6 +49,8 @@ description: 为小红书创作可直接体验的网页小游戏和互动小工�
 
 默认面向手机竖屏设计并兼顾横屏和桌面。让首屏展示真实用途，用户第一次操作就得到有意义的反馈。小游戏采用无需点击的干净玩法演示，实用工具直接展示可操作的输入和可信示例，避免强制登录或展示无法工作的按钮。
 
+作品需要启动关注或赞赏提示时，用可以略过的小卡，卡片外的第一次操作仍要完成原动作，例如拾取珍藏或生成结果。从局内入口点关注或赞赏时，先收起作品自己的菜单。即使原生面板一直没有回调，玩家返回后也能继续，稍后还能主动重试。关注权益只按已确认的关系发放，赞赏不给奖励。[启动提示与原生面板的实现](workflows/paean-convert-to-rednote/reference/optional-entry.md)
+
 从创作阶段读取[事件处理与交互所有权](workflows/paean-game-create/references/input-reliability.md)：同一手势只执行一次，兼容事件共用状态；取消/滚动不提交，菜单不操作底层玩法，摇杆不同时控制镜头。保留键盘与普通按钮行为，音频失败不能阻断入口；转换后再按目标宿主验证实际事件链。
 
 未来新上架的**游戏**在适配时读取内置转换工作流的 [RedNote 上架呈现标准](workflows/paean-convert-to-rednote/reference/rednote-release-standard.md)：自动玩法演示与入口 UI 保留不遮挡操作的真实版权／来源署名；适合横屏的游戏提供可操作的虚拟横屏按钮，并在桌面鼠标模拟手机与触屏环境实测。`© paean.ai` 只在原作权利声明支持时使用，不替其他作者冒领版权。旧作品仅在用户另行要求时修改。
@@ -59,11 +65,17 @@ description: 为小红书创作可直接体验的网页小游戏和互动小工�
 
 官方构建基线更新为 [minitool-zip-builder 1.9.0-beta.20261023.1](https://fe-static.xhscdn.com/minitool/test/20261023/dist/minitool-zip-builder-1.9.0-beta.20261023.1.skill) 与 [redapp-cli](https://fe-video-qc.xhscdn.com/fe-platform-file/104101b8326rqruuj5006b6titltg00000000038l066g4)（可安全解压更新本地技能），配合[小工具在线文档](https://miniapp-sandbox.xiaohongshu.com/minitool/doc)使用；以后按上传页当时提供的口令选择版本。读取随包 API 基线与高消耗能力标记规范（在 `dist/` 根目录生成一字段 `mini_tool.json`：`{"is_high_consumption_scene": false}` 或 `true`）后获取在线文档，比较并播报新增公开能力，再按在线契约实现。
 
-需要接入小红书专用排行榜（`submitScore` / `getRankList` / `getMyRank`，9.51+，使用 `submitScore` 时 `redapp submit` 必须勾选 `"USER_PROFILE"` 用户头像昵称授权，分数须在 `-1,000,000 ~ 1,000,000` 区间内，`getMyRank` 四态 `EXACT` 1–500 / `OVER_LIMIT` 500+ / `NO_SCORE` / `NOT_PARTICIPATING`）、专用云存储（`addCloudStorage` / `updateCloudStorage` / `queryCloudStorage` / `removeCloudStorage`，9.51+，单批 ≤100 条、单条 ≤64KB、150 QPS）、本地缓存（`setStorage` / `getStorage`，9.46+）、首页/顶栏引导关注创作者（`followAuthor` / `getFollowStatus`，9.51+）、卡片/图片分享（`share` `type: "card" | "image"`，9.53+）或视频/实况/图文笔记发布（`postNote` + `writeTempFile`）时，读[小红书专用平台能力与预览兜底指南](workflows/paean-convert-to-rednote/reference/xhs-platform-apis.md)。在未注入 9.51+ 白名单的审核预览环境、真机审核容器 `window.xhs.miniTool` 异步回调挂起或 0 分新档下，排行榜「提交成绩」、首页「关注创作者」、暂停页「云端备份」与结算页「发布笔记」按钮严禁设为 `disabled` 或等待异步回调，必须在 **`t = 0ms` 同步完成乐观 UI 与本地状态更新**，并将普通查询 `callXhs()` 超时收敛至 `<= 450ms`。发布动态视频笔记（`pageType: "video_publish"`）时，`writeTempFile` 须使用独立文件 I/O 超时（`5000ms`），`video_resources.cover_url` 仅传 `writeTempFile` 返回的 `filePath`（禁传原始 `data:` URI），**严禁在 `postNote({ pageType: "video_publish" })` 超时 `catch` 中回退调用 `photo_publish`**（否则 400ms 后图文发布页会直接覆盖已拉起的原生视频编辑器），并提供纯 JS H.264 Constrained Baseline（`avc1.42C01E` `I_PCM` + `faststart` MP4）编码兜底以兼容 `MediaRecorder` 仅支持 `video/webm` 的 Android WebView。支持软件横屏（`body.xhs-virtual-landscape`）时，安全区别名变量（`--top`、`--left` 等）必须同时声明在 `:root, #app, [data-xhs-orientation-root]` 上，确保软件横屏后顶部 UI 不往下避让（`--top: 0px`）、左侧 UI 往右避让（`--left: 86px`）以避开横屏左手边的小红书系统按钮；同时 3D/2D `resize()` 必须读取 `window.XHSOrientation.size()`（严禁裸读未旋转的 `window.innerWidth / window.innerHeight` 导致横屏画幅压扁），触控坐标必须通过 `window.XHSOrientation.client(x, y)` / `clientToStage(x, y)` 逆向映射。遇到「内容未通过平台综合审核」或涉及梦核/RPG/肉鸽战斗题材时，读[内容与代码双端机审净化指南](workflows/paean-convert-to-rednote/reference/content-audit-sanitization.md)。
+需要接入小红书专用排行榜（`submitScore` / `getRankList` / `getMyRank`，9.51+，使用 `submitScore` 时 `redapp submit` 必须勾选 `"USER_PROFILE"` 用户头像昵称授权，分数须在 `-1,000,000 ~ 1,000,000` 区间内，`getMyRank` 四态 `EXACT` 1–500 / `OVER_LIMIT` 500+ / `NO_SCORE` / `NOT_PARTICIPATING`）、专用云存储（`addCloudStorage` / `updateCloudStorage` / `queryCloudStorage` / `removeCloudStorage`，9.51+，单批 ≤100 条、单条 ≤64KB、150 QPS）、本地缓存（`setStorage` / `getStorage`，9.46+）、首页/顶栏引导关注创作者（`followAuthor` / `getFollowStatus`，9.51+）、卡片/图片分享（`share` `type: "card" | "image"`，9.53+）或视频/实况/图文笔记发布（`postNote` + `writeTempFile`）时，读[小红书专用平台能力与预览兜底指南](workflows/paean-convert-to-rednote/reference/xhs-platform-apis.md)。在未注入 9.51+ 白名单的审核预览环境、真机审核容器 `window.xhs.miniTool` 异步回调挂起或 0 分新档下，「查看排行」入口、首页「关注创作者」、暂停页「云端备份」与结算页「发布笔记」按钮严禁设为 `disabled` 或等待异步回调，必须在 **`t = 0ms` 同步完成乐观 UI 与本地状态更新**，并将普通查询 `callXhs()` 超时收敛至 `<= 450ms`。发布动态视频笔记（`pageType: "video_publish"`）时，`writeTempFile` 须使用独立文件 I/O 超时（`5000ms`），`video_resources.cover_url` 仅传 `writeTempFile` 返回的 `filePath`（禁传原始 `data:` URI），**严禁在 `postNote({ pageType: "video_publish" })` 超时 `catch` 中回退调用 `photo_publish`**（否则 400ms 后图文发布页会直接覆盖已拉起的原生视频编辑器），并提供纯 JS H.264 Constrained Baseline（`avc1.42C01E` `I_PCM` + `faststart` MP4）编码兜底以兼容 `MediaRecorder` 仅支持 `video/webm` 的 Android WebView。软件横屏按容器物理边缘换算 HUD、弹窗及触控坐标，用最终包检查状态栏只计入一个对应舞台边。实际安全区读数和回切测试见[物理状态栏回归用例](workflows/paean-convert-to-rednote/reference/rednote-release-standard.md#resolve-the-physical-status-bar-edge-on-the-rotated-stage)。关注专属道具或能力在启动页和局内系统设置中都展示效果，由确认关系后的同一份装备状态驱动玩法。取消或接口不可用时保留游戏入口，赞赏独立处理。遇到「内容未通过平台综合审核」或涉及梦核/RPG/肉鸽战斗题材时，读[内容与代码双端机审净化指南](workflows/paean-convert-to-rednote/reference/content-audit-sanitization.md)。
+
+关注奖励在启动、返回前台和领取时核对。已关注直接发放，确认取消后回收持续权益，云端恢复也应遵循已核对的关系。[关注权益验收](workflows/paean-convert-to-rednote/reference/xhs-platform-apis.md#关注权益的核对与回收)
+
+从任意入口打开排行榜时，自动提交待同步的真实成绩，随后刷新榜单和本人名次。再次打开即使没有新成绩也要刷新。验收只点一次「排行榜」，无需再点「上报」或「刷新」。[排行榜实现与验收](workflows/paean-convert-to-rednote/reference/xhs-platform-apis.md#43-打开排行榜时自动提交与刷新)
 
 用户希望将 IAP/IAA 转成发笔记获得道具时，读[笔记与可选奖励设计](workflows/paean-convert-to-rednote/reference/note-rewards.md)。它是按游戏选择的试验选项：保留免费玩法，预览真实画面，允许取消，限定低价值奖励并去重；**严禁在分享降级分支调用被容器审计禁止的 `navigator.clipboard`**；`postNote:ok` 不代表最终审核通过或付费收据。品牌/游戏话题写入可编辑正文，不虚构话题参数。平台是否允许该激励须单独核对，不自动发布测试笔记。
 
 ## 验收与交付
+
+每次送审都从最终 ZIP 冷启动，保留可选提示，实际完成一次主操作。有关注或赞赏入口时，再测取消、无回调及迟到回调后的下一次主操作和主动重试。记录作品版本、包摘要、测试环境和实际状态变化。[送审前复测清单](workflows/paean-convert-to-rednote/reference/optional-entry.md#送审前复测)
 
 - **小游戏创作源 / 8x 版**：用内置 `paean-game-create/scripts/validate-game.mjs` 验证对应作品目录，且实际完成开始、游玩、结束和重开。不要拿它检查转换产物或实用小工具：它包含 8x 游戏素材和结构要求。
 - **小红书产物**：构建器自检后，对 `dist/` 和最终 ZIP 运行 `audit-minitool.mjs` 做体积检查；运行 `check-host-chrome.mjs` 与适用的 `check-pointer-parity.mjs`，再用浏览器操作最终产物。体积检查通过不代表能力、交互或审核通过。

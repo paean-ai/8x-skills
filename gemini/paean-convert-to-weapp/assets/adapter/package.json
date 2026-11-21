@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test runtime.test.mjs layout.test.mjs"
+    "test": "node --test runtime.test.mjs layout.test.mjs wasm-parity.test.mjs wasm-abi.test.mjs"
   },
   "dependencies": {
     "abort-controller": "3.0.0",

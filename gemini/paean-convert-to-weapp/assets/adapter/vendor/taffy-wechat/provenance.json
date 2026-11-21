@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/ByteLandTechnology/taffy-layout",
+  "tag": "v4.0.0",
+  "commit": "69d768736c2deacc1de41b029931997549c46ba5",
+  "taffy": "0.15.1",
+  "rust": "1.92.0",
+  "wasmBindgen": "0.2.106",
+  "binaryen": "132.0.0",
+  "wabt": "1.0.39",
+  "rustFlags": "-C target-cpu=mvp -C target-feature=-reference-types,-multivalue,-bulk-memory,-nontrapping-fptoint,-sign-ext",
+  "rebuildStd": true,
+  "legalizeJSInterface": true,
+  "cargoLock": "bee59e1c746ea75dd01deb206296b24cf047731b032228391bed36c05feec249",
+  "artifacts": {
+    "taffy_wasm.js": "0d6de194144ad01f32b0aead29bed8c7c31b93cde6b9e10de2504f1d9565549c",
+    "taffy_wasm_bg.wasm": "22931d784a625ff1141f2d9c995553dde02fe006b3932508e0bfb90bfd01b2ca",
+    "i64-abi.json": "ce7b96c140a796fd132c94db9ab244ad3e680e92d66353618c98d380865ba689",
+    "LICENSE": "732fbe1fa6637bef291ffcb7d18ac45dc34998dd701125582ce270efaf7ab9bf"
+  }
+}

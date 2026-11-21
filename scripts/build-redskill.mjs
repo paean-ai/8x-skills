@@ -35,6 +35,23 @@ function filesIn(root, { source = false } = {}) {
   return files
 }
 
+// A fenced example may contain JavaScript such as api[method](options).
+function* markdownLinkTargets(markdown) {
+  let fence = ''
+  for (const line of markdown.split(/\r?\n/)) {
+    const delimiter = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+    if (fence) {
+      if (delimiter && delimiter[1].startsWith(fence) && !delimiter[2].trim()) fence = ''
+      continue
+    }
+    if (delimiter && (delimiter[1][0] === '~' || !delimiter[2].includes('`'))) {
+      fence = delimiter[1]
+      continue
+    }
+    for (const match of line.matchAll(/\[[^\]\n]*\]\(([^)\s]+)\)/g)) yield match[1]
+  }
+}
+
 export function assembleBundle(repoRoot = ROOT) {
   const spec = JSON.parse(readFileSync(path.join(repoRoot, 'redskill/release.json'), 'utf8'))
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(spec.name) || spec.name.length > 64) throw new Error('Invalid skill name')
@@ -74,8 +91,7 @@ export function assembleBundle(repoRoot = ROOT) {
   // Catch missing companion references before publishing a seemingly valid single-file skill.
   for (const [name, bytes] of entries) {
     if (!name.endsWith('.md')) continue
-    for (const match of bytes.toString('utf8').matchAll(/\[[^\]\n]*\]\(([^)\s]+)\)/g)) {
-      const href = match[1]
+    for (const href of markdownLinkTargets(bytes.toString('utf8'))) {
       if (/^(?:https?:|mailto:|#)/.test(href)) continue
       const target = path.posix.normalize(path.posix.join(path.posix.dirname(name), decodeURIComponent(href.split('#')[0])))
       if (href.startsWith('/') || !entries.has(target)) throw new Error(`Unbundled reference: ${name} -> ${href}`)
