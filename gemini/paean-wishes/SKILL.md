@@ -1,16 +1,18 @@
 ---
 name: paean-wishes
-description: Browse, search, create, and prepare Paean community Wishes (许愿单). Anyone can view wishes openly, post a new wish for 10 credits (without starting an Agent task), or build and publish unlimited apps that fulfill any wish on 8x.gg and paean.ai.
+description: Pull, browse, search, post, and fulfill live Paean / 8x.gg community Wishes (许愿单 / wish list). Use when the user asks to pull the online wish list (拉取心愿单 / 查看线上心愿列表 / 找未实现心愿), inspect a wish, prepare a project to fulfill a wish, or post a new wish (10 credits, no Agent started).
 ---
 
-# Paean Wishes (Gemini CLI) — Browse, Post & Fulfill Community Wishes
+# Paean Wishes (Gemini CLI) — Pull, Post & Fulfill Community Wishes
 
 Paean Wishes (`许愿单`) connects players and creators directly across **paean.ai** and **8x.gg**.
-Anyone can browse open wishes anonymously, anyone signed in can post a wish for **10 credits**
-(without starting an automated agent job), and **anyone**—including the wisher themselves—can
-build an app in Web Studio, Cloud Computer, Paean Harness, or CLI and link it when publishing.
-A single wish can collect an unlimited number of fulfilling apps; each Square app can link to
-at most one wish (`0..1`).
+While the public Web Wish Board is accumulating early wishes (Web currently focuses on `Make a Wish`
+and personal `My Wishes`), **creators pull the full live online Wish List directly through this skill
+(`wishes.mjs pull`) or via the `8xgg` MCP server (`search_wishes` / `get_wish`)**.
+Anyone signed in can post a wish for **10 credits** (without starting an automated agent job), and
+**anyone**—including the wisher themselves—can build an app in Web Studio, Cloud Computer,
+Paean Harness, or CLI and link it when publishing. A single wish can collect an unlimited number
+of fulfilling apps; each Square app can link to at most one wish (`0..1`).
 
 > **Using this skill in Gemini CLI.** Install this directory under `~/.gemini/skills/`
 > or the project's `.gemini/skills/`. A same-named skill in `.agents/skills/` takes
@@ -20,22 +22,26 @@ at most one wish (`0..1`).
 > Resolve bundled paths from this skill directory; run commands in the project directory
 > when the workflow requires project files. Skill activation uses Gemini's normal consent UI.
 
-When a user invokes this skill, check whether they want to browse/inspect wishes (`list` / `get`),
-post a new wish (`create`), or set up a workspace to implement a specific wish (`prepare`).
+When a user invokes this skill, check whether they want to pull/search/inspect live wishes (`pull` /
+`list` / `search` / `get`), post a new wish (`create`), or set up a workspace to implement a specific
+wish (`prepare`).
 
-## 1. Check Available Wishes
+## 1. Pull the Live Online Wish List
 
-Use `list` and `get` without requiring credentials for public wishes:
+Use `pull` (or `list` / `search`) and `get` without requiring credentials for open community wishes:
 
 ```bash
-# Search unfulfilled game wishes (newest first)
-node "$SKILL_DIR/scripts/wishes.mjs" list --q "pixel pinball" --category game --fulfillment unfulfilled
+# Pull all open unfulfilled community wishes (newest first, no login needed)
+node "$SKILL_DIR/scripts/wishes.mjs" pull --unfulfilled
+
+# Filter by category or keyword
+node "$SKILL_DIR/scripts/wishes.mjs" pull --category game --q "pixel pinball" --limit 20
 
 # Inspect a full wish brief (accepts bare hashKey or https://paean.ai/wishes/<key> / https://8x.gg/wishes/<key>)
 node "$SKILL_DIR/scripts/wishes.mjs" get <hashKey|url>
 
 # Machine-readable JSON output for agents
-node "$SKILL_DIR/scripts/wishes.mjs" list --json
+node "$SKILL_DIR/scripts/wishes.mjs" pull --unfulfilled --json
 node "$SKILL_DIR/scripts/wishes.mjs" get <hashKey|url> --json
 ```
 

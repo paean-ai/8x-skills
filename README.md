@@ -21,7 +21,7 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 | **paean-tts** | Generate game dialogue, spoken tutorials, pronunciation samples, and demo-video narration through Paean TTS using the creator's login. Includes a local CLI, resumable WAV output, and optional pitch-preserving speed adjustment. |
 | **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
 | **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, secret scanning, `--wish <hashKey>` fulfillment linking, and Worker/D1/R2 compatibility checks. Also guides tips (including self-tips), Express Boost, and creator content Boost for existing Square works. |
-| **[paean-wishes](claude-code/paean-wishes/SKILL.md)** | Browse and search public community Wishes (`许愿单`), post new wishes (10 credits, no agent task started), or `prepare` a workspace (`WISH.md` + `clide.json.wish`) to build and link fulfilling apps on **paean.ai** and **8x.gg**. |
+| **[paean-wishes](claude-code/paean-wishes/SKILL.md)** | Pull, search, and fulfill the live online Wish List (`许愿单`) via CLI (`wishes.mjs pull --unfulfilled`) or MCP (`search_wishes` / `get_wish`), `prepare` a local project (`WISH.md` + `clide.json.wish`), or post a new wish (10 credits, no agent job started). |
 | **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
 | **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline, compatibility and artifact audits, plus a release standard for source credit in automatic demos and entry UI, optional virtual landscape with mapped controls, 14-character listing copy, a game-specific icon and a 30-second HD video from the final ZIP. Requires `esbuild`. |
 | **[paean-convert-to-weapp](claude-code/paean-convert-to-weapp/SKILL.md)** | Port to native WeChat Mini Games through compatibility layers while preserving original gameplay, renderer, DOM/CSS UI and assets. Includes middleware evaluation, source-integrity checks, native runtime probes and two real source case studies. Full-game and device compatibility require verification; the helpers are not a universal HTML converter. |
@@ -335,6 +335,22 @@ opportunities for display and traffic. Results depend on the work, audience resp
 platform distribution. Tips are not a fixed ranking multiplier, and Express Boost counters
 are not evidence of organic reach.
 
+### Pull and fulfill community Wishes
+
+Creators can pull open wishes from the live backend queue (`paean-wishes`), scaffold a workspace
+around the selected wish, build the work, and link it automatically at publish time:
+
+```bash
+# 1. Pull open unfulfilled community wishes (no login needed)
+node <paean-wishes-dir>/scripts/wishes.mjs pull --unfulfilled --limit 20
+
+# 2. Scaffold WISH.md + clide.json.wish in your new or existing project directory
+node <paean-wishes-dir>/scripts/wishes.mjs prepare <wishHashKey> --dir my-wish-game
+
+# 3. Publish as usual — clide.json.wish links the Square listing to the wish automatically
+node <paean-publish-dir>/scripts/publish.mjs --yes
+```
+
 ### Validate and remix games
 
 Before publishing a newly created or remixed game, validate its self-contained project and browser
@@ -356,10 +372,11 @@ node <skill-dir>/scripts/remix.mjs --yes h1=gameplay h2=art h3=theme --dir my-re
 
 ## The 8x.gg MCP server
 
-`https://api.paean.ai/8x/mcp` is the discovery/study half of remixing: `find_app` /
+`https://api.paean.ai/8x/mcp` is the discovery/study half of remixing and wish fulfillment: `find_app` /
 `search_apps` resolve any 8x.gg or clide.app URL, title or description to an app;
 `get_app` / `get_remix_lineage` / `get_app_growth` say whether it is worth remixing;
-`list_app_files` / `read_app_file` let the agent read source without cloning anything.
+`list_app_files` / `read_app_file` let the agent read source without cloning anything; and
+`search_wishes` / `get_wish` let creators pull and inspect live community wishes.
 The scripts are the delivery half (full assets, local scaffold, publish). `paean-zero-setup`
 registers the server per host (including the Gemini/Cursor config templates) using
 the same Paean token; inside the Paean Mac app it is registered automatically as `8xgg`.

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -78,16 +79,19 @@ export function parseWishRef(raw) {
 function usage() {
   return [
     'Usage:',
-    '  wishes.mjs list [--q <text>] [--category <cat>] [--status open|closed|all]',
-    '                  [--fulfillment all|unfulfilled|fulfilled] [--sort newest|popular|unfulfilled]',
-    '                  [--mine] [--fulfilled-by-me] [--page <n>] [--limit <n>] [--json]',
+    '  wishes.mjs pull [--q <text>] [--category <cat>] [--status open|closed|all]',
+    '                  [--unfulfilled | --fulfillment all|unfulfilled|fulfilled] [--open]',
+    '                  [--sort newest|popular|unfulfilled] [--mine] [--fulfilled-by-me]',
+    '                  [--page <n>] [--limit <n>] [--json]',
+    '  wishes.mjs list|search [same filters as pull]',
     '  wishes.mjs get <hashKey|url> [--json]',
     '  wishes.mjs create --prompt <text> [--title <text>] [--category <cat>] [--tags <a,b>]',
     '                    [--image <https-url>]... [--client-request-id <id>] [--dry-run] [--json]',
     '  wishes.mjs prepare <hashKey|url> [--dir <project-dir>] [--note <text>] [--json]',
     '',
     'Notes:',
-    '  - list and get are public (no auth required unless --mine or --fulfilled-by-me is passed).',
+    '  - pull / list / search and get are public (no auth required unless --mine or --fulfilled-by-me is passed).',
+    '  - pull/list defaults to --status open for community wish queries; pass --status all to include closed wishes.',
     '  - create consumes 10 Paean credits and does NOT start an automated agent build.',
     '  - prepare writes WISH.md and updates clide.json.wish so paean-publish links your work.',
   ].join('\n')
@@ -130,6 +134,10 @@ export function parseWishCliArgs(argv) {
     else if (arg === '--dry-run') out.dryRun = true
     else if (arg === '--mine') out.mine = true
     else if (arg === '--fulfilled-by-me') out.fulfilledByMe = true
+    else if (arg === '--unfulfilled') {
+      out.fulfillment = 'unfulfilled'
+      if (!out.status) out.status = 'open'
+    } else if (arg === '--open') out.status = 'open'
     else if (arg === '--q') out.q = args[++i] ?? ''
     else if (arg.startsWith('--q=')) out.q = arg.slice(4)
     else if (arg === '--category') out.category = args[++i] ?? ''
@@ -179,25 +187,96 @@ export function parseWishCliArgs(argv) {
   return out
 }
 
+function hasEnvProxy() {
+  return Boolean(
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.ALL_PROXY ||
+    process.env.all_proxy,
+  )
+}
+
+function curlQuote(value) {
+  const str = String(value).replace(/[\r\n]/g, '')
+  return '"' + str.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'
+}
+
+function curlRequest(url, { method, headers, body }) {
+  const cfgLines = [
+    `url = ${curlQuote(url)}`,
+    `request = ${curlQuote(method)}`,
+  ]
+  for (const [k, v] of Object.entries(headers || {})) {
+    cfgLines.push(`header = ${curlQuote(`${k}: ${v}`)}`)
+  }
+  let bodyTempDir = null
+  try {
+    if (body !== undefined) {
+      bodyTempDir = mkdtempSync(path.join(tmpdir(), 'paean-wish-curl-'))
+      const bodyFile = path.join(bodyTempDir, 'body.json')
+      writeFileSync(bodyFile, JSON.stringify(body), { encoding: 'utf8', mode: 0o600 })
+      cfgLines.push(`data-binary = ${curlQuote('@' + bodyFile)}`)
+    }
+    const res = spawnSync('curl', ['-sS', '-w', '\n%{http_code}', '--config', '-'], {
+      input: cfgLines.join('\n') + '\n',
+      encoding: 'utf8',
+      timeout: 20000,
+    })
+    if (res.error) throw res.error
+    if (res.status !== 0) {
+      throw new Error((res.stderr || '').trim() || `curl exited with status ${res.status}`)
+    }
+    const rawOut = res.stdout || ''
+    const sep = rawOut.lastIndexOf('\n')
+    const status = sep >= 0 ? Number(rawOut.slice(sep + 1).trim()) : 0
+    const text = sep >= 0 ? rawOut.slice(0, sep) : rawOut
+    if (!Number.isFinite(status) || status <= 0) {
+      throw new Error(`curl returned invalid HTTP status: ${rawOut.slice(-80)}`)
+    }
+    return { ok: status >= 200 && status < 300, status, text }
+  } finally {
+    if (bodyTempDir) rmSync(bodyTempDir, { recursive: true, force: true })
+  }
+}
+
 async function apiRequest(pathname, { method = 'GET', token, body, apiBase = resolveApiBase() } = {}) {
-  const headers = {}
+  const headers = { Accept: 'application/json' }
   if (token) headers.Authorization = 'Bearer ' + token
   if (body !== undefined) headers['Content-Type'] = 'application/json'
-  const res = await fetch(apiBase + pathname, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
-  const text = await res.text()
+  const url = apiBase + pathname
+  let status = 0
+  let ok = false
+  let text = ''
+  try {
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    })
+    status = res.status
+    ok = res.ok
+    text = await res.text()
+  } catch (err) {
+    if (/^https:/i.test(apiBase) && hasEnvProxy()) {
+      const viaCurl = curlRequest(url, { method, headers, body })
+      status = viaCurl.status
+      ok = viaCurl.ok
+      text = viaCurl.text
+    } else {
+      throw err
+    }
+  }
   let parsed
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error(`${method} ${pathname} returned non-JSON ${res.status}: ${text.slice(0, 300)}`)
+    throw new Error(`${method} ${pathname} returned non-JSON ${status}: ${text.slice(0, 300)}`)
   }
-  if (!res.ok || parsed.success === false) {
+  if (!ok || parsed.success === false) {
     throw new Error(
-      `${method} ${pathname} failed (${res.status}): ${parsed.error || parsed.message || text.slice(0, 300)}`,
+      `${method} ${pathname} failed (${status}): ${parsed.error || parsed.message || text.slice(0, 300)}`,
     )
   }
   return parsed
@@ -205,9 +284,10 @@ async function apiRequest(pathname, { method = 'GET', token, body, apiBase = res
 
 export async function listWishesCmd(opts, apiBase = resolveApiBase()) {
   const params = new URLSearchParams()
+  const effectiveStatus = opts.status || (!opts.mine && !opts.fulfilledByMe ? 'open' : undefined)
   if (opts.q) params.set('q', opts.q)
   if (opts.category) params.set('category', opts.category)
-  if (opts.status) params.set('status', opts.status)
+  if (effectiveStatus) params.set('status', effectiveStatus)
   if (opts.fulfillment) params.set('fulfillment', opts.fulfillment)
   if (opts.sort) params.set('sort', opts.sort)
   if (opts.mine) params.set('mine', '1')
@@ -334,7 +414,9 @@ export async function prepareWishCmd(opts, apiBase = resolveApiBase()) {
 
 function formatWishSummary(w) {
   const imgs = Array.isArray(w.referenceImages) && w.referenceImages.length ? ` | imgs:${w.referenceImages.length}` : ''
-  return `[${w.hashKey}] ${w.title} (${w.category} | ${w.status} | works:${w.fulfillmentCount ?? 0}${imgs})\n  Prompt: ${String(w.prompt || '').replace(/\s+/g, ' ').slice(0, 140)}`
+  const tags = Array.isArray(w.tags) && w.tags.length ? ' | ' + w.tags.slice(0, 4).map(t => `#${t}`).join(' ') : ''
+  const date = w.createdAt ? ` | ${String(w.createdAt).slice(0, 10)}` : ''
+  return `[${w.hashKey}] ${w.title} (${w.category} | ${w.status} | works:${w.fulfillmentCount ?? 0}${imgs}${date}${tags})\n  Prompt: ${String(w.prompt || '').replace(/\s+/g, ' ').slice(0, 140)}`
 }
 
 export async function runWishCli(argv = process.argv.slice(2)) {
@@ -344,7 +426,7 @@ export async function runWishCli(argv = process.argv.slice(2)) {
     return
   }
 
-  if (opts.subcommand === 'list') {
+  if (opts.subcommand === 'list' || opts.subcommand === 'pull' || opts.subcommand === 'search') {
     const res = await listWishesCmd(opts)
     if (opts.json) {
       console.log(JSON.stringify(res, null, 2))
@@ -352,8 +434,14 @@ export async function runWishCli(argv = process.argv.slice(2)) {
     }
     const items = Array.isArray(res.items) ? res.items : []
     console.log(`Found ${res.total ?? items.length} wishes (page ${res.page ?? 1}):`)
-    for (const item of items) {
-      console.log(formatWishSummary(item))
+    if (items.length === 0) {
+      console.log('  (No matching wishes right now.)')
+    } else {
+      for (const item of items) {
+        console.log(formatWishSummary(item))
+      }
+      console.log('')
+      console.log('Tip: inspect a wish with `wishes.mjs get <hashKey>` or claim/scaffold locally with `wishes.mjs prepare <hashKey> --dir <project-dir>`.')
     }
     return
   }

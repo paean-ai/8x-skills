@@ -271,3 +271,76 @@ test('wishes prepare scaffolds WISH.md + clide.json.wish and publish forwards wi
     await rm(cwd, { recursive: true, force: true })
   }
 })
+
+test('wishes pull and search support --unfulfilled/--open, default open status, and readable formatting', async () => {
+  const api = await mockApi(async (req, res) => {
+    res.setHeader('Content-Type', 'application/json')
+    if (req.url.startsWith('/square/wishes?')) {
+      const parsedUrl = new URL(req.url, 'http://127.0.0.1')
+      const q = parsedUrl.searchParams.get('q')
+      if (q === 'empty') {
+        res.end(JSON.stringify({ success: true, items: [], total: 0, page: 1, limit: 20 }))
+        return
+      }
+      res.end(JSON.stringify({
+        success: true,
+        items: [
+          {
+            hashKey: 'wsh_pull1',
+            title: 'Cozy Ramen Truck',
+            prompt: 'Serve midnight bowls under neon rain with upgradeable broth pots',
+            category: 'game',
+            tags: ['cozy', 'cooking', 'pixel'],
+            referenceImages: [],
+            status: 'open',
+            fulfillmentCount: 0,
+            createdAt: '2026-11-21T08:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 20,
+      }))
+      return
+    }
+    res.statusCode = 404
+    res.end(JSON.stringify({ success: false }))
+  })
+  const cwd = await projectFixture()
+  const emptyHome = await mkdtemp(path.join(os.tmpdir(), 'paean-pull-'))
+  const baseEnv = {
+    PAEAN_API_BASE: api.baseUrl,
+    HOME: emptyHome,
+    ZERO_CONFIG_DIR: '',
+    PAEAN_AUTH_TOKEN: '',
+    PAEAN_CREDENTIALS_FILE: '',
+  }
+  try {
+    const pullRes = await runNode(wishesScript, cwd, ['pull', '--unfulfilled', '--category', 'game'], baseEnv)
+    assert.equal(pullRes.code, 0, pullRes.stderr)
+    const firstQuery = new URL(api.requests[0].url, 'http://127.0.0.1').searchParams
+    assert.equal(firstQuery.get('status'), 'open')
+    assert.equal(firstQuery.get('fulfillment'), 'unfulfilled')
+    assert.equal(firstQuery.get('category'), 'game')
+    assert.match(pullRes.stdout, /Found 1 wishes/)
+    assert.match(pullRes.stdout, /\[wsh_pull1\] Cozy Ramen Truck/)
+    assert.match(pullRes.stdout, /#cozy #cooking #pixel/)
+    assert.match(pullRes.stdout, /2026-11-21/)
+    assert.match(pullRes.stdout, /Tip: inspect a wish/)
+
+    const searchRes = await runNode(wishesScript, cwd, ['search', '--open', '--q', 'ramen', '--json'], baseEnv)
+    assert.equal(searchRes.code, 0, searchRes.stderr)
+    const secondQuery = new URL(api.requests[1].url, 'http://127.0.0.1').searchParams
+    assert.equal(secondQuery.get('status'), 'open')
+    assert.equal(secondQuery.get('q'), 'ramen')
+    assert.equal(JSON.parse(searchRes.stdout).total, 1)
+
+    const emptyRes = await runNode(wishesScript, cwd, ['pull', '--q', 'empty'], baseEnv)
+    assert.equal(emptyRes.code, 0, emptyRes.stderr)
+    assert.match(emptyRes.stdout, /\(No matching wishes right now\.\)/)
+  } finally {
+    await api.close()
+    await rm(cwd, { recursive: true, force: true })
+    await rm(emptyHome, { recursive: true, force: true })
+  }
+})

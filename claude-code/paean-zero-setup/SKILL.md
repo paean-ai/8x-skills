@@ -77,13 +77,14 @@ API endpoint (default `https://api.paean.ai`); `ZERO_API_BASE` / `ZERO_CLI_BASE_
 honored only when they point at a `*.paean.ai` host — `ZERO_CLI_BASE_URL` is often the LLM
 gateway (e.g. an Anthropic-compatible provider URL) and is never a Paean API address.
 
-## Register the 8x.gg MCP server (remix discovery)
+## Register the 8x.gg MCP server (remix & wish discovery)
 
-The **paean-remix** flow pairs with the 8x.gg MCP server at `https://api.paean.ai/8x/mcp`.
+The **paean-remix** and **paean-wishes** flows pair with the 8x.gg MCP server at `https://api.paean.ai/8x/mcp`.
 It gives the agent `find_app` / `search_apps` (resolve any 8x.gg or clide.app URL, a title or a
 description to an app), `get_app` / `get_remix_lineage` / `get_app_growth` (decide whether a
-remix is worth doing) and `list_app_files` / `read_app_file` (study source without cloning
-anything). It authenticates with the same Paean token the scripts use.
+remix is worth doing), `list_app_files` / `read_app_file` (study source without cloning
+anything), plus **`search_wishes`** and **`get_wish`** for pulling and inspecting live community
+Wishes (`许愿单`). It authenticates with the same Paean token the scripts use.
 
 Choose the configuration for the user's actual agent. For **Gemini CLI or Cursor**, read
 [the client MCP guide](references/gemini-cursor-mcp.md) and use its bundled JSON template;
@@ -116,6 +117,8 @@ From the project or target working directory, dry-run the relevant skill:
 ```bash
 node "<paean-publish-skill-dir>/scripts/publish.mjs" --dry-run
 node "<paean-remix-skill-dir>/scripts/remix.mjs" --dry-run <hash>
+# Optional public wish pull check (no auth required)
+node "<paean-wishes-skill-dir>/scripts/wishes.mjs" pull --limit 5
 ```
 
 If the only failure is missing credentials, repeat the login steps. If Zero is configured for

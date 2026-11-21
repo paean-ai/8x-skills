@@ -15,6 +15,11 @@ prototype finished.
 
 ## Start with a production brief
 
+When the user wants to pick an idea from the live community Wish List (`许愿单`) or fulfill a
+specific wish `hashKey`, use `paean-wishes` first (`wishes.mjs pull --unfulfilled` then
+`wishes.mjs prepare <hashKey> --dir <game-dir>`) so `WISH.md` informs the brief and
+`clide.json.wish` automatically links the release when published via `paean-publish`.
+
 Before implementation, establish the game's fantasy, core loop, input model, session length,
 progression, fail/win states, portrait and landscape adaptation, art pipeline, and performance
 budget. Make reasonable creative decisions when the user leaves these open. Prefer an original
