@@ -81,6 +81,7 @@ function usage() {
     '                          [--title <title>] [--summary <text>] [--category <category>] [--tag <tag>]',
     '                          [--handle <subdomain>]',
     '                          [--session-jsonl <file.jsonl[.gz]> | --no-session]',
+    '                          [--wish <hashKey|url> [--wish-note <text>] | --no-wish]',
     '                          [--price <credits> | --free] [--standalone allow|demo|shell]',
     '                          [--product <sku>=<title>:<credits>]...',
     '       publish-helper.mjs --delete [--handle <owned-handle>]',
@@ -113,8 +114,21 @@ function usage() {
   ].join('\n')
 }
 
+function parseWishHashKeyArg(raw) {
+  const trimmed = String(raw || '').trim()
+  if (!trimmed) throw new Error('--wish needs a wish hashKey or URL')
+  if (/^https?:\/\//i.test(trimmed)) {
+    const u = new URL(trimmed)
+    const parts = u.pathname.split('/').filter(Boolean)
+    const idx = parts.lastIndexOf('wishes')
+    if (idx >= 0 && parts[idx + 1]) return decodeURIComponent(parts[idx + 1])
+    throw new Error('Could not parse wish hashKey from URL: ' + trimmed)
+  }
+  return trimmed
+}
+
 function parseArgs(argv) {
-  const out = { delete: false, dryRun: false, hostingOnly: false, allowSecrets: false, allowStaticOnly: false, yes: false, help: false, dir: undefined, handle: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, tags: [], price: undefined, free: false, standalone: undefined, products: [] }
+  const out = { delete: false, dryRun: false, hostingOnly: false, allowSecrets: false, allowStaticOnly: false, yes: false, help: false, dir: undefined, handle: undefined, title: undefined, summary: undefined, category: undefined, license: undefined, tags: [], price: undefined, free: false, standalone: undefined, products: [], wish: undefined, wishNote: undefined, noWish: false }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') out.help = true
@@ -126,6 +140,11 @@ function parseArgs(argv) {
     else if (arg === '--no-session') out.noSession = true
     else if (arg === '--session-jsonl') out.sessionJsonl = argv[++i] ?? ''
     else if (arg.startsWith('--session-jsonl=')) out.sessionJsonl = arg.slice('--session-jsonl='.length)
+    else if (arg === '--wish') out.wish = parseWishHashKeyArg(argv[++i] ?? '')
+    else if (arg.startsWith('--wish=')) out.wish = parseWishHashKeyArg(arg.slice('--wish='.length))
+    else if (arg === '--wish-note') out.wishNote = argv[++i] ?? ''
+    else if (arg.startsWith('--wish-note=')) out.wishNote = arg.slice('--wish-note='.length)
+    else if (arg === '--no-wish') out.noWish = true
     else if (arg === '--delete' || arg === '--unpublish') out.delete = true
     else if (arg === '--dir') out.dir = argv[++i]
     else if (arg.startsWith('--dir=')) out.dir = arg.slice('--dir='.length)
@@ -163,6 +182,10 @@ function parseArgs(argv) {
   if (!out.delete && out.handle !== undefined) out.handle = requireHandleValue(out.handle)
   if (out.sessionJsonl !== undefined && (!out.sessionJsonl || out.sessionJsonl.startsWith('--'))) throw new Error('--session-jsonl needs a JSONL file path.')
   if (out.noSession && out.sessionJsonl !== undefined) throw new Error('--session-jsonl and --no-session are mutually exclusive.')
+  if (out.noWish && (out.wish !== undefined || out.wishNote !== undefined)) throw new Error('--wish / --wish-note and --no-wish are mutually exclusive.')
+  if (out.hostingOnly && (out.wish !== undefined || out.wishNote !== undefined || out.noWish)) {
+    throw new Error('Wish linkage requires an Apps Square listing and cannot be combined with --hosting-only.')
+  }
   if (out.delete && (out.noSession || out.sessionJsonl !== undefined)) throw new Error('session options are only valid when publishing.')
   if (out.delete && out.dir) throw new Error('--dir is only valid when publishing, not deleting.')
   if (out.delete && out.dryRun) throw new Error('--dry-run is only valid when publishing, not deleting.')
@@ -800,6 +823,37 @@ function normalizeAccess(raw) {
   return { model, price, standalone, products }
 }
 
+function resolveWish(projectRoot, args) {
+  if (args.hostingOnly) return null
+  if (args.noWish) return { action: 'detach', hashKey: null, note: null }
+  const manifest = readManifest(projectRoot)
+  const rawWish = manifest && manifest.wish
+  const manifestHashKey = typeof rawWish === 'string'
+    ? parseWishHashKeyArg(rawWish)
+    : rawWish && typeof rawWish === 'object' && typeof rawWish.hashKey === 'string' && rawWish.hashKey.trim()
+      ? parseWishHashKeyArg(rawWish.hashKey)
+      : undefined
+  const manifestTitle = rawWish && typeof rawWish === 'object' && typeof rawWish.title === 'string'
+    ? rawWish.title.trim()
+    : undefined
+  const manifestNote = rawWish && typeof rawWish === 'object' && typeof rawWish.note === 'string'
+    ? rawWish.note.trim()
+    : undefined
+
+  const hashKey = args.wish || manifestHashKey
+  const note = args.wishNote !== undefined ? args.wishNote.trim() : manifestNote
+  if (note && !hashKey) {
+    throw new Error('--wish-note requires --wish <hashKey> or clide.json.wish.hashKey.')
+  }
+  if (!hashKey) return null
+  return {
+    action: 'attach',
+    hashKey,
+    ...(manifestTitle ? { title: manifestTitle } : {}),
+    ...(note ? { note } : {}),
+  }
+}
+
 // Resolve the remix lineage recorded by /remix into the shape the API consumes
 // (remixOfHashKey = primary parent) plus the full graph for forward-compat.
 function resolveRemix(projectRoot) {
@@ -846,7 +900,7 @@ function licenseBody(spdx, year, holder) {
 
 // Ensure clide.json + LICENSE exist so every published project carries complete
 // metadata. .clideignore is ensured separately via getClideIgnorePatterns.
-function ensureProjectFiles(projectRoot, metadata, license, remix, access) {
+function ensureProjectFiles(projectRoot, metadata, license, remix, access, wish) {
   const written = []
   const manifestPath = path.join(projectRoot, MANIFEST_FILE)
   const existing = readManifest(projectRoot) || {}
@@ -865,6 +919,17 @@ function ensureProjectFiles(projectRoot, metadata, license, remix, access) {
   // --price run updates clide.json and the next flag-less publish keeps it.
   if (access) merged.access = access
   else if (existing.access) merged.access = existing.access
+  if (wish && wish.action === 'detach') {
+    delete merged.wish
+  } else if (wish && wish.action === 'attach') {
+    merged.wish = {
+      hashKey: wish.hashKey,
+      ...(wish.title ? { title: wish.title } : {}),
+      ...(wish.note ? { note: wish.note } : {}),
+    }
+  } else if (existing.wish) {
+    merged.wish = existing.wish
+  }
   const nextText = JSON.stringify(merged, null, 2) + '\n'
   let prevText = ''
   try { prevText = readFileSync(manifestPath, 'utf8') } catch {}
@@ -989,7 +1054,7 @@ async function importZip(token, workspaceHashKey, zipData) {
   return await importZipDirect(token, workspaceHashKey, zipData)
 }
 
-async function publishSquare(token, workspaceHashKey, metadata, remix, handle, access) {
+async function publishSquare(token, workspaceHashKey, metadata, remix, handle, access, wish) {
   const body = {
     workspaceHashKey,
     title: metadata.title,
@@ -1013,6 +1078,12 @@ async function publishSquare(token, workspaceHashKey, metadata, remix, handle, a
     // Full declared parent set. The backend dedupes this with remixOfHashKey
     // and records SquareRemixEdge rows for the multi-parent DAG.
     body.remixOfHashKeys = remix.parents.map(p => p.hashKey).filter(Boolean)
+  }
+  if (wish && wish.action === 'detach') {
+    body.wishHashKey = null
+  } else if (wish && wish.action === 'attach') {
+    body.wishHashKey = wish.hashKey
+    if (wish.note !== undefined) body.wishNote = wish.note
   }
   let json
   try {
@@ -1263,6 +1334,7 @@ async function main() {
   const license = resolveLicense(projectRoot, args)
   const remix = resolveRemix(projectRoot)
   const access = args.hostingOnly ? null : resolveAccess(projectRoot, args)
+  const wish = resolveWish(projectRoot, args)
   const titleWarning = resolvedTitle.source === 'directory-name'
     ? 'Title fell back to the directory name. Pass --title with a name that reflects the game theme/gameplay.'
     : undefined
@@ -1296,6 +1368,7 @@ async function main() {
       titleWarning,
       assetWarnings: mediaWarnings,
       remix: remix ? { parent: remix.parent, parents: remix.parents } : null,
+      wish,
       // null = keep the listing's current model (free on a first publish).
       access,
       secretScan: {
@@ -1318,7 +1391,7 @@ async function main() {
   }
   const token = getPaeanToken()
   if (!token) throw new Error('Paean credentials not found. Set the PAEAN_AUTH_TOKEN environment variable to your Paean JWT (or place it in ~/.paean/credentials.json as {"token":"..."}). See the skill README for how to obtain one.')
-  const ensuredFiles = args.hostingOnly ? [] : ensureProjectFiles(projectRoot, metadata, license, remix, access)
+  const ensuredFiles = args.hostingOnly ? [] : ensureProjectFiles(projectRoot, metadata, license, remix, access, wish)
   if (ensuredFiles.length > 0) console.log('Wrote project metadata: ' + ensuredFiles.join(', '))
   const zip = await zipFiles(publishDir, files)
   try {
@@ -1384,7 +1457,7 @@ async function main() {
       if (pruned.truncated) console.log('Warning: workspace listing was truncated; some clone-only files may remain.')
     }
     console.log('Publishing public Square listing...')
-    const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle, access)
+    const app = await publishSquare(token, workspaceHashKey, metadata, remix, args.handle, access, wish)
     const shareUrl = 'https://www.8x.gg/apps/' + encodeURIComponent(app.hashKey)
     // Persist the successful public release before the optional network follow-up:
     // an interrupted backup must never erase the handle/hash needed for recovery.
@@ -1439,6 +1512,7 @@ async function main() {
           remixOfHashKeys: remix.parents.map(p => p.hashKey).filter(Boolean),
         },
       } : null,
+      wish: app.wish || (wish && wish.action === 'attach' ? { hashKey: wish.hashKey, note: wish.note || null } : null),
       wroteProjectFiles: ensuredFiles,
       fileCount: imported.fileCount || summary.fileCount,
       totalBytes: imported.totalBytes || summary.totalBytes,

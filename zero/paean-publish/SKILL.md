@@ -204,6 +204,20 @@ node "$SKILL_DIR/scripts/publish.mjs" --dry-run --dir dist --price 100 [--standa
 Report `access` alongside the canonical `url` from the publish output. Access options are not valid with
 `--hosting-only`.
 
+## Fulfilling community Wishes (`--wish`)
+
+If the project fulfills a community wish (`许愿`) from **paean.ai/wishes** or **8x.gg/wishes**,
+pass `--wish <hashKey|url>` (plus optional `--wish-note <text>`) or keep `clide.json.wish`
+written by `paean-wishes prepare`. Anyone—including the wish author—can fulfill an open wish,
+and unlimited apps may link to the same wish:
+
+```bash
+node "$SKILL_DIR/scripts/publish.mjs" --dry-run --wish <wishHashKey> [--wish-note "Built with CRT shaders"]
+```
+
+Pass `--no-wish` to detach an existing wish link and remove `clide.json.wish`. Wish options
+require Apps Square mode and are rejected with `--hosting-only`.
+
 ### Register and verify the product catalogue
 
 This section applies to platform-managed `access.require({ sku })` products.

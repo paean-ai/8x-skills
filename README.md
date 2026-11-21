@@ -20,7 +20,8 @@ generated skill ZIP to **Red Skill**, and generated *work* ZIPs to **小工具**
 | **[paean-3d-create](claude-code/paean-3d-create/SKILL.md)** | Create editable 3D objects, scenes and game assets with pinned 3DCodeVerse build, geometry-check and render instruments. Loads only the selected language; optional Python, Node/Chrome or Blender setup stays outside the host application. |
 | **paean-tts** | Generate game dialogue, spoken tutorials, pronunciation samples, and demo-video narration through Paean TTS using the creator's login. Includes a local CLI, resumable WAV output, and optional pitch-preserving speed adjustment. |
 | **paean-sdk** | Design and integrate cloud save, ranking, paid access/IAP, rewarded ads/IAA, multiplayer rooms, AI including runtime TTS/read-aloud, shared data, and sharing. One entry routes to focused capability design guides; includes an integration module and offline mock host. |
-| **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, secret scanning, and Worker/D1/R2 compatibility checks. Also guides tips (including self-tips), Express Boost, and creator content Boost for existing Square works. |
+| **paean-publish** | Deploy a static frontend (top-level `index.html`) to `*.clide.app` either as hosting-only (`--hosting-only`, no Apps Square row) or as a public Square listing. Supports custom handles, secret scanning, `--wish <hashKey>` fulfillment linking, and Worker/D1/R2 compatibility checks. Also guides tips (including self-tips), Express Boost, and creator content Boost for existing Square works. |
+| **[paean-wishes](claude-code/paean-wishes/SKILL.md)** | Browse and search public community Wishes (`许愿单`), post new wishes (10 credits, no agent task started), or `prepare` a workspace (`WISH.md` + `clide.json.wish`) to build and link fulfilling apps on **paean.ai** and **8x.gg**. |
 | **paean-convert-to-ad** | Convert a finished work into an HTML5 playable-ad bundle (Google Ads `MEDIA_BUNDLE`): find the seam that opens straight into core play, tune a showcase run, auto-play then hand over control, exit to the store, and self-check that the bundle is fully offline. |
 | **paean-convert-to-rednote** | Convert a finished work into a RedNote (Xiaohongshu) mini-tool: a fully offline zip on a Chrome 61 baseline. Ships the build pipeline, compatibility and artifact audits, plus a release standard for source credit in automatic demos and entry UI, optional virtual landscape with mapped controls, 14-character listing copy, a game-specific icon and a 30-second HD video from the final ZIP. Requires `esbuild`. |
 | **[paean-convert-to-weapp](claude-code/paean-convert-to-weapp/SKILL.md)** | Port to native WeChat Mini Games through compatibility layers while preserving original gameplay, renderer, DOM/CSS UI and assets. Includes middleware evaluation, source-integrity checks, native runtime probes and two real source case studies. Full-game and device compatibility require verification; the helpers are not a universal HTML converter. |
@@ -62,6 +63,7 @@ casual colors and tactile surfaces unless the theme or explicit art direction ca
 │   ├── paean-tts/
 │   ├── paean-sdk/
 │   ├── paean-publish/
+│   ├── paean-wishes/
 │   ├── paean-sessions/
 │   ├── paean-remix/
 │   ├── paean-record-demo/
